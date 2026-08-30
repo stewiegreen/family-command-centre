@@ -105,6 +105,15 @@ export function Dashboard() {
     persistOrder(next);
   };
 
+  /** Moves the combined Events + To-Dos row together, as one block. */
+  const movePairSection = (dir: -1 | 1) => {
+    const withoutPair = order.filter((x): x is SectionId => x !== 'events' && x !== 'todos');
+    const pairIndex = Math.min(order.indexOf('events'), order.indexOf('todos'));
+    const insertAt = Math.max(0, Math.min(withoutPair.length, pairIndex + dir));
+    const next: SectionId[] = [...withoutPair.slice(0, insertAt), 'events', 'todos', ...withoutPair.slice(insertAt)];
+    persistOrder(next);
+  };
+
   const dismissHero = () => {
     setHeroOpen(false);
     if (announcement) {
@@ -181,6 +190,30 @@ export function Dashboard() {
         </button>
       </div>
       <div className="sm:pl-6">{children}</div>
+    </div>
+  );
+
+  const SectionChromePair = ({ children }: { children: React.ReactNode }) => (
+    <div className="relative group/section">
+      <div className="absolute -left-1 top-2 z-10 flex flex-col gap-0.5 opacity-70 sm:opacity-0 sm:group-hover/section:opacity-100 transition-opacity">
+        <button
+          type="button"
+          onClick={() => movePairSection(-1)}
+          className="p-1 rounded-md bg-surface border border-border text-muted hover:text-fg"
+          title="Move up"
+        >
+          <ChevronUp className="w-3.5 h-3.5" />
+        </button>
+        <button
+          type="button"
+          onClick={() => movePairSection(1)}
+          className="p-1 rounded-md bg-surface border border-border text-muted hover:text-fg"
+          title="Move down"
+        >
+          <ChevronDown className="w-3.5 h-3.5" />
+        </button>
+      </div>
+      <div className="sm:pl-6 grid grid-cols-1 lg:grid-cols-2 gap-4">{children}</div>
     </div>
   );
 
@@ -496,11 +529,26 @@ export function Dashboard() {
         </section>
       )}
 
-      {order.map((id) => (
-        <SectionChrome key={id} id={id}>
-          {sections[id]}
-        </SectionChrome>
-      ))}
+      {(() => {
+        let pairRendered = false;
+        return order.map((id) => {
+          if (id === 'events' || id === 'todos') {
+            if (pairRendered) return null;
+            pairRendered = true;
+            return (
+              <SectionChromePair key="events-todos-pair">
+                {sections.events}
+                {sections.todos}
+              </SectionChromePair>
+            );
+          }
+          return (
+            <SectionChrome key={id} id={id}>
+              {sections[id]}
+            </SectionChrome>
+          );
+        });
+      })()}
     </div>
   );
 }
