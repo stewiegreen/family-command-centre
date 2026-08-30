@@ -169,9 +169,9 @@ export function CalendarPage() {
                 onClick={() => openNew(day)}
                 className={`min-h-[3.5rem] sm:min-h-[4.5rem] p-1 rounded-xl text-left transition-colors ${
                   inMonth ? 'hover:bg-nav-hover' : 'opacity-40'
-                } ${isToday ? 'ring-1 ring-indigo-500/50 bg-indigo-500/10' : ''}`}
+                } ${isToday ? 'ring-1 ring-accent/50 bg-accent/10' : ''}`}
               >
-                <span className={`text-xs font-medium ${isToday ? 'text-indigo-500' : 'text-muted'}`}>
+                <span className={`text-xs font-medium ${isToday ? 'text-accent' : 'text-muted'}`}>
                   {format(day, 'd')}
                 </span>
                 <div className="mt-0.5 space-y-0.5">

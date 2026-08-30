@@ -226,7 +226,7 @@ export function ChoresPage() {
       </div>
 
       {earnFlash && (
-        <div className="rounded-2xl border border-lime-400/40 bg-gradient-to-r from-lime-500/15 via-emerald-500/10 to-teal-500/15 p-4 flex items-center gap-3">
+        <div className="rounded-2xl border border-accent/40 bg-accent-tint p-4 flex items-center gap-3">
           <span className="text-3xl">🎉</span>
           <div>
             <p className="font-bold text-fg text-lg">+{earnFlash.minutes} min screen time!</p>
@@ -236,9 +236,9 @@ export function ChoresPage() {
       )}
 
       {/* —— Slim screen-time bank strip —— */}
-      <Card className="!p-4 bg-gradient-to-br from-lime-500/10 via-emerald-500/5 to-transparent border-lime-500/20">
+      <Card className="!p-4 bg-accent-tint border-accent/20">
         <div className="flex items-center gap-2 mb-3">
-          <Tv className="w-4 h-4 text-lime-500" />
+          <Tv className="w-4 h-4 text-accent" />
           <h2 className="text-sm font-semibold text-fg">Screen time bank</h2>
           <Sparkles className="w-3.5 h-3.5 text-amber-400" />
         </div>
@@ -247,7 +247,7 @@ export function ChoresPage() {
           <div className="mb-3 flex items-center gap-3">
             <span className="text-3xl">⏱️</span>
             <div>
-              <p className="text-2xl font-black text-lime-500 tabular-nums leading-none">{myMinutes}</p>
+              <p className="text-2xl font-black text-accent tabular-nums leading-none">{myMinutes}</p>
               <p className="text-xs text-muted mt-0.5">minutes you’ve earned</p>
             </div>
           </div>
@@ -262,12 +262,12 @@ export function ChoresPage() {
                 key={m.id}
                 className={cn(
                   'flex items-center gap-2 pl-1.5 pr-3 py-1.5 rounded-full border',
-                  m.id === myId ? 'border-lime-500/40 bg-lime-500/10' : 'border-border bg-surface/50',
+                  m.id === myId ? 'border-accent/40 bg-accent-tint' : 'border-border bg-surface/50',
                 )}
               >
                 <Avatar {...look} size="sm" className="!w-6 !h-6" />
                 <span className="text-sm text-fg-secondary">{m.name}</span>
-                <span className="text-sm font-bold tabular-nums text-lime-500">{mins}m</span>
+                <span className="text-sm font-bold tabular-nums text-accent">{mins}m</span>
               </div>
             );
           })}
@@ -278,7 +278,7 @@ export function ChoresPage() {
             <button
               type="button"
               onClick={() => setSpendOpen((o) => !o)}
-              className="w-full flex items-center justify-between text-sm font-medium text-fg hover:text-lime-500 transition-colors"
+              className="w-full flex items-center justify-between text-sm font-medium text-fg hover:text-accent transition-colors"
             >
               <span className="flex items-center gap-1.5">
                 <Minus className="w-3.5 h-3.5" /> Spend screen time
@@ -324,7 +324,7 @@ export function ChoresPage() {
                       key={m.id + 'bonus'}
                       type="button"
                       onClick={() => adjustScreenTime(m.id, 10, 'Parent bonus')}
-                      className="text-xs px-2.5 py-1 rounded-full border border-border-strong text-muted hover:text-lime-500 hover:border-lime-500"
+                      className="text-xs px-2.5 py-1 rounded-full border border-border-strong text-muted hover:text-accent hover:border-accent"
                     >
                       +10 bonus for {m.name}
                     </button>
@@ -360,7 +360,7 @@ export function ChoresPage() {
                   onChange={(e) => setChoreReward(Number(e.target.value))}
                 />
               </div>
-              <Button onClick={addChore} className="w-full !bg-lime-500 hover:!bg-lime-400 !text-neutral-950" disabled={!choreTitle.trim()}>
+              <Button onClick={addChore} className="w-full !bg-accent hover:!bg-accent-hover !text-accent-ink" disabled={!choreTitle.trim()}>
                 <Plus className="w-4 h-4" /> Add chore
               </Button>
             </Card>
@@ -374,7 +374,7 @@ export function ChoresPage() {
                     <div key={c.id} className="flex items-center gap-2.5 text-sm">
                       {who && <Avatar {...who} size="sm" className="!w-6 !h-6" />}
                       <span className="text-fg-secondary truncate flex-1 min-w-0">{c.title}</span>
-                      <span className="text-lime-500 font-medium text-xs shrink-0">+{c.rewardMinutes || 0}m</span>
+                      <span className="text-accent font-medium text-xs shrink-0">+{c.rewardMinutes || 0}m</span>
                     </div>
                   );
                 })}
@@ -439,7 +439,7 @@ export function ChoresPage() {
                                 </option>
                               ))}
                             </select>
-                            <Button onClick={() => approveChore(c.id, pick || c.submittedById || '')} className="!bg-lime-500 hover:!bg-lime-400 !text-neutral-950">
+                            <Button onClick={() => approveChore(c.id, pick || c.submittedById || '')} className="!bg-accent hover:!bg-accent-hover !text-accent-ink">
                               Approve +{c.rewardMinutes || 0}
                             </Button>
                             <Button variant="secondary" onClick={() => cancelSubmit(c.id)}>
@@ -469,7 +469,7 @@ export function ChoresPage() {
                     <Card key={c.id} className="!p-4 flex flex-col sm:flex-row sm:items-center gap-3">
                       <div className="flex-1 min-w-0">
                         <p className="font-semibold text-fg">{c.title}</p>
-                        <p className="text-sm text-lime-500 font-medium mt-0.5">
+                        <p className="text-sm text-accent font-medium mt-0.5">
                           +{c.rewardMinutes || 0} min screen time
                         </p>
                         {isParent && (
@@ -487,7 +487,7 @@ export function ChoresPage() {
                         )}
                       </div>
                       <div className="flex items-center gap-2">
-                        <Button onClick={() => submitChore(c.id)} className="!bg-lime-500 hover:!bg-lime-400 !text-neutral-950">I finished this</Button>
+                        <Button onClick={() => submitChore(c.id)} className="!bg-accent hover:!bg-accent-hover !text-accent-ink">I finished this</Button>
                         {isParent && (
                           <button
                             type="button"

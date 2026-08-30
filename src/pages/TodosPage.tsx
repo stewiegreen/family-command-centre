@@ -109,7 +109,7 @@ export function TodosPage() {
               className={cn(
                 'flex items-center gap-2.5 px-3.5 py-2 rounded-2xl text-sm border transition-colors',
                 activeId === m.id
-                  ? 'border-lime-500 bg-lime-500/15 text-lime-500'
+                  ? 'border-accent bg-accent-tint text-accent'
                   : 'border-border-strong text-muted hover:bg-nav-hover',
               )}
             >
@@ -198,8 +198,8 @@ export function TodosPage() {
                       className={cn(
                         'mt-0.5 w-6 h-6 rounded-lg border-2 flex items-center justify-center shrink-0 transition-colors',
                         t.completed
-                          ? 'bg-emerald-500 border-emerald-500 text-white'
-                          : 'border-border-strong hover:border-emerald-500',
+                          ? 'bg-accent border-accent text-accent-ink'
+                          : 'border-border-strong hover:border-accent',
                       )}
                     >
                       {t.completed && <span className="text-xs">✓</span>}

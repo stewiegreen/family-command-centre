@@ -153,7 +153,7 @@ export function EmojiPicker({ onPick, className }: Props) {
         className={cn(
           'p-2.5 rounded-xl border transition-colors',
           open
-            ? 'border-indigo-500 bg-indigo-500/15 text-indigo-500'
+            ? 'border-accent bg-accent/15 text-accent'
             : 'border-border-strong text-muted hover:bg-nav-hover hover:text-fg',
         )}
         title="Emoji"
@@ -173,7 +173,7 @@ export function EmojiPicker({ onPick, className }: Props) {
                 onClick={() => setTab(i)}
                 className={cn(
                   'px-2.5 py-1 rounded-lg text-[11px] font-medium shrink-0 transition-colors',
-                  tab === i ? 'bg-indigo-500/15 text-indigo-500' : 'text-muted hover:bg-nav-hover',
+                  tab === i ? 'bg-accent/15 text-accent' : 'text-muted hover:bg-nav-hover',
                 )}
               >
                 {g.label}

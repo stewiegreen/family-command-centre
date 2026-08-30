@@ -17,7 +17,7 @@ export function KidPinGate({ children }: { children: React.ReactNode }) {
     <div className="min-h-dvh flex items-center justify-center p-4 bg-page">
       <Card className="w-full max-w-sm space-y-4">
         <div className="flex flex-col items-center text-center gap-2">
-          <div className="w-12 h-12 rounded-2xl bg-indigo-500/15 flex items-center justify-center text-indigo-500">
+          <div className="w-12 h-12 rounded-2xl bg-accent/15 flex items-center justify-center text-accent">
             <Lock className="w-6 h-6" />
           </div>
           <h1 className="text-lg font-semibold text-fg">Enter PIN</h1>
@@ -53,7 +53,7 @@ export function KidPinGate({ children }: { children: React.ReactNode }) {
         </Button>
         <button
           type="button"
-          className="w-full text-xs text-muted hover:text-indigo-500 underline"
+          className="w-full text-xs text-muted hover:text-accent underline"
           onClick={() => void signOut()}
         >
           Sign out

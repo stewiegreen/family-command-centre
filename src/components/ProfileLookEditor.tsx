@@ -43,8 +43,8 @@ export function ProfileLookEditor() {
         className="flex items-center gap-2 text-left group"
         title="Change your emoji & colour"
       >
-        <Avatar {...look} size="sm" className="ring-2 ring-transparent group-hover:ring-indigo-500/50 transition" />
-        <span className="text-xs text-muted group-hover:text-indigo-500 hidden sm:inline">Edit look</span>
+        <Avatar {...look} size="sm" className="ring-2 ring-transparent group-hover:ring-accent/50 transition" />
+        <span className="text-xs text-muted group-hover:text-accent hidden sm:inline">Edit look</span>
       </button>
 
       <Modal open={open} onClose={() => setOpen(false)} title="Your look">
@@ -62,7 +62,7 @@ export function ProfileLookEditor() {
                   onClick={() => setEmoji(e)}
                   className={cn(
                     'w-9 h-9 text-xl rounded-lg flex items-center justify-center',
-                    emoji === e ? 'bg-indigo-500/20 ring-2 ring-indigo-500' : 'hover:bg-nav-hover',
+                    emoji === e ? 'bg-accent/20 ring-2 ring-accent' : 'hover:bg-nav-hover',
                   )}
                 >
                   {e}
@@ -131,7 +131,7 @@ export function ProfileLookCard() {
             }
             className={cn(
               'w-9 h-9 text-lg rounded-xl flex items-center justify-center border',
-              look.emoji === e ? 'border-indigo-500 bg-indigo-500/15' : 'border-border hover:bg-nav-hover',
+              look.emoji === e ? 'border-accent bg-accent/15' : 'border-border hover:bg-nav-hover',
             )}
           >
             {e}

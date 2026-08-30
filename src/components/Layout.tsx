@@ -81,7 +81,7 @@ export function Layout({ children }: { children: ReactNode }) {
   const navBtn = (active: boolean) =>
     cn(
       'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all',
-      active ? 'bg-indigo-500/15 text-indigo-500' : 'text-muted hover:bg-nav-hover hover:text-fg',
+      active ? 'bg-accent/15 text-accent' : 'text-muted hover:bg-nav-hover hover:text-fg',
     );
 
   return (
@@ -89,14 +89,14 @@ export function Layout({ children }: { children: ReactNode }) {
       <aside className="hidden lg:flex flex-col w-64 shrink-0 border-r border-border bg-sidebar">
         <div className="p-5 border-b border-border">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-indigo-500/30">
+            <div className="w-10 h-10 rounded-xl bg-accent flex items-center justify-center text-accent-ink font-bold text-lg">
               {settings.familyName.charAt(0)}
             </div>
             <div className="min-w-0">
               <h1 className="font-semibold truncate text-fg">{settings.familyName}</h1>
               <p className="text-xs text-faint">
                 {syncStatus === 'live' ? (
-                  <span className="text-emerald-500">● Live{familyId ? ` · ${familyId}` : ''}</span>
+                  <span className="text-accent">● Live{familyId ? ` · ${familyId}` : ''}</span>
                 ) : syncStatus === 'connecting' ? (
                   <span className="text-amber-500">● Syncing…</span>
                 ) : syncStatus === 'error' ? (
@@ -114,7 +114,7 @@ export function Layout({ children }: { children: ReactNode }) {
               <item.icon className="w-5 h-5" />
               <span className="flex-1 text-left">{item.label}</span>
               {item.id === 'messages' && unread > 0 && (
-                <span className="bg-indigo-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">{unread}</span>
+                <span className="bg-accent text-accent-ink text-xs font-bold px-1.5 py-0.5 rounded-full">{unread}</span>
               )}
             </button>
           ))}
@@ -141,7 +141,7 @@ export function Layout({ children }: { children: ReactNode }) {
                 className={cn(
                   'w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-sm font-medium transition-colors',
                   notifOn
-                    ? 'text-indigo-500 bg-indigo-500/10 hover:bg-indigo-500/15'
+                    ? 'text-accent bg-accent/10 hover:bg-accent/15'
                     : 'text-muted hover:bg-nav-hover hover:text-fg',
                 )}
               >
@@ -187,7 +187,7 @@ export function Layout({ children }: { children: ReactNode }) {
               onClick={() => void toggleNotifs()}
               className={cn(
                 'p-2 rounded-xl transition-colors',
-                notifOn ? 'text-indigo-500 hover:bg-indigo-500/10' : 'text-muted hover:bg-nav-hover',
+                notifOn ? 'text-accent hover:bg-accent/10' : 'text-muted hover:bg-nav-hover',
               )}
               title={notifOn ? 'Notifications on — click to disable' : 'Enable notifications'}
             >
@@ -208,13 +208,13 @@ export function Layout({ children }: { children: ReactNode }) {
               onClick={() => setView(item.id)}
               className={cn(
                 'relative flex flex-col items-center justify-center gap-0.5 w-14 h-14 rounded-xl',
-                view === item.id ? 'text-indigo-500' : 'text-faint',
+                view === item.id ? 'text-accent' : 'text-faint',
               )}
             >
               <item.icon className="w-5 h-5" />
               <span className="text-[10px] font-medium">{item.label}</span>
               {item.id === 'messages' && unread > 0 && (
-                <span className="absolute top-1 right-1.5 bg-indigo-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+                <span className="absolute top-1 right-1.5 bg-accent text-accent-ink text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
                   {unread}
                 </span>
               )}
@@ -277,7 +277,7 @@ export function Layout({ children }: { children: ReactNode }) {
                   className={cn(
                     'w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-sm font-medium transition-colors',
                     notifOn
-                      ? 'text-indigo-500 bg-indigo-500/10 hover:bg-indigo-500/15'
+                      ? 'text-accent bg-accent/10 hover:bg-accent/15'
                       : 'text-muted hover:bg-nav-hover hover:text-fg',
                   )}
                 >

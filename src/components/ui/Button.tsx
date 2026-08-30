@@ -9,7 +9,7 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 export function Button({ children, variant = 'primary', size = 'md', className, ...props }: ButtonProps) {
   const v = {
-    primary: 'bg-indigo-500 hover:bg-indigo-400 text-white shadow-lg shadow-indigo-500/20',
+    primary: 'bg-accent hover:bg-accent-hover text-accent-ink',
     secondary: 'bg-surface-2 hover:bg-surface-3 text-fg border border-border-strong',
     ghost: 'bg-transparent hover:bg-nav-hover text-fg-secondary',
     danger: 'bg-red-500/15 hover:bg-red-500/25 text-red-500 border border-red-500/25',
@@ -23,7 +23,7 @@ export function Button({ children, variant = 'primary', size = 'md', className, 
   return (
     <button
       className={cn(
-        'inline-flex items-center justify-center gap-2 font-medium transition-all active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400',
+        'inline-flex items-center justify-center gap-2 font-medium transition-all active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
         v,
         s,
         className,

@@ -3,59 +3,77 @@
 /* Semantic tokens — dark is default (matches current look) */
 :root,
 .dark {
-  --app-page: #020617;          /* slate-950 */
-  --app-surface: #0f172a;       /* slate-900 */
-  --app-surface-2: #1e293b;     /* slate-800 */
-  --app-surface-3: #334155;     /* slate-700 */
-  --app-inset: rgba(15, 23, 42, 0.55);
-  --app-elevated: rgba(30, 41, 59, 0.6);
-  --app-border: rgba(51, 65, 85, 0.55);
-  --app-border-strong: #334155;
-  --app-fg: #f1f5f9;            /* slate-100 */
-  --app-fg-secondary: #cbd5e1;  /* slate-300 */
-  --app-muted: #94a3b8;         /* slate-400 */
-  --app-faint: #64748b;         /* slate-500 */
-  --app-header: rgba(2, 6, 23, 0.8);
-  --app-sidebar: rgba(15, 23, 42, 0.5);
-  --app-nav-hover: rgba(30, 41, 59, 0.8);
-  --app-input: rgba(15, 23, 42, 0.85);
-  --app-scrollbar: #334155;
-  --app-hero-from: rgba(79, 70, 229, 0.2);
-  --app-hero-via: rgba(147, 51, 234, 0.1);
-  --app-hero-to: #0f172a;
-  --app-hero-border: rgba(99, 102, 241, 0.2);
-  --app-hero-title: #ffffff;
-  --app-hero-sub: rgba(165, 180, 252, 0.85);
-  --app-hero-body: #cbd5e1;
-  --app-ring-offset: #0f172a;
+  --app-page: #131412;
+  --app-surface: #1b1c19;
+  --app-surface-2: #232420;
+  --app-surface-3: #2b2c27;
+  --app-inset: rgba(19, 20, 18, 0.6);
+  --app-elevated: rgba(35, 36, 32, 0.75);
+  --app-border: rgba(43, 44, 39, 0.9);
+  --app-border-strong: #38392f;
+  --app-fg: #ededE7;
+  --app-fg-secondary: #a3a297;
+  --app-muted: #a3a297;
+  --app-faint: #6c6b62;
+  --app-header: rgba(19, 20, 18, 0.85);
+  --app-sidebar: rgba(27, 28, 25, 0.9);
+  --app-nav-hover: rgba(35, 36, 32, 0.9);
+  --app-input: rgba(27, 28, 25, 0.9);
+  --app-scrollbar: #38392f;
+  --app-hero-from: rgba(111, 190, 139, 0.16);
+  --app-hero-via: rgba(111, 190, 139, 0.06);
+  --app-hero-to: #1b1c19;
+  --app-hero-border: rgba(111, 190, 139, 0.25);
+  --app-hero-title: #ededE7;
+  --app-hero-sub: #86cc9f;
+  --app-hero-body: #a3a297;
+  --app-ring-offset: #1b1c19;
+  --app-accent: #6fbe8b;
+  --app-accent-hover: #86cc9f;
+  --app-accent-tint: #1d2a20;
+  --app-accent-tint-strong: #26392b;
+  --app-accent-ink: #10231a;
+  --app-warn: #d9a54d;
+  --app-warn-tint: #33291a;
+  --app-danger: #e08571;
+  --app-danger-tint: #362320;
 }
 
 .light {
-  --app-page: #f1f5f9;          /* slate-100 */
+  --app-page: #fafaf8;
   --app-surface: #ffffff;
-  --app-surface-2: #f8fafc;     /* slate-50 */
-  --app-surface-3: #e2e8f0;     /* slate-200 */
-  --app-inset: #f8fafc;
+  --app-surface-2: #f4f3ef;
+  --app-surface-3: #e7e6e0;
+  --app-inset: #f4f3ef;
   --app-elevated: #ffffff;
-  --app-border: #e2e8f0;        /* slate-200 */
-  --app-border-strong: #cbd5e1; /* slate-300 */
-  --app-fg: #0f172a;            /* slate-900 */
-  --app-fg-secondary: #334155;  /* slate-700 */
-  --app-muted: #64748b;         /* slate-500 */
-  --app-faint: #94a3b8;         /* slate-400 */
+  --app-border: #e7e6e0;
+  --app-border-strong: #d9d8d0;
+  --app-fg: #1c1c1a;
+  --app-fg-secondary: #6b6a62;
+  --app-muted: #6b6a62;
+  --app-faint: #a3a299;
   --app-header: rgba(255, 255, 255, 0.9);
   --app-sidebar: #ffffff;
-  --app-nav-hover: #f1f5f9;
+  --app-nav-hover: #f4f3ef;
   --app-input: #ffffff;
-  --app-scrollbar: #cbd5e1;
-  --app-hero-from: #eef2ff;     /* indigo-50 */
-  --app-hero-via: #f5f3ff;      /* violet-50 */
+  --app-scrollbar: #d9d8d0;
+  --app-hero-from: #eaf2ea;
+  --app-hero-via: #f4faf5;
   --app-hero-to: #ffffff;
-  --app-hero-border: #c7d2fe;   /* indigo-200 */
-  --app-hero-title: #1e1b4b;    /* indigo-950 */
-  --app-hero-sub: #4338ca;      /* indigo-700 */
-  --app-hero-body: #475569;     /* slate-600 */
+  --app-hero-border: #d7e9d9;
+  --app-hero-title: #1c1c1a;
+  --app-hero-sub: #2e6b44;
+  --app-hero-body: #6b6a62;
   --app-ring-offset: #ffffff;
+  --app-accent: #2e6b44;
+  --app-accent-hover: #255738;
+  --app-accent-tint: #eaf2ea;
+  --app-accent-tint-strong: #d7e9d9;
+  --app-accent-ink: #ffffff;
+  --app-warn: #b4740f;
+  --app-warn-tint: #fbf1df;
+  --app-danger: #b4432f;
+  --app-danger-tint: #fbebe7;
 }
 
 @theme {
@@ -83,6 +101,15 @@
   --color-hero-sub: var(--app-hero-sub);
   --color-hero-body: var(--app-hero-body);
   --color-ring-offset: var(--app-ring-offset);
+  --color-accent: var(--app-accent);
+  --color-accent-hover: var(--app-accent-hover);
+  --color-accent-tint: var(--app-accent-tint);
+  --color-accent-tint-strong: var(--app-accent-tint-strong);
+  --color-accent-ink: var(--app-accent-ink);
+  --color-warn: var(--app-warn);
+  --color-warn-tint: var(--app-warn-tint);
+  --color-danger: var(--app-danger);
+  --color-danger-tint: var(--app-danger-tint);
 }
 
 html,

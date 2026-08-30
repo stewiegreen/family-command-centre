@@ -21,8 +21,8 @@ import { upcomingExpanded } from '../lib/recurrence';
 import { cn } from '../lib/cn';
 
 const COLOR_ICON: Record<string, string> = {
-  indigo: 'bg-indigo-500/15 text-indigo-500',
-  emerald: 'bg-emerald-500/15 text-emerald-500',
+  indigo: 'bg-accent/15 text-accent',
+  emerald: 'bg-sky-500/15 text-sky-500',
   amber: 'bg-amber-500/15 text-amber-500',
   pink: 'bg-pink-500/15 text-pink-500',
 };
@@ -237,7 +237,7 @@ export function Dashboard() {
                   className={cn(
                     'px-3 py-1.5 rounded-full text-sm border transition-colors',
                     myStatus === o.id
-                      ? 'border-indigo-500 bg-indigo-500/15 text-indigo-500'
+                      ? 'border-accent bg-accent/15 text-accent'
                       : 'border-border-strong text-muted hover:bg-nav-hover hover:text-fg',
                   )}
                 >
@@ -253,7 +253,7 @@ export function Dashboard() {
       <Card className="!p-5 lg:!p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold text-fg flex items-center gap-2">
-            <Newspaper className="w-4 h-4 text-indigo-500" />
+            <Newspaper className="w-4 h-4 text-accent" />
             This week
             <span className="text-xs font-normal text-muted">({weekLabel})</span>
           </h2>
@@ -332,7 +332,7 @@ export function Dashboard() {
       <Card>
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold text-fg">Upcoming Events</h2>
-          <button type="button" onClick={() => setView('calendar')} className="text-xs text-indigo-500">
+          <button type="button" onClick={() => setView('calendar')} className="text-xs text-accent">
             See all →
           </button>
         </div>
@@ -375,7 +375,7 @@ export function Dashboard() {
       <Card>
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold text-fg">To-Dos by Person</h2>
-          <button type="button" onClick={() => setView('todos')} className="text-xs text-indigo-500">
+          <button type="button" onClick={() => setView('todos')} className="text-xs text-accent">
             Open lists →
           </button>
         </div>
@@ -409,9 +409,9 @@ export function Dashboard() {
         <Card>
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold text-fg flex items-center gap-2">
-              <RefreshCw className="w-4 h-4 text-indigo-500" /> {isParent ? "Chores to approve" : "Chores"}
+              <RefreshCw className="w-4 h-4 text-accent" /> {isParent ? "Chores to approve" : "Chores"}
             </h2>
-            <button type="button" onClick={() => setView('chores')} className="text-xs text-indigo-500">
+            <button type="button" onClick={() => setView('chores')} className="text-xs text-accent">
               All chores →
             </button>
           </div>
@@ -423,7 +423,7 @@ export function Dashboard() {
             myChores.map((c) => (
               <div
                 key={c.id}
-                className="flex items-center gap-3 p-3 rounded-xl bg-indigo-500/10 border border-indigo-500/20 mb-2"
+                className="flex items-center gap-3 p-3 rounded-xl bg-accent/10 border border-accent/20 mb-2"
               >
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-sm text-fg">{c.title}</p>
@@ -438,7 +438,7 @@ export function Dashboard() {
         </Card>
         <Card onClick={() => setView('shopping')}>
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/15 flex items-center justify-center text-emerald-500">
+            <div className="w-10 h-10 rounded-xl bg-sky-500/15 flex items-center justify-center text-sky-500">
               <ShoppingCart className="w-5 h-5" />
             </div>
             <div>
@@ -463,7 +463,7 @@ export function Dashboard() {
           <button
             type="button"
             onClick={() => setHeroOpen(true)}
-            className="text-xs text-indigo-500 hover:underline"
+            className="text-xs text-accent hover:underline"
           >
             Show message
           </button>
@@ -472,7 +472,7 @@ export function Dashboard() {
 
       {heroOpen && (
         <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-hero-from via-hero-via to-hero-to border border-hero-border p-6 lg:p-8">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+          <div className="absolute top-0 right-0 w-64 h-64 bg-accent/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
           <button
             type="button"
             onClick={dismissHero}

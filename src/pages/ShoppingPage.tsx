@@ -130,7 +130,7 @@ export function ShoppingPage() {
                       <button
                         type="button"
                         onClick={() => toggleBought(s.id)}
-                        className="w-6 h-6 rounded-lg border-2 border-border-strong flex items-center justify-center shrink-0 hover:border-emerald-500 transition-colors"
+                        className="w-6 h-6 rounded-lg border-2 border-border-strong flex items-center justify-center shrink-0 hover:border-accent transition-colors"
                         aria-label="Mark bought"
                       />
                       <div className="flex-1 min-w-0">
@@ -138,7 +138,7 @@ export function ShoppingPage() {
                         <div className="flex flex-wrap gap-2 mt-1 text-xs text-muted">
                           {s.store && <span className="px-2 py-0.5 rounded-md bg-surface-2">{s.store}</span>}
                           {claimer && (
-                            <span className="text-indigo-500">
+                            <span className="text-accent">
                               {claimer.id === myId ? 'You claimed this' : `${claimer.name} claimed this`}
                             </span>
                           )}
@@ -176,7 +176,7 @@ export function ShoppingPage() {
                     <button
                       type="button"
                       onClick={() => toggleBought(s.id)}
-                      className="w-6 h-6 rounded-lg bg-emerald-500 border-2 border-emerald-500 flex items-center justify-center shrink-0 text-white text-xs"
+                      className="w-6 h-6 rounded-lg bg-accent border-2 border-accent flex items-center justify-center shrink-0 text-accent-ink text-xs"
                     >
                       ✓
                     </button>

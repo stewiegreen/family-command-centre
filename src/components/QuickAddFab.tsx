@@ -38,7 +38,7 @@ export function QuickAddFab() {
               onClick={() => run(a)}
               className="flex items-center gap-2 pl-3 pr-3.5 py-2.5 rounded-2xl bg-surface border border-border shadow-lg text-sm font-medium text-fg hover:bg-nav-hover"
             >
-              <a.icon className="w-4 h-4 text-indigo-500" />
+              <a.icon className="w-4 h-4 text-accent" />
               {a.label}
             </button>
           ))}
@@ -48,8 +48,8 @@ export function QuickAddFab() {
         type="button"
         onClick={() => setOpen((o) => !o)}
         className={cn(
-          'w-14 h-14 rounded-2xl text-white shadow-xl shadow-indigo-500/40 flex items-center justify-center active:scale-95 transition-all',
-          open ? 'bg-slate-600' : 'bg-indigo-500 hover:bg-indigo-400',
+          'w-14 h-14 rounded-2xl text-accent-ink flex items-center justify-center active:scale-95 transition-all',
+          open ? 'bg-surface-3 text-fg' : 'bg-accent hover:bg-accent-hover',
         )}
         aria-label={open ? 'Close quick add' : 'Quick add'}
       >

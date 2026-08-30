@@ -145,7 +145,7 @@ export function SettingsPage() {
         <h1 className="text-xl font-bold">Settings</h1>
         <Card className="space-y-4">
           <div className="flex flex-col items-center text-center gap-2">
-            <div className="w-12 h-12 rounded-2xl bg-indigo-500/15 flex items-center justify-center text-indigo-500">
+            <div className="w-12 h-12 rounded-2xl bg-accent/15 flex items-center justify-center text-accent">
               <Lock className="w-6 h-6" />
             </div>
             <h2 className="font-semibold">Parent PIN required</h2>
@@ -355,7 +355,7 @@ export function SettingsPage() {
         <Button size="sm" className="mt-3" variant="secondary" onClick={applyParentPin}>
           {newParentPin ? 'Set parent PIN' : 'Clear parent PIN'}
         </Button>
-        {s.parentPin && <p className="text-xs text-emerald-500 mt-2">Parent PIN is set (remember to Save).</p>}
+        {s.parentPin && <p className="text-xs text-accent mt-2">Parent PIN is set (remember to Save).</p>}
       </Card>
 
       {familyId && cloudReady && (
@@ -383,9 +383,9 @@ export function SettingsPage() {
             </Button>
           </div>
           {lastInvite && (
-            <div className="mb-3 p-3 rounded-xl bg-indigo-500/10 border border-indigo-500/30">
+            <div className="mb-3 p-3 rounded-xl bg-accent/10 border border-accent/30">
               <p className="text-xs text-muted mb-1">Share once</p>
-              <p className="text-xl font-bold tracking-widest text-indigo-500">{lastInvite}</p>
+              <p className="text-xl font-bold tracking-widest text-accent">{lastInvite}</p>
             </div>
           )}
           {invites.length > 0 && (
@@ -396,7 +396,7 @@ export function SettingsPage() {
                   className="flex items-center gap-2 text-xs p-2 rounded-lg bg-surface/60 border border-border"
                 >
                   <span
-                    className={cn('font-mono tracking-wider', inv.used ? 'text-faint line-through' : 'text-indigo-500')}
+                    className={cn('font-mono tracking-wider', inv.used ? 'text-faint line-through' : 'text-accent')}
                   >
                     {inv.code}
                   </span>
@@ -536,7 +536,7 @@ export function SettingsPage() {
               onClick={() => setS({ ...s, theme: t })}
               className={cn(
                 'px-4 py-2 rounded-xl text-sm capitalize',
-                s.theme === t ? 'bg-indigo-500 text-white' : 'bg-surface-2 text-muted',
+                s.theme === t ? 'bg-accent text-accent-ink' : 'bg-surface-2 text-muted',
               )}
             >
               {t}

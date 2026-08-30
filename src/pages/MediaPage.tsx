@@ -26,8 +26,8 @@ export function MediaPage() {
       <div className="grid md:grid-cols-2 gap-4">
         <Card className="space-y-3">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl bg-indigo-500/15 flex items-center justify-center">
-              <Film className="w-6 h-6 text-indigo-500" />
+            <div className="w-11 h-11 rounded-xl bg-accent/15 flex items-center justify-center">
+              <Film className="w-6 h-6 text-accent" />
             </div>
             <div>
               <h2 className="font-semibold">Emby</h2>

@@ -86,13 +86,13 @@ export function MessagesPage() {
               onClick={() => setChatId(m.id)}
               className={cn(
                 'flex items-center gap-2 px-3 py-1.5 rounded-full text-sm shrink-0 border relative',
-                chatId === m.id ? 'border-indigo-500 bg-indigo-500/15' : 'border-border-strong',
+                chatId === m.id ? 'border-accent bg-accent/15' : 'border-border-strong',
               )}
             >
               <Avatar {...m} size="sm" className="!w-6 !h-6" />
               {m.name}
               {unread > 0 && (
-                <span className="bg-indigo-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+                <span className="bg-accent text-accent-ink text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
                   {unread}
                 </span>
               )}
@@ -113,11 +113,11 @@ export function MessagesPage() {
                 <div
                   className={cn(
                     'max-w-[80%] px-3 py-2 rounded-2xl text-sm whitespace-pre-wrap break-words',
-                    mine ? 'bg-indigo-500 text-white rounded-br-md' : 'bg-surface-2 text-fg rounded-bl-md',
+                    mine ? 'bg-accent text-accent-ink rounded-br-md' : 'bg-surface-2 text-fg rounded-bl-md',
                   )}
                 >
                   {m.text}
-                  <div className={cn('text-[10px] mt-1', mine ? 'text-indigo-200' : 'text-muted')}>
+                  <div className={cn('text-[10px] mt-1', mine ? 'text-accent' : 'text-muted')}>
                     {new Date(m.timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
                   </div>
                 </div>
@@ -140,7 +140,7 @@ export function MessagesPage() {
             type="button"
             onClick={() => void send()}
             disabled={sending}
-            className="p-2.5 rounded-xl bg-indigo-500 text-white hover:bg-indigo-400 disabled:opacity-50"
+            className="p-2.5 rounded-xl bg-accent text-accent-ink hover:bg-accent disabled:opacity-50"
           >
             <Send className="w-5 h-5" />
           </button>

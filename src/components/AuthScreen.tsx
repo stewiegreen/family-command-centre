@@ -47,10 +47,10 @@ export function AuthScreen() {
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-page relative overflow-hidden">
       <div
-        className="pointer-events-none absolute inset-0 opacity-40"
+        className="pointer-events-none absolute inset-0 opacity-60"
         style={{
           background:
-            'radial-gradient(circle at 50% 0%, rgba(132, 204, 22, 0.18), transparent 60%)',
+            'radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--app-accent) 14%, transparent), transparent 60%)',
         }}
       />
       <div className="w-full max-w-md space-y-4 relative z-10">
@@ -73,7 +73,7 @@ export function AuthScreen() {
               onClick={() => setMode('signin')}
               className={cn(
                 'flex-1 py-2 text-sm rounded-lg font-medium transition-colors',
-                mode === 'signin' ? 'bg-lime-500 text-neutral-950' : 'text-muted hover:text-fg',
+                mode === 'signin' ? 'bg-accent text-accent-ink' : 'text-muted hover:text-fg',
               )}
             >
               Sign in
@@ -83,7 +83,7 @@ export function AuthScreen() {
               onClick={() => setMode('signup')}
               className={cn(
                 'flex-1 py-2 text-sm rounded-lg font-medium transition-colors',
-                mode === 'signup' ? 'bg-lime-500 text-neutral-950' : 'text-muted hover:text-fg',
+                mode === 'signup' ? 'bg-accent text-accent-ink' : 'text-muted hover:text-fg',
               )}
             >
               Create account
@@ -127,7 +127,7 @@ export function AuthScreen() {
             {err && <p className="text-sm text-red-400">{err}</p>}
             <Button
               type="submit"
-              className="w-full !bg-lime-500 hover:!bg-lime-400 !text-neutral-950 !shadow-lime-500/20 focus-visible:!ring-lime-400"
+              className="w-full !bg-accent hover:!bg-accent-hover !text-accent-ink focus-visible:!ring-accent"
               disabled={busy}
             >
               {busy ? 'Please wait…' : mode === 'signup' ? 'Create account' : 'Sign in'}

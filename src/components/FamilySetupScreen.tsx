@@ -61,7 +61,7 @@ export function FamilySetupScreen() {
           </form>
         </Card>
         <p className="text-center text-xs text-faint">
-          <button type="button" className="text-muted hover:text-indigo-500 underline" onClick={() => void signOut()}>
+          <button type="button" className="text-muted hover:text-accent underline" onClick={() => void signOut()}>
             Sign out
           </button>
         </p>
