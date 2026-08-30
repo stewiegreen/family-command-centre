@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Trash2, RefreshCw, Tv, Sparkles, Minus } from 'lucide-react';
+import { Plus, Trash2, RefreshCw, Tv, Sparkles, Minus, ChevronDown, ChevronUp } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Avatar } from '../components/ui/Avatar';
 import { Button } from '../components/ui/Button';
@@ -17,6 +17,7 @@ export function ChoresPage() {
   const [choreReward, setChoreReward] = useState(15);
   const [approvePick, setApprovePick] = useState<Record<string, string>>({});
   const [earnFlash, setEarnFlash] = useState<{ minutes: number; title: string } | null>(null);
+  const [spendOpen, setSpendOpen] = useState(false);
   const [spendMember, setSpendMember] = useState('');
   const [spendMins, setSpendMins] = useState(30);
   const [spendNote, setSpendNote] = useState('');
@@ -214,6 +215,7 @@ export function ChoresPage() {
   const openChores = chores.filter((c) => c.status === 'open' || !c.status);
   const pendingChores = chores.filter((c) => c.status === 'pending');
   const doneChores = chores.filter((c) => c.status === 'done');
+  const recentlyApproved = doneChores.slice(0, 3);
 
   return (
     <div className="p-4 lg:p-8 max-w-4xl mx-auto space-y-6">
@@ -224,7 +226,7 @@ export function ChoresPage() {
       </div>
 
       {earnFlash && (
-        <div className="rounded-2xl border border-amber-400/40 bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-pink-500/15 p-4 flex items-center gap-3">
+        <div className="rounded-2xl border border-lime-400/40 bg-gradient-to-r from-lime-500/15 via-emerald-500/10 to-teal-500/15 p-4 flex items-center gap-3">
           <span className="text-3xl">🎉</span>
           <div>
             <p className="font-bold text-fg text-lg">+{earnFlash.minutes} min screen time!</p>
@@ -233,22 +235,25 @@ export function ChoresPage() {
         </div>
       )}
 
-      <Card className="!p-5 bg-gradient-to-br from-indigo-500/10 via-purple-500/5 to-transparent border-indigo-500/20">
+      {/* —— Slim screen-time bank strip —— */}
+      <Card className="!p-4 bg-gradient-to-br from-lime-500/10 via-emerald-500/5 to-transparent border-lime-500/20">
         <div className="flex items-center gap-2 mb-3">
-          <Tv className="w-5 h-5 text-indigo-500" />
-          <h2 className="font-semibold text-fg">Screen time bank</h2>
-          <Sparkles className="w-4 h-4 text-amber-400" />
+          <Tv className="w-4 h-4 text-lime-500" />
+          <h2 className="text-sm font-semibold text-fg">Screen time bank</h2>
+          <Sparkles className="w-3.5 h-3.5 text-amber-400" />
         </div>
+
         {!isParent && (
-          <div className="mb-4 p-4 rounded-2xl bg-surface border border-border flex items-center gap-4">
-            <div className="text-4xl">⏱️</div>
+          <div className="mb-3 flex items-center gap-3">
+            <span className="text-3xl">⏱️</span>
             <div>
-              <p className="text-3xl font-black text-indigo-500 tabular-nums">{myMinutes}</p>
-              <p className="text-sm text-muted">minutes you’ve earned</p>
+              <p className="text-2xl font-black text-lime-500 tabular-nums leading-none">{myMinutes}</p>
+              <p className="text-xs text-muted mt-0.5">minutes you’ve earned</p>
             </div>
           </div>
         )}
-        <div className="grid sm:grid-cols-2 gap-2">
+
+        <div className="flex flex-wrap gap-2">
           {(isParent ? members : kids.length ? kids : members.filter((m) => m.id === myId)).map((m) => {
             const mins = screenTime[m.id] || 0;
             const look = getMember(m.id) || m;
@@ -256,100 +261,128 @@ export function ChoresPage() {
               <div
                 key={m.id}
                 className={cn(
-                  'flex items-center gap-3 p-3 rounded-xl border',
-                  m.id === myId ? 'border-indigo-500/40 bg-indigo-500/10' : 'border-border bg-surface/50',
+                  'flex items-center gap-2 pl-1.5 pr-3 py-1.5 rounded-full border',
+                  m.id === myId ? 'border-lime-500/40 bg-lime-500/10' : 'border-border bg-surface/50',
                 )}
               >
-                <Avatar {...look} size="sm" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-fg truncate">{m.name}</p>
-                  <p className="text-xs text-muted">{mins} min</p>
-                </div>
-                <span className="text-lg font-bold tabular-nums text-indigo-500">{mins}</span>
+                <Avatar {...look} size="sm" className="!w-6 !h-6" />
+                <span className="text-sm text-fg-secondary">{m.name}</span>
+                <span className="text-sm font-bold tabular-nums text-lime-500">{mins}m</span>
               </div>
             );
           })}
         </div>
 
         {isParent && kids.length > 0 && (
-          <div className="mt-4 pt-4 border-t border-border space-y-3">
-            <p className="text-sm font-medium text-fg">Spend screen time</p>
-            <p className="text-xs text-muted">When a kid uses device time, subtract minutes here.</p>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <select
-                value={spendMember || kids[0]?.id || ''}
-                onChange={(e) => setSpendMember(e.target.value)}
-                className="bg-input border border-border-strong rounded-xl px-3 py-2.5 text-sm text-fg flex-1"
-              >
-                {kids.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name} ({screenTime[m.id] || 0} min)
-                  </option>
-                ))}
-              </select>
-              <Input
-                type="number"
-                min={1}
-                max={480}
-                value={spendMins}
-                onChange={(e) => setSpendMins(Number(e.target.value))}
-                className="sm:w-28"
-              />
-              <Input
-                value={spendNote}
-                onChange={(e) => setSpendNote(e.target.value)}
-                placeholder="e.g. YouTube"
-                className="flex-1"
-              />
-              <Button onClick={spendScreenTime}>
-                <Minus className="w-4 h-4" /> Spend
-              </Button>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {kids.map((m) => (
-                <button
-                  key={m.id + 'bonus'}
-                  type="button"
-                  onClick={() => adjustScreenTime(m.id, 10, 'Parent bonus')}
-                  className="text-xs px-2.5 py-1 rounded-full border border-border-strong text-muted hover:text-indigo-500 hover:border-indigo-500"
-                >
-                  +10 bonus for {m.name}
-                </button>
-              ))}
-            </div>
+          <div className="mt-3 pt-3 border-t border-border">
+            <button
+              type="button"
+              onClick={() => setSpendOpen((o) => !o)}
+              className="w-full flex items-center justify-between text-sm font-medium text-fg hover:text-lime-500 transition-colors"
+            >
+              <span className="flex items-center gap-1.5">
+                <Minus className="w-3.5 h-3.5" /> Spend screen time
+              </span>
+              {spendOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </button>
+            {spendOpen && (
+              <div className="mt-3 space-y-3">
+                <p className="text-xs text-muted">When a kid uses device time, subtract minutes here.</p>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <select
+                    value={spendMember || kids[0]?.id || ''}
+                    onChange={(e) => setSpendMember(e.target.value)}
+                    className="bg-input border border-border-strong rounded-xl px-3 py-2.5 text-sm text-fg flex-1"
+                  >
+                    {kids.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name} ({screenTime[m.id] || 0} min)
+                      </option>
+                    ))}
+                  </select>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={480}
+                    value={spendMins}
+                    onChange={(e) => setSpendMins(Number(e.target.value))}
+                    className="sm:w-28"
+                  />
+                  <Input
+                    value={spendNote}
+                    onChange={(e) => setSpendNote(e.target.value)}
+                    placeholder="e.g. YouTube"
+                    className="flex-1"
+                  />
+                  <Button onClick={spendScreenTime}>
+                    <Minus className="w-4 h-4" /> Spend
+                  </Button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {kids.map((m) => (
+                    <button
+                      key={m.id + 'bonus'}
+                      type="button"
+                      onClick={() => adjustScreenTime(m.id, 10, 'Parent bonus')}
+                      className="text-xs px-2.5 py-1 rounded-full border border-border-strong text-muted hover:text-lime-500 hover:border-lime-500"
+                    >
+                      +10 bonus for {m.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </Card>
 
       <div className="grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] gap-6 items-start">
         {isParent ? (
-          <Card className="!p-5 lg:!p-6 space-y-4 lg:sticky lg:top-20">
-            <h2 className="font-semibold text-fg">Add a chore</h2>
-            <p className="text-xs text-muted -mt-2">Kids pick jobs, mark them finished, then you approve the minutes.</p>
-            <Input
-              value={choreTitle}
-              onChange={(e) => setChoreTitle(e.target.value)}
-              placeholder="e.g. Unload dishwasher"
-              onKeyDown={(e) => e.key === 'Enter' && addChore()}
-            />
-            <div>
-              <label className="text-xs text-muted mb-1.5 block flex items-center gap-1.5">
-                <Tv className="w-3.5 h-3.5" /> Screen time reward (minutes)
-              </label>
+          <div className="space-y-4 lg:sticky lg:top-20">
+            <Card className="!p-5 lg:!p-6 space-y-4">
+              <h2 className="font-semibold text-fg">Add a chore</h2>
+              <p className="text-xs text-muted -mt-2">Kids pick jobs, mark them finished, then you approve the minutes.</p>
               <Input
-                type="number"
-                min={0}
-                max={240}
-                value={choreReward}
-                onChange={(e) => setChoreReward(Number(e.target.value))}
+                value={choreTitle}
+                onChange={(e) => setChoreTitle(e.target.value)}
+                placeholder="e.g. Unload dishwasher"
+                onKeyDown={(e) => e.key === 'Enter' && addChore()}
               />
-            </div>
-            <Button onClick={addChore} className="w-full" disabled={!choreTitle.trim()}>
-              <Plus className="w-4 h-4" /> Add chore
-            </Button>
-          </Card>
+              <div>
+                <label className="text-xs text-muted mb-1.5 block flex items-center gap-1.5">
+                  <Tv className="w-3.5 h-3.5" /> Screen time reward (minutes)
+                </label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={240}
+                  value={choreReward}
+                  onChange={(e) => setChoreReward(Number(e.target.value))}
+                />
+              </div>
+              <Button onClick={addChore} className="w-full !bg-lime-500 hover:!bg-lime-400 !text-neutral-950" disabled={!choreTitle.trim()}>
+                <Plus className="w-4 h-4" /> Add chore
+              </Button>
+            </Card>
+
+            {recentlyApproved.length > 0 && (
+              <Card className="!p-5 space-y-2.5">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">Recently approved</h3>
+                {recentlyApproved.map((c) => {
+                  const who = getMember(c.approvedForId || c.submittedById || '');
+                  return (
+                    <div key={c.id} className="flex items-center gap-2.5 text-sm">
+                      {who && <Avatar {...who} size="sm" className="!w-6 !h-6" />}
+                      <span className="text-fg-secondary truncate flex-1 min-w-0">{c.title}</span>
+                      <span className="text-lime-500 font-medium text-xs shrink-0">+{c.rewardMinutes || 0}m</span>
+                    </div>
+                  );
+                })}
+              </Card>
+            )}
+          </div>
         ) : (
-          <Card className="!p-5 text-sm text-muted space-y-2">
+          <Card className="!p-5 text-sm text-muted space-y-2 lg:sticky lg:top-20">
             <p>
               Pick any <strong className="text-fg">open</strong> chore, do it, then tap{' '}
               <strong className="text-fg">I finished this</strong>.
@@ -406,7 +439,7 @@ export function ChoresPage() {
                                 </option>
                               ))}
                             </select>
-                            <Button onClick={() => approveChore(c.id, pick || c.submittedById || '')}>
+                            <Button onClick={() => approveChore(c.id, pick || c.submittedById || '')} className="!bg-lime-500 hover:!bg-lime-400 !text-neutral-950">
                               Approve +{c.rewardMinutes || 0}
                             </Button>
                             <Button variant="secondary" onClick={() => cancelSubmit(c.id)}>
@@ -436,7 +469,7 @@ export function ChoresPage() {
                     <Card key={c.id} className="!p-4 flex flex-col sm:flex-row sm:items-center gap-3">
                       <div className="flex-1 min-w-0">
                         <p className="font-semibold text-fg">{c.title}</p>
-                        <p className="text-sm text-amber-500 font-medium mt-0.5">
+                        <p className="text-sm text-lime-500 font-medium mt-0.5">
                           +{c.rewardMinutes || 0} min screen time
                         </p>
                         {isParent && (
@@ -454,7 +487,7 @@ export function ChoresPage() {
                         )}
                       </div>
                       <div className="flex items-center gap-2">
-                        <Button onClick={() => submitChore(c.id)}>I finished this</Button>
+                        <Button onClick={() => submitChore(c.id)} className="!bg-lime-500 hover:!bg-lime-400 !text-neutral-950">I finished this</Button>
                         {isParent && (
                           <button
                             type="button"
