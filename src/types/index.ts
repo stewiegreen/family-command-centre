@@ -1,6 +1,6 @@
 export type Role = 'parent' | 'kid' | 'media';
 export type Priority = 'low' | 'medium' | 'high';
-export type ViewId = 'dashboard' | 'calendar' | 'todos' | 'shopping' | 'notes' | 'messages' | 'media' | 'settings';
+export type ViewId = 'dashboard' | 'calendar' | 'todos' | 'chores' | 'shopping' | 'notes' | 'messages' | 'media' | 'settings';
 export type SyncStatus = 'local' | 'connecting' | 'live' | 'error' | 'auth';
 export type ChoreCadence = 'daily' | 'weekly' | 'once'; // legacy
 export type ChoreStatus = 'open' | 'pending' | 'done';

@@ -411,7 +411,7 @@ export function Dashboard() {
             <h2 className="font-semibold text-fg flex items-center gap-2">
               <RefreshCw className="w-4 h-4 text-indigo-500" /> {isParent ? "Chores to approve" : "Chores"}
             </h2>
-            <button type="button" onClick={() => setView('todos')} className="text-xs text-indigo-500">
+            <button type="button" onClick={() => setView('chores')} className="text-xs text-indigo-500">
               All chores →
             </button>
           </div>

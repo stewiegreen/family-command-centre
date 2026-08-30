@@ -7,7 +7,7 @@ import type { ViewId } from '../types';
 const ACTIONS: { id: string; label: string; view: ViewId; icon: typeof Plus; event?: string }[] = [
   { id: 'event', label: 'Event', view: 'calendar', icon: Calendar, event: 'fcc:quick-add' },
   { id: 'todo', label: 'To-do', view: 'todos', icon: CheckSquare, event: 'fcc:quick-add' },
-  { id: 'chore', label: 'Chore', view: 'todos', icon: RefreshCw, event: 'fcc:open-chores' },
+  { id: 'chore', label: 'Chore', view: 'chores', icon: RefreshCw },
   { id: 'shop', label: 'Shopping', view: 'shopping', icon: ShoppingCart, event: 'fcc:quick-add' },
 ];
 

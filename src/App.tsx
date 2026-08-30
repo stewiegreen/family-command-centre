@@ -6,6 +6,7 @@ import { FamilySetupScreen } from './components/FamilySetupScreen';
 import { Dashboard } from './pages/Dashboard';
 import { CalendarPage } from './pages/CalendarPage';
 import { TodosPage } from './pages/TodosPage';
+import { ChoresPage } from './pages/ChoresPage';
 import { ShoppingPage } from './pages/ShoppingPage';
 import { NotesPage } from './pages/NotesPage';
 import { MessagesPage } from './pages/MessagesPage';
@@ -79,6 +80,7 @@ function AppShell() {
             {view === 'dashboard' && <Dashboard />}
             {view === 'calendar' && <CalendarPage />}
             {view === 'todos' && <TodosPage />}
+            {view === 'chores' && <ChoresPage />}
             {view === 'shopping' && <ShoppingPage />}
             {view === 'notes' && <NotesPage />}
             {view === 'messages' && <MessagesPage />}
