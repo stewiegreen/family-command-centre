@@ -1,0 +1,125 @@
+@import "tailwindcss";
+
+/* Semantic tokens — dark is default (matches current look) */
+:root,
+.dark {
+  --app-page: #020617;          /* slate-950 */
+  --app-surface: #0f172a;       /* slate-900 */
+  --app-surface-2: #1e293b;     /* slate-800 */
+  --app-surface-3: #334155;     /* slate-700 */
+  --app-inset: rgba(15, 23, 42, 0.55);
+  --app-elevated: rgba(30, 41, 59, 0.6);
+  --app-border: rgba(51, 65, 85, 0.55);
+  --app-border-strong: #334155;
+  --app-fg: #f1f5f9;            /* slate-100 */
+  --app-fg-secondary: #cbd5e1;  /* slate-300 */
+  --app-muted: #94a3b8;         /* slate-400 */
+  --app-faint: #64748b;         /* slate-500 */
+  --app-header: rgba(2, 6, 23, 0.8);
+  --app-sidebar: rgba(15, 23, 42, 0.5);
+  --app-nav-hover: rgba(30, 41, 59, 0.8);
+  --app-input: rgba(15, 23, 42, 0.85);
+  --app-scrollbar: #334155;
+  --app-hero-from: rgba(79, 70, 229, 0.2);
+  --app-hero-via: rgba(147, 51, 234, 0.1);
+  --app-hero-to: #0f172a;
+  --app-hero-border: rgba(99, 102, 241, 0.2);
+  --app-hero-title: #ffffff;
+  --app-hero-sub: rgba(165, 180, 252, 0.85);
+  --app-hero-body: #cbd5e1;
+  --app-ring-offset: #0f172a;
+}
+
+.light {
+  --app-page: #f1f5f9;          /* slate-100 */
+  --app-surface: #ffffff;
+  --app-surface-2: #f8fafc;     /* slate-50 */
+  --app-surface-3: #e2e8f0;     /* slate-200 */
+  --app-inset: #f8fafc;
+  --app-elevated: #ffffff;
+  --app-border: #e2e8f0;        /* slate-200 */
+  --app-border-strong: #cbd5e1; /* slate-300 */
+  --app-fg: #0f172a;            /* slate-900 */
+  --app-fg-secondary: #334155;  /* slate-700 */
+  --app-muted: #64748b;         /* slate-500 */
+  --app-faint: #94a3b8;         /* slate-400 */
+  --app-header: rgba(255, 255, 255, 0.9);
+  --app-sidebar: #ffffff;
+  --app-nav-hover: #f1f5f9;
+  --app-input: #ffffff;
+  --app-scrollbar: #cbd5e1;
+  --app-hero-from: #eef2ff;     /* indigo-50 */
+  --app-hero-via: #f5f3ff;      /* violet-50 */
+  --app-hero-to: #ffffff;
+  --app-hero-border: #c7d2fe;   /* indigo-200 */
+  --app-hero-title: #1e1b4b;    /* indigo-950 */
+  --app-hero-sub: #4338ca;      /* indigo-700 */
+  --app-hero-body: #475569;     /* slate-600 */
+  --app-ring-offset: #ffffff;
+}
+
+@theme {
+  --color-page: var(--app-page);
+  --color-surface: var(--app-surface);
+  --color-surface-2: var(--app-surface-2);
+  --color-surface-3: var(--app-surface-3);
+  --color-inset: var(--app-inset);
+  --color-elevated: var(--app-elevated);
+  --color-border: var(--app-border);
+  --color-border-strong: var(--app-border-strong);
+  --color-fg: var(--app-fg);
+  --color-fg-secondary: var(--app-fg-secondary);
+  --color-muted: var(--app-muted);
+  --color-faint: var(--app-faint);
+  --color-header: var(--app-header);
+  --color-sidebar: var(--app-sidebar);
+  --color-nav-hover: var(--app-nav-hover);
+  --color-input: var(--app-input);
+  --color-hero-from: var(--app-hero-from);
+  --color-hero-via: var(--app-hero-via);
+  --color-hero-to: var(--app-hero-to);
+  --color-hero-border: var(--app-hero-border);
+  --color-hero-title: var(--app-hero-title);
+  --color-hero-sub: var(--app-hero-sub);
+  --color-hero-body: var(--app-hero-body);
+  --color-ring-offset: var(--app-ring-offset);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: Inter, system-ui, -apple-system, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  background-color: var(--app-page);
+  color: var(--app-fg);
+}
+
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--app-scrollbar);
+  border-radius: 3px;
+}
+
+.line-clamp-1 {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.line-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
