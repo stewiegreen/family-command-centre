@@ -45,10 +45,21 @@ export function AuthScreen() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-page">
-      <div className="w-full max-w-md space-y-4">
+    <div className="min-h-screen flex items-center justify-center p-4 bg-page relative overflow-hidden">
+      <div
+        className="pointer-events-none absolute inset-0 opacity-40"
+        style={{
+          background:
+            'radial-gradient(circle at 50% 0%, rgba(132, 204, 22, 0.18), transparent 60%)',
+        }}
+      />
+      <div className="w-full max-w-md space-y-4 relative z-10">
         <div className="text-center mb-6">
-          <h1 className="text-2xl font-bold text-fg">Family Command Centre</h1>
+          <img
+            src="/greenhq-logo.png"
+            alt="Green HQ — Our family. Our home. Our mission."
+            className="w-full max-w-sm mx-auto mb-4"
+          />
           <p className="text-sm text-muted mt-1">
             {HAS_BUILT_IN_CONFIG
               ? 'Sign in with your email — same link works on every phone'
@@ -62,7 +73,7 @@ export function AuthScreen() {
               onClick={() => setMode('signin')}
               className={cn(
                 'flex-1 py-2 text-sm rounded-lg font-medium transition-colors',
-                mode === 'signin' ? 'bg-indigo-500 text-white' : 'text-muted hover:text-fg',
+                mode === 'signin' ? 'bg-lime-500 text-neutral-950' : 'text-muted hover:text-fg',
               )}
             >
               Sign in
@@ -72,7 +83,7 @@ export function AuthScreen() {
               onClick={() => setMode('signup')}
               className={cn(
                 'flex-1 py-2 text-sm rounded-lg font-medium transition-colors',
-                mode === 'signup' ? 'bg-indigo-500 text-white' : 'text-muted hover:text-fg',
+                mode === 'signup' ? 'bg-lime-500 text-neutral-950' : 'text-muted hover:text-fg',
               )}
             >
               Create account
@@ -114,7 +125,11 @@ export function AuthScreen() {
               />
             </div>
             {err && <p className="text-sm text-red-400">{err}</p>}
-            <Button type="submit" className="w-full" disabled={busy}>
+            <Button
+              type="submit"
+              className="w-full !bg-lime-500 hover:!bg-lime-400 !text-neutral-950 !shadow-lime-500/20 focus-visible:!ring-lime-400"
+              disabled={busy}
+            >
               {busy ? 'Please wait…' : mode === 'signup' ? 'Create account' : 'Sign in'}
             </Button>
           </form>
