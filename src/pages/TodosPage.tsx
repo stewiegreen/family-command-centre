@@ -7,7 +7,11 @@ import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
 import { EmptyState } from '../components/ui/EmptyState';
 import { uid } from '../lib/uid';
+<<<<<<< HEAD
 import type { Priority } from '../types';
+=======
+import type { ChoreCadence, Priority } from '../types';
+>>>>>>> 78dbda71cfcdf1ae5ca5fd69f5e1f4fb892f06d0
 import { FAMILY_LIST_ID } from '../types';
 import { cn } from '../lib/cn';
 
@@ -25,8 +29,14 @@ export function TodosPage() {
   const [assignId, setAssignId] = useState(myId);
 
   const [choreTitle, setChoreTitle] = useState('');
+<<<<<<< HEAD
   const [choreReward, setChoreReward] = useState(15);
   const [approvePick, setApprovePick] = useState<Record<string, string>>({});
+=======
+  const [choreCadence, setChoreCadence] = useState<ChoreCadence>('weekly');
+  const [choreRotation, setChoreRotation] = useState<string[]>([]);
+  const [choreReward, setChoreReward] = useState(15);
+>>>>>>> 78dbda71cfcdf1ae5ca5fd69f5e1f4fb892f06d0
   const [earnFlash, setEarnFlash] = useState<{ minutes: number; title: string } | null>(null);
   const [spendMember, setSpendMember] = useState('');
   const [spendMins, setSpendMins] = useState(30);
@@ -44,7 +54,10 @@ export function TodosPage() {
   }, []);
 
   const members = data.members.filter((m) => m.role !== 'media');
+<<<<<<< HEAD
   const kids = members.filter((m) => m.role === 'kid');
+=======
+>>>>>>> 78dbda71cfcdf1ae5ca5fd69f5e1f4fb892f06d0
   const chores = data.chores || [];
 
   const listId = tab === 'family' ? FAMILY_LIST_ID : isParent ? activeId : myId;
@@ -101,8 +114,17 @@ export function TodosPage() {
     }));
   };
 
+<<<<<<< HEAD
   const addChore = () => {
     if (!choreTitle.trim() || !isParent) return;
+=======
+  const toggleRotationMember = (id: string) => {
+    setChoreRotation((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+
+  const addChore = () => {
+    if (!choreTitle.trim() || choreRotation.length === 0 || !isParent) return;
+>>>>>>> 78dbda71cfcdf1ae5ca5fd69f5e1f4fb892f06d0
     const reward = Math.max(0, Math.min(240, Math.round(choreReward) || 0));
     update((d) => ({
       ...d,
@@ -110,8 +132,15 @@ export function TodosPage() {
         {
           id: uid(),
           title: choreTitle.trim(),
+<<<<<<< HEAD
           rewardMinutes: reward,
           status: 'open' as const,
+=======
+          rotation: [...choreRotation],
+          turnIndex: 0,
+          cadence: choreCadence,
+          rewardMinutes: reward,
+>>>>>>> 78dbda71cfcdf1ae5ca5fd69f5e1f4fb892f06d0
           createdById: myId,
           createdAt: new Date().toISOString(),
         },
@@ -119,6 +148,7 @@ export function TodosPage() {
       ],
     }));
     setChoreTitle('');
+<<<<<<< HEAD
   };
 
   /** Kid (or anyone) marks a chore finished — waits for parent approval. */
@@ -156,15 +186,29 @@ export function TodosPage() {
   /** Parent approves and awards minutes to a chosen kid. */
   const approveChore = (choreId: string, forMemberId: string) => {
     if (!isParent || !forMemberId) return;
+=======
+    setChoreRotation([]);
+  };
+
+  const completeChore = (choreId: string) => {
+>>>>>>> 78dbda71cfcdf1ae5ca5fd69f5e1f4fb892f06d0
     let earned = 0;
     let title = '';
     update((d) => {
       const chore = (d.chores || []).find((c) => c.id === choreId);
+<<<<<<< HEAD
       if (!chore || chore.status !== 'pending') return d;
+=======
+      if (!chore || chore.rotation.length === 0) return d;
+      const whoseTurn = chore.rotation[chore.turnIndex % chore.rotation.length];
+      // Only the person whose turn it is earns (or a parent completing for them still advances)
+      const earnerId = whoseTurn;
+>>>>>>> 78dbda71cfcdf1ae5ca5fd69f5e1f4fb892f06d0
       const reward = Math.max(0, chore.rewardMinutes || 0);
       const balances = { ...(d.screenTime || {}) };
       const log = [...(d.screenTimeLog || [])];
       if (reward > 0) {
+<<<<<<< HEAD
         balances[forMemberId] = (balances[forMemberId] || 0) + reward;
         log.unshift({
           id: uid(),
@@ -178,11 +222,27 @@ export function TodosPage() {
       if (forMemberId === myId) {
         earned = reward;
         title = chore.title;
+=======
+        balances[earnerId] = (balances[earnerId] || 0) + reward;
+        log.unshift({
+          id: uid(),
+          memberId: earnerId,
+          delta: reward,
+          reason: `Chore: ${chore.title}`,
+          byId: myId,
+          at: new Date().toISOString(),
+        });
+        if (earnerId === myId) {
+          earned = reward;
+          title = chore.title;
+        }
+>>>>>>> 78dbda71cfcdf1ae5ca5fd69f5e1f4fb892f06d0
       }
       return {
         ...d,
         screenTime: balances,
         screenTimeLog: log.slice(0, 80),
+<<<<<<< HEAD
         chores: (d.chores || []).map((c) =>
           c.id === choreId
             ? {
@@ -194,6 +254,17 @@ export function TodosPage() {
               }
             : c,
         ),
+=======
+        chores: (d.chores || []).map((c) => {
+          if (c.id !== choreId) return c;
+          return {
+            ...c,
+            turnIndex: (c.turnIndex + 1) % c.rotation.length,
+            lastCompletedAt: new Date().toISOString(),
+            lastCompletedById: myId,
+          };
+        }),
+>>>>>>> 78dbda71cfcdf1ae5ca5fd69f5e1f4fb892f06d0
       };
     });
     if (earned > 0) {
@@ -202,6 +273,7 @@ export function TodosPage() {
     }
   };
 
+<<<<<<< HEAD
   const reopenChore = (choreId: string) => {
     if (!isParent) return;
     update((d) => ({
@@ -222,6 +294,8 @@ export function TodosPage() {
     }));
   };
 
+=======
+>>>>>>> 78dbda71cfcdf1ae5ca5fd69f5e1f4fb892f06d0
   const removeChore = (id: string) => {
     if (!isParent) return;
     update((d) => ({ ...d, chores: (d.chores || []).filter((c) => c.id !== id) }));
@@ -285,6 +359,10 @@ export function TodosPage() {
   };
 
   const screenTime = data.screenTime || {};
+<<<<<<< HEAD
+=======
+  const kids = members.filter((m) => m.role === 'kid');
+>>>>>>> 78dbda71cfcdf1ae5ca5fd69f5e1f4fb892f06d0
   const myMinutes = screenTime[myId] || 0;
 
   const tabs: { id: Tab; label: string; icon: typeof User; hint: string }[] = [
@@ -515,12 +593,21 @@ export function TodosPage() {
         </div>
       )}
 
+<<<<<<< HEAD
 
       {/* —— Chores + screen time —— */}
       {tab === 'chores' && (
         <div className="space-y-6">
           {earnFlash && (
             <div className="rounded-2xl border border-amber-400/40 bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-pink-500/15 p-4 flex items-center gap-3">
+=======
+      {/* —— Chores + screen time —— */}
+      {tab === 'chores' && (
+        <div className="space-y-6">
+          {/* Celebrate earn */}
+          {earnFlash && (
+            <div className="rounded-2xl border border-amber-400/40 bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-pink-500/15 p-4 flex items-center gap-3 animate-in">
+>>>>>>> 78dbda71cfcdf1ae5ca5fd69f5e1f4fb892f06d0
               <span className="text-3xl">🎉</span>
               <div>
                 <p className="font-bold text-fg text-lg">+{earnFlash.minutes} min screen time!</p>
@@ -529,6 +616,10 @@ export function TodosPage() {
             </div>
           )}
 
+<<<<<<< HEAD
+=======
+          {/* Balances */}
+>>>>>>> 78dbda71cfcdf1ae5ca5fd69f5e1f4fb892f06d0
           <Card className="!p-5 bg-gradient-to-br from-indigo-500/10 via-purple-500/5 to-transparent border-indigo-500/20">
             <div className="flex items-center gap-2 mb-3">
               <Tv className="w-5 h-5 text-indigo-500" />
@@ -547,7 +638,11 @@ export function TodosPage() {
             <div className="grid sm:grid-cols-2 gap-2">
               {(isParent ? members : kids.length ? kids : members.filter((m) => m.id === myId)).map((m) => {
                 const mins = screenTime[m.id] || 0;
+<<<<<<< HEAD
                 const look = getMember(m.id) || m;
+=======
+                const look = getMember?.(m.id) || m;
+>>>>>>> 78dbda71cfcdf1ae5ca5fd69f5e1f4fb892f06d0
                 return (
                   <div
                     key={m.id}
@@ -570,7 +665,13 @@ export function TodosPage() {
             {isParent && kids.length > 0 && (
               <div className="mt-4 pt-4 border-t border-border space-y-3">
                 <p className="text-sm font-medium text-fg">Spend screen time</p>
+<<<<<<< HEAD
                 <p className="text-xs text-muted">When a kid uses device time, subtract minutes here.</p>
+=======
+                <p className="text-xs text-muted">
+                  When a kid uses device time, subtract minutes here. Kids can’t change balances.
+                </p>
+>>>>>>> 78dbda71cfcdf1ae5ca5fd69f5e1f4fb892f06d0
                 <div className="flex flex-col sm:flex-row gap-2">
                   <select
                     value={spendMember || kids[0]?.id || ''}
@@ -590,14 +691,30 @@ export function TodosPage() {
                     value={spendMins}
                     onChange={(e) => setSpendMins(Number(e.target.value))}
                     className="sm:w-28"
+<<<<<<< HEAD
+=======
+                    placeholder="Minutes"
+>>>>>>> 78dbda71cfcdf1ae5ca5fd69f5e1f4fb892f06d0
                   />
                   <Input
                     value={spendNote}
                     onChange={(e) => setSpendNote(e.target.value)}
+<<<<<<< HEAD
                     placeholder="e.g. YouTube"
                     className="flex-1"
                   />
                   <Button onClick={spendScreenTime}>
+=======
+                    placeholder="e.g. YouTube, game"
+                    className="flex-1"
+                  />
+                  <Button
+                    onClick={() => {
+                      if (!spendMember && kids[0]) setSpendMember(kids[0].id);
+                      spendScreenTime();
+                    }}
+                  >
+>>>>>>> 78dbda71cfcdf1ae5ca5fd69f5e1f4fb892f06d0
                     <Minus className="w-4 h-4" /> Spend
                   </Button>
                 </div>
@@ -620,6 +737,7 @@ export function TodosPage() {
           <div className="grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] gap-6 items-start">
             {isParent ? (
               <Card className="!p-5 lg:!p-6 space-y-4 lg:sticky lg:top-20">
+<<<<<<< HEAD
                 <h2 className="font-semibold text-fg">Add a chore</h2>
                 <p className="text-xs text-muted -mt-2">Kids pick jobs, mark them finished, then you approve the minutes.</p>
                 <Input
@@ -629,6 +747,28 @@ export function TodosPage() {
                   onKeyDown={(e) => e.key === 'Enter' && addChore()}
                 />
                 <div>
+=======
+                <h2 className="font-semibold text-fg">New rotating chore</h2>
+                <Input
+                  value={choreTitle}
+                  onChange={(e) => setChoreTitle(e.target.value)}
+                  placeholder="e.g. Dishes, Take out bins"
+                  onKeyDown={(e) => e.key === 'Enter' && addChore()}
+                />
+                <div>
+                  <label className="text-xs text-muted mb-1.5 block">How often</label>
+                  <select
+                    value={choreCadence}
+                    onChange={(e) => setChoreCadence(e.target.value as ChoreCadence)}
+                    className="w-full bg-input border border-border-strong rounded-xl px-3 py-2.5 text-sm text-fg"
+                  >
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="once">Each time (no schedule)</option>
+                  </select>
+                </div>
+                <div>
+>>>>>>> 78dbda71cfcdf1ae5ca5fd69f5e1f4fb892f06d0
                   <label className="text-xs text-muted mb-1.5 block flex items-center gap-1.5">
                     <Tv className="w-3.5 h-3.5" /> Screen time reward (minutes)
                   </label>
@@ -639,22 +779,65 @@ export function TodosPage() {
                     value={choreReward}
                     onChange={(e) => setChoreReward(Number(e.target.value))}
                   />
+<<<<<<< HEAD
                 </div>
                 <Button onClick={addChore} className="w-full" disabled={!choreTitle.trim()}>
+=======
+                  <p className="text-[11px] text-faint mt-1">Kids earn this when the chore is marked done.</p>
+                </div>
+                <div>
+                  <label className="text-xs text-muted mb-2 block">Rotation order — tap names in order</label>
+                  <div className="flex flex-wrap gap-2">
+                    {members.map((m) => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => toggleRotationMember(m.id)}
+                        className={cn(
+                          'flex items-center gap-2 px-3 py-2 rounded-2xl text-sm border transition-colors',
+                          choreRotation.includes(m.id)
+                            ? 'border-indigo-500 bg-indigo-500/15 text-indigo-500'
+                            : 'border-border-strong text-muted hover:bg-nav-hover',
+                        )}
+                      >
+                        <Avatar {...(getMember?.(m.id) || m)} size="sm" className="!w-6 !h-6" />
+                        {m.name}
+                        {choreRotation.includes(m.id) && (
+                          <span className="text-[11px] font-bold w-5 h-5 rounded-full bg-indigo-500 text-white flex items-center justify-center">
+                            {choreRotation.indexOf(m.id) + 1}
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <Button
+                  onClick={addChore}
+                  className="w-full"
+                  disabled={!choreTitle.trim() || choreRotation.length === 0}
+                >
+>>>>>>> 78dbda71cfcdf1ae5ca5fd69f5e1f4fb892f06d0
                   <Plus className="w-4 h-4" /> Add chore
                 </Button>
               </Card>
             ) : (
               <Card className="!p-5 text-sm text-muted space-y-2">
                 <p>
+<<<<<<< HEAD
                   Pick any <strong className="text-fg">open</strong> chore, do it, then tap{' '}
                   <strong className="text-fg">I finished this</strong>.
                 </p>
                 <p>A parent must approve before the minutes land in your bank.</p>
+=======
+                  Finish chores when it’s <strong className="text-fg">your turn</strong> to earn screen time minutes.
+                </p>
+                <p>Parents decide how many minutes each chore is worth — only they can spend your balance.</p>
+>>>>>>> 78dbda71cfcdf1ae5ca5fd69f5e1f4fb892f06d0
               </Card>
             )}
 
             <div className="space-y-3">
+<<<<<<< HEAD
               {(() => {
                 const openChores = chores.filter((c) => c.status === 'open' || !c.status);
                 const pendingChores = chores.filter((c) => c.status === 'pending');
@@ -800,11 +983,118 @@ export function TodosPage() {
                   </>
                 );
               })()}
+=======
+              {chores.length === 0 ? (
+                <Card className="!p-8">
+                  <EmptyState
+                    icon={RefreshCw}
+                    title="No chores yet"
+                    description={
+                      isParent
+                        ? 'Create a chore, set a screen-time reward, and choose who rotates.'
+                        : 'Ask a parent to set up the household rotation.'
+                    }
+                  />
+                </Card>
+              ) : (
+                chores.map((c) => {
+                  const whoseId = c.rotation[c.turnIndex % c.rotation.length];
+                  const who = getMember?.(whoseId) || data.members.find((m) => m.id === whoseId);
+                  const myTurn = whoseId === myId;
+                  const reward = c.rewardMinutes || 0;
+                  return (
+                    <Card
+                      key={c.id}
+                      className={cn(
+                        '!p-5 flex flex-col gap-4',
+                        myTurn && 'ring-2 ring-indigo-500/40 border-indigo-500/30',
+                      )}
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                          {who && <Avatar {...who} size="sm" className="!w-10 !h-10" />}
+                          <div className="min-w-0">
+                            <p className="text-lg font-semibold text-fg">{c.title}</p>
+                            <p className="text-sm text-muted mt-0.5">
+                              {myTurn ? (
+                                <span className="text-indigo-500 font-medium">Your turn</span>
+                              ) : (
+                                <>{who?.name || 'Someone'}&apos;s turn</>
+                              )}
+                              <span className="text-faint"> · </span>
+                              <span className="capitalize">{c.cadence}</span>
+                            </p>
+                            {reward > 0 && (
+                              <p className="text-sm font-semibold text-amber-500 mt-1 flex items-center gap-1">
+                                <Tv className="w-3.5 h-3.5" /> +{reward} min screen time
+                              </p>
+                            )}
+                            <div className="flex flex-wrap gap-1.5 mt-2">
+                              {c.rotation.map((rid, i) => {
+                                const m = getMember?.(rid) || data.members.find((x) => x.id === rid);
+                                if (!m) return null;
+                                const active = i === c.turnIndex % c.rotation.length;
+                                return (
+                                  <span
+                                    key={rid}
+                                    className={cn(
+                                      'text-xs px-2.5 py-1 rounded-full font-medium',
+                                      active ? 'bg-indigo-500 text-white' : 'bg-surface-2 text-muted',
+                                    )}
+                                  >
+                                    {m.name}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 sm:flex-col sm:items-stretch">
+                          <Button
+                            size="md"
+                            variant={myTurn ? 'primary' : 'secondary'}
+                            onClick={() => completeChore(c.id)}
+                            className="flex-1 sm:flex-none"
+                          >
+                            Done{myTurn && reward > 0 ? ` · +${reward}` : ''}
+                          </Button>
+                          {isParent && (
+                            <button
+                              type="button"
+                              onClick={() => removeChore(c.id)}
+                              className="p-2 text-faint hover:text-red-400 rounded-lg hover:bg-red-500/10 self-center"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      {isParent && (
+                        <div className="flex items-center gap-2 pt-2 border-t border-border">
+                          <label className="text-xs text-muted shrink-0">Reward (min)</label>
+                          <input
+                            type="number"
+                            min={0}
+                            max={240}
+                            value={reward}
+                            onChange={(e) => setChoreRewardMinutes(c.id, Number(e.target.value))}
+                            className="w-20 bg-input border border-border-strong rounded-lg px-2 py-1.5 text-sm text-fg"
+                          />
+                        </div>
+                      )}
+                    </Card>
+                  );
+                })
+              )}
+>>>>>>> 78dbda71cfcdf1ae5ca5fd69f5e1f4fb892f06d0
             </div>
           </div>
         </div>
       )}
+<<<<<<< HEAD
 
+=======
+>>>>>>> 78dbda71cfcdf1ae5ca5fd69f5e1f4fb892f06d0
     </div>
   );
 }

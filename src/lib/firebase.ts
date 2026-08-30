@@ -270,6 +270,7 @@ export async function cloudJoinWithInvite(
   return { familyId, memberId: newMember.id, data };
 }
 
+<<<<<<< HEAD
 /** Firestore rejects `undefined` anywhere in the document tree. */
 function stripUndefined<T>(value: T): T {
   if (value === undefined) return value;
@@ -285,6 +286,8 @@ function stripUndefined<T>(value: T): T {
   return out as T;
 }
 
+=======
+>>>>>>> 78dbda71cfcdf1ae5ca5fd69f5e1f4fb892f06d0
 export async function cloudWrite(familyId: string, data: FamilyData): Promise<void> {
   if (!db || !fsMod) throw new Error('Cloud not connected');
   const memberUids = (data.members || []).map((m) => m.uid).filter(Boolean) as string[];
@@ -293,7 +296,11 @@ export async function cloudWrite(familyId: string, data: FamilyData): Promise<vo
     .map((m) => m.uid!) as string[];
   const { currentUserId: _, ...settingsRest } = data.settings;
   // Messages live in families/{id}/messages — do not write the legacy array.
+<<<<<<< HEAD
   const payload = stripUndefined({
+=======
+  const payload: Record<string, unknown> = {
+>>>>>>> 78dbda71cfcdf1ae5ca5fd69f5e1f4fb892f06d0
     members: data.members,
     events: data.events,
     todos: data.todos,
@@ -308,7 +315,11 @@ export async function cloudWrite(familyId: string, data: FamilyData): Promise<vo
     updatedAt: new Date().toISOString(),
     memberUids,
     parentUids,
+<<<<<<< HEAD
   });
+=======
+  };
+>>>>>>> 78dbda71cfcdf1ae5ca5fd69f5e1f4fb892f06d0
   await fsMod.setDoc(familyRef(familyId), payload, { merge: true });
 }
 

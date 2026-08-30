@@ -2,8 +2,12 @@ export type Role = 'parent' | 'kid' | 'media';
 export type Priority = 'low' | 'medium' | 'high';
 export type ViewId = 'dashboard' | 'calendar' | 'todos' | 'shopping' | 'notes' | 'messages' | 'media' | 'settings';
 export type SyncStatus = 'local' | 'connecting' | 'live' | 'error' | 'auth';
+<<<<<<< HEAD
 export type ChoreCadence = 'daily' | 'weekly' | 'once'; // legacy
 export type ChoreStatus = 'open' | 'pending' | 'done';
+=======
+export type ChoreCadence = 'daily' | 'weekly' | 'once';
+>>>>>>> 78dbda71cfcdf1ae5ca5fd69f5e1f4fb892f06d0
 /** Simple presence — no GPS. */
 export type PresenceStatus = 'home' | 'school' | 'work' | 'out' | 'away';
 
@@ -63,6 +67,7 @@ export interface Todo {
   dueAt?: string;
 }
 
+<<<<<<< HEAD
 /**
  * Parent-created chore board item.
  * Kids pick a job → mark finished → parent approves screen-time minutes.
@@ -88,6 +93,22 @@ export interface Chore {
   cadence?: ChoreCadence;
   lastCompletedAt?: string;
   lastCompletedById?: string;
+=======
+/** Rotating household chore (dishes, trash, etc.). */
+export interface Chore {
+  id: string;
+  title: string;
+  /** Ordered member ids — whose turn advances on complete. */
+  rotation: string[];
+  turnIndex: number;
+  cadence: ChoreCadence;
+  lastCompletedAt?: string;
+  lastCompletedById?: string;
+  createdById: string;
+  createdAt: string;
+  /** Screen-time minutes earned when this chore is completed (parent-set). */
+  rewardMinutes?: number;
+>>>>>>> 78dbda71cfcdf1ae5ca5fd69f5e1f4fb892f06d0
 }
 
 /** Ledger entry for screen-time earn/spend. */

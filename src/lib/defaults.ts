@@ -61,6 +61,7 @@ export function migratePayload(p: Partial<FamilyData>): FamilyData {
     settings: { ...DEFAULT_SETTINGS, ...(p.settings || {}) },
     members,
     todos,
+<<<<<<< HEAD
     chores: (p.chores || []).map((c: {
       id: string;
       title: string;
@@ -90,6 +91,9 @@ export function migratePayload(p: Partial<FamilyData>): FamilyData {
       createdById: c.createdById || '',
       createdAt: c.createdAt || new Date().toISOString(),
     })),
+=======
+    chores: p.chores || [],
+>>>>>>> 78dbda71cfcdf1ae5ca5fd69f5e1f4fb892f06d0
     shopping: p.shopping || [],
     events: p.events || [],
     notes: p.notes || [],
