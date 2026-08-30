@@ -126,15 +126,9 @@ export function Dashboard() {
   const overdueTodos = todos.filter(
     (t) => !t.completed && t.dueAt && new Date(t.dueAt).getTime() < now.getTime(),
   );
-<<<<<<< HEAD
   const pendingForParents = isParent ? chores.filter((c) => c.status === 'pending') : [];
   const myPending = chores.filter((c) => c.status === 'pending' && c.submittedById === myId);
   const myChores = isParent ? pendingForParents : [...myPending, ...chores.filter((c) => c.status === 'open' || !c.status)].slice(0, 5);
-=======
-  const myChores = chores.filter(
-    (c) => c.rotation.length && c.rotation[c.turnIndex % c.rotation.length] === myId,
-  );
->>>>>>> 78dbda71cfcdf1ae5ca5fd69f5e1f4fb892f06d0
   const shopOpen = shopping.filter((s) => !s.bought).length;
   const hour = now.getHours();
   const greeting = hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening';
@@ -302,27 +296,18 @@ export function Dashboard() {
             )}
           </div>
           <div>
-<<<<<<< HEAD
             <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">
               {isParent ? 'Chores to approve' : 'Chores'}
             </p>
             {myChores.length === 0 ? (
               <p className="text-muted">{isParent ? 'None waiting' : 'None open'}</p>
-=======
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">Chores on you</p>
-            {myChores.length === 0 ? (
-              <p className="text-muted">None right now</p>
->>>>>>> 78dbda71cfcdf1ae5ca5fd69f5e1f4fb892f06d0
             ) : (
               <ul className="space-y-1.5">
                 {myChores.map((c) => (
                   <li key={c.id} className="text-fg">
                     {c.title}
-<<<<<<< HEAD
                     {c.status === 'pending' ? ' · pending' : ''}
                     {(c.rewardMinutes || 0) > 0 ? ` · +${c.rewardMinutes}m` : ''}
-=======
->>>>>>> 78dbda71cfcdf1ae5ca5fd69f5e1f4fb892f06d0
                   </li>
                 ))}
               </ul>
@@ -424,24 +409,16 @@ export function Dashboard() {
         <Card>
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold text-fg flex items-center gap-2">
-<<<<<<< HEAD
               <RefreshCw className="w-4 h-4 text-indigo-500" /> {isParent ? "Chores to approve" : "Chores"}
-=======
-              <RefreshCw className="w-4 h-4 text-indigo-500" /> Your chores
->>>>>>> 78dbda71cfcdf1ae5ca5fd69f5e1f4fb892f06d0
             </h2>
             <button type="button" onClick={() => setView('todos')} className="text-xs text-indigo-500">
               All chores →
             </button>
           </div>
           {myChores.length === 0 ? (
-<<<<<<< HEAD
             <p className="text-sm text-muted py-4 text-center">
               {isParent ? 'No chores waiting for approval.' : 'No open chores — check back soon.'}
             </p>
-=======
-            <p className="text-sm text-muted py-4 text-center">Nothing on your rotation right now.</p>
->>>>>>> 78dbda71cfcdf1ae5ca5fd69f5e1f4fb892f06d0
           ) : (
             myChores.map((c) => (
               <div
@@ -450,14 +427,10 @@ export function Dashboard() {
               >
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-sm text-fg">{c.title}</p>
-<<<<<<< HEAD
                   <p className="text-xs text-muted">
                     {c.status === 'pending' ? 'Waiting for approval' : 'Open'}
                     {(c.rewardMinutes || 0) > 0 ? ` · +${c.rewardMinutes} min` : ''}
                   </p>
-=======
-                  <p className="text-xs text-muted capitalize">Your turn · {c.cadence}</p>
->>>>>>> 78dbda71cfcdf1ae5ca5fd69f5e1f4fb892f06d0
                 </div>
               </div>
             ))
