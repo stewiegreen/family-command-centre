@@ -14,6 +14,8 @@ import {
   Bell,
   BellOff,
   ShoppingCart,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Avatar } from './ui/Avatar';
@@ -37,12 +39,43 @@ const NAV: { id: ViewId; label: string; icon: typeof Home }[] = [
   { id: 'media', label: 'Media', icon: Film },
 ];
 
+const SIDEBAR_KEY = 'fcc-sidebar-collapsed';
+
+function loadCollapsed(): boolean {
+  try {
+    return localStorage.getItem(SIDEBAR_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
 export function Layout({ children }: { children: ReactNode }) {
-  const { data, view, setView, currentUser, isParent, isMediaOnly, syncStatus, familyId, signOut, authUser } = useApp();
+  const {
+    data,
+    view,
+    setView,
+    currentUser,
+    isParent,
+    isMediaOnly,
+    syncStatus,
+    familyId,
+    signOut,
+    authUser,
+  } = useApp();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [collapsed, setCollapsedState] = useState(loadCollapsed);
   const [signingOut, setSigningOut] = useState(false);
   const [notifOn, setNotifOn] = useState(isNotificationsEnabled);
   const { settings } = data;
+
+  const setCollapsed = (v: boolean) => {
+    setCollapsedState(v);
+    try {
+      localStorage.setItem(SIDEBAR_KEY, v ? '1' : '0');
+    } catch {
+      /* ignore */
+    }
+  };
 
   useEffect(() => {
     const sync = () => setNotifOn(isNotificationsEnabled());
@@ -80,52 +113,92 @@ export function Layout({ children }: { children: ReactNode }) {
 
   const navBtn = (active: boolean) =>
     cn(
-      'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all',
+      'w-full flex items-center rounded-xl text-sm font-medium transition-all',
+      collapsed ? 'justify-center px-2 py-2.5' : 'gap-3 px-3 py-2.5',
       active ? 'bg-accent/15 text-accent' : 'text-muted hover:bg-nav-hover hover:text-fg',
     );
 
   return (
     <div className="min-h-dvh flex bg-page text-fg">
-      <aside className="hidden lg:flex flex-col w-64 shrink-0 border-r border-border bg-sidebar">
-        <div className="p-5 border-b border-border">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-accent flex items-center justify-center text-accent-ink font-bold text-lg">
+      {/* Desktop sidebar */}
+      <aside
+        className={cn(
+          'hidden lg:flex flex-col shrink-0 border-r border-border bg-sidebar transition-[width] duration-200 ease-out',
+          collapsed ? 'w-[4.25rem]' : 'w-64',
+        )}
+      >
+        <div className={cn('border-b border-border', collapsed ? 'p-3' : 'p-5')}>
+          <div className={cn('flex items-center', collapsed ? 'justify-center' : 'gap-3')}>
+            <div
+              className="w-10 h-10 rounded-xl bg-accent flex items-center justify-center text-accent-ink font-bold text-lg shrink-0"
+              title={settings.familyName}
+            >
               {settings.familyName.charAt(0)}
             </div>
-            <div className="min-w-0">
-              <h1 className="font-semibold truncate text-fg">{settings.familyName}</h1>
-              <p className="text-xs text-faint">
-                {syncStatus === 'live' ? (
-                  <span className="text-accent">● Live{familyId ? ` · ${familyId}` : ''}</span>
-                ) : syncStatus === 'connecting' ? (
-                  <span className="text-amber-500">● Syncing…</span>
-                ) : syncStatus === 'error' ? (
-                  <span className="text-red-500">● Offline</span>
-                ) : (
-                  'Command Centre · local'
-                )}
-              </p>
-            </div>
+            {!collapsed && (
+              <div className="min-w-0">
+                <h1 className="font-semibold truncate text-fg">{settings.familyName}</h1>
+                <p className="text-xs text-faint">
+                  {syncStatus === 'live' ? (
+                    <span className="text-accent">● Live{familyId ? ` · ${familyId}` : ''}</span>
+                  ) : syncStatus === 'connecting' ? (
+                    <span className="text-amber-500">● Syncing…</span>
+                  ) : syncStatus === 'error' ? (
+                    <span className="text-red-500">● Offline</span>
+                  ) : (
+                    'Command Centre · local'
+                  )}
+                </p>
+              </div>
+            )}
           </div>
         </div>
-        <nav className="flex-1 p-3 space-y-1">
+
+        <nav className={cn('flex-1 space-y-1', collapsed ? 'p-2' : 'p-3')}>
           {navItems.map((item) => (
-            <button key={item.id} type="button" onClick={() => setView(item.id)} className={navBtn(view === item.id)}>
-              <item.icon className="w-5 h-5" />
-              <span className="flex-1 text-left">{item.label}</span>
-              {item.id === 'messages' && unread > 0 && (
-                <span className="bg-accent text-accent-ink text-xs font-bold px-1.5 py-0.5 rounded-full">{unread}</span>
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setView(item.id)}
+              className={navBtn(view === item.id)}
+              title={item.label}
+            >
+              <span className="relative">
+                <item.icon className="w-5 h-5 shrink-0" />
+                {item.id === 'messages' && unread > 0 && collapsed && (
+                  <span className="absolute -top-1 -right-1 bg-accent text-accent-ink text-[9px] font-bold min-w-[14px] h-3.5 px-0.5 rounded-full flex items-center justify-center">
+                    {unread > 9 ? '9+' : unread}
+                  </span>
+                )}
+              </span>
+              {!collapsed && (
+                <>
+                  <span className="flex-1 text-left">{item.label}</span>
+                  {item.id === 'messages' && unread > 0 && (
+                    <span className="bg-accent text-accent-ink text-xs font-bold px-1.5 py-0.5 rounded-full">
+                      {unread}
+                    </span>
+                  )}
+                </>
               )}
             </button>
           ))}
         </nav>
-        <div className="p-3 border-t border-border space-y-2">
+
+        <div className={cn('border-t border-border space-y-2', collapsed ? 'p-2' : 'p-3')}>
           {isParent && (
-            <button type="button" onClick={() => setView('settings')} className={navBtn(view === 'settings')}>
-              <Settings className="w-5 h-5" /> Settings
+            <button
+              type="button"
+              onClick={() => setView('settings')}
+              className={navBtn(view === 'settings')}
+              title="Settings"
+            >
+              <Settings className="w-5 h-5 shrink-0" />
+              {!collapsed && 'Settings'}
             </button>
           )}
-          {currentUser && (
+
+          {currentUser && !collapsed && (
             <div className="pt-2 px-2 space-y-2">
               <p className="text-xs text-faint px-1 mb-1">Signed in as</p>
               <div className="flex items-center gap-2.5 px-1 py-1.5 rounded-xl bg-surface-2 border border-border">
@@ -161,6 +234,53 @@ export function Layout({ children }: { children: ReactNode }) {
               )}
             </div>
           )}
+
+          {currentUser && collapsed && (
+            <div className="flex flex-col items-center gap-1">
+              <Avatar {...currentUser} size="sm" />
+              <button
+                type="button"
+                onClick={() => void toggleNotifs()}
+                className={cn(
+                  'p-2 rounded-xl transition-colors',
+                  notifOn ? 'text-accent hover:bg-accent/10' : 'text-muted hover:bg-nav-hover',
+                )}
+                title={notifOn ? 'Notifications on' : 'Enable notifications'}
+              >
+                {notifOn ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />}
+              </button>
+              {authUser && (
+                <button
+                  type="button"
+                  onClick={() => void handleSignOut()}
+                  disabled={signingOut}
+                  className="p-2 rounded-xl text-muted hover:text-red-500 hover:bg-red-500/10 transition-colors disabled:opacity-50"
+                  title="Log out"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setCollapsed(!collapsed)}
+            className={cn(
+              'w-full flex items-center rounded-xl text-sm font-medium text-muted hover:bg-nav-hover hover:text-fg transition-colors',
+              collapsed ? 'justify-center px-2 py-2.5' : 'gap-3 px-3 py-2.5',
+            )}
+            title={collapsed ? 'Expand menu' : 'Minimize menu'}
+          >
+            {collapsed ? (
+              <PanelLeftOpen className="w-5 h-5 shrink-0" />
+            ) : (
+              <>
+                <PanelLeftClose className="w-5 h-5 shrink-0" />
+                <span>Minimize</span>
+              </>
+            )}
+          </button>
         </div>
       </aside>
 
@@ -174,10 +294,27 @@ export function Layout({ children }: { children: ReactNode }) {
             >
               <Menu className="w-5 h-5" />
             </button>
+            {/* Desktop: also allow expand when collapsed via header (optional affordance) */}
+            {collapsed && (
+              <button
+                type="button"
+                className="hidden lg:inline-flex p-2 -ml-1 rounded-xl hover:bg-nav-hover text-muted"
+                onClick={() => setCollapsed(false)}
+                title="Expand menu"
+              >
+                <PanelLeftOpen className="w-5 h-5" />
+              </button>
+            )}
             <div className="min-w-0">
-              <p className="text-sm font-medium truncate text-fg">Hey, {currentUser?.name || 'there'} 👋</p>
+              <p className="text-sm font-medium truncate text-fg">
+                Hey, {currentUser?.name || 'there'} 👋
+              </p>
               <p className="text-xs text-faint hidden sm:block">
-                {new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
+                {new Date().toLocaleDateString(undefined, {
+                  weekday: 'long',
+                  month: 'long',
+                  day: 'numeric',
+                })}
               </p>
             </div>
           </div>
@@ -199,6 +336,7 @@ export function Layout({ children }: { children: ReactNode }) {
         <main className="flex-1 overflow-y-auto pb-24 lg:pb-6">{children}</main>
       </div>
 
+      {/* Mobile bottom nav */}
       <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 border-t border-border bg-header backdrop-blur-xl pb-[env(safe-area-inset-bottom)]">
         <div className="flex items-center justify-around h-16 px-1">
           {navItems.map((item) => (
@@ -223,15 +361,28 @@ export function Layout({ children }: { children: ReactNode }) {
         </div>
       </nav>
 
-      {/* Quick-add lives only on Home — see QuickAddFab in App */}
-
+      {/* Mobile drawer */}
       {sidebarOpen && (
-        <div className="lg:hidden fixed inset-0 z-50">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setSidebarOpen(false)} />
-          <div className="absolute left-0 top-0 bottom-0 w-72 bg-surface border-r border-border flex flex-col shadow-xl">
+        <div className="lg:hidden fixed inset-0 z-50 flex">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setSidebarOpen(false)} />
+          <div className="relative w-[min(100%,18rem)] max-w-full h-full bg-sidebar border-r border-border flex flex-col shadow-2xl">
             <div className="flex items-center justify-between p-4 border-b border-border">
-              <h2 className="font-semibold text-fg">{settings.familyName}</h2>
-              <button type="button" onClick={() => setSidebarOpen(false)} className="p-1.5 rounded-lg hover:bg-nav-hover text-muted">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-9 h-9 rounded-xl bg-accent flex items-center justify-center text-accent-ink font-bold">
+                  {settings.familyName.charAt(0)}
+                </div>
+                <div className="min-w-0">
+                  <p className="font-semibold truncate">{settings.familyName}</p>
+                  <p className="text-xs text-faint truncate">
+                    {syncStatus === 'live' ? 'Live sync' : 'Local'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="p-2 rounded-xl hover:bg-nav-hover text-muted"
+                onClick={() => setSidebarOpen(false)}
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -244,7 +395,12 @@ export function Layout({ children }: { children: ReactNode }) {
                     setView(item.id);
                     setSidebarOpen(false);
                   }}
-                  className={navBtn(view === item.id)}
+                  className={cn(
+                    'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all',
+                    view === item.id
+                      ? 'bg-accent/15 text-accent'
+                      : 'text-muted hover:bg-nav-hover hover:text-fg',
+                  )}
                 >
                   <item.icon className="w-5 h-5" /> {item.label}
                 </button>
@@ -256,7 +412,12 @@ export function Layout({ children }: { children: ReactNode }) {
                     setView('settings');
                     setSidebarOpen(false);
                   }}
-                  className={navBtn(view === 'settings')}
+                  className={cn(
+                    'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all',
+                    view === 'settings'
+                      ? 'bg-accent/15 text-accent'
+                      : 'text-muted hover:bg-nav-hover hover:text-fg',
+                  )}
                 >
                   <Settings className="w-5 h-5" /> Settings
                 </button>
