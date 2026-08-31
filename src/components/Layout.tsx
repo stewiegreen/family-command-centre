@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Avatar } from './ui/Avatar';
+import { ProfileSwitcher } from './ProfileSwitcher';
 import { cn } from '../lib/cn';
 import type { ViewId } from '../types';
 import {
@@ -64,6 +65,7 @@ export function Layout({ children }: { children: ReactNode }) {
   } = useApp();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [collapsed, setCollapsedState] = useState(loadCollapsed);
+  const [switcherOpen, setSwitcherOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [notifOn, setNotifOn] = useState(isNotificationsEnabled);
   const { settings } = data;
@@ -203,13 +205,18 @@ export function Layout({ children }: { children: ReactNode }) {
           {currentUser && !collapsed && (
             <div className="pt-2 px-2 space-y-2">
               <p className="text-xs text-faint px-1 mb-1">Signed in as</p>
-              <div className="flex items-center gap-2.5 px-1 py-1.5 rounded-xl bg-surface-2 border border-border">
+              <button
+                type="button"
+                onClick={() => setSwitcherOpen(true)}
+                className="w-full flex items-center gap-2.5 px-1 py-1.5 rounded-xl bg-surface-2 border border-border hover:border-accent/40 transition text-left"
+                title="Switch profile"
+              >
                 <Avatar {...currentUser} size="sm" />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium truncate text-fg">{currentUser.name}</p>
                   <p className="text-[11px] text-faint capitalize">{currentUser.role}</p>
                 </div>
-              </div>
+              </button>
               <button
                 type="button"
                 onClick={() => void toggleNotifs()}
@@ -239,7 +246,9 @@ export function Layout({ children }: { children: ReactNode }) {
 
           {currentUser && collapsed && (
             <div className="flex flex-col items-center gap-1">
-              <Avatar {...currentUser} size="sm" />
+              <button type="button" onClick={() => setSwitcherOpen(true)} title="Switch profile">
+                <Avatar {...currentUser} size="sm" />
+              </button>
               <button
                 type="button"
                 onClick={() => void toggleNotifs()}
@@ -332,7 +341,16 @@ export function Layout({ children }: { children: ReactNode }) {
             >
               {notifOn ? <Bell className="w-5 h-5" /> : <BellOff className="w-5 h-5" />}
             </button>
-            {currentUser && <Avatar {...currentUser} size="sm" />}
+            {currentUser && (
+              <button
+                type="button"
+                onClick={() => setSwitcherOpen(true)}
+                className="rounded-full ring-offset-2 ring-offset-page hover:ring-2 hover:ring-accent/50 transition"
+                title="Switch profile"
+              >
+                <Avatar {...currentUser} size="sm" />
+              </button>
+            )}
           </div>
         </header>
         <main className="flex-1 min-h-0 overflow-y-auto pb-24 lg:pb-6">{children}</main>
@@ -470,6 +488,8 @@ export function Layout({ children }: { children: ReactNode }) {
           </div>
         </div>
       )}
+      <ProfileSwitcher open={switcherOpen} onClose={() => setSwitcherOpen(false)} />
     </div>
   );
 }
+

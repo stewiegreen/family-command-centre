@@ -45,6 +45,7 @@ import {
 
 const PARENT_PIN_SESSION_KEY = 'fcc_parent_pin_ok';
 const KID_PIN_SESSION_KEY = 'fcc_kid_pin_ok';
+const PROFILE_OVERRIDE_KEY = 'fcc_profile_override';
 
 interface AppContextValue {
   data: FamilyData;
@@ -70,6 +71,10 @@ interface AppContextValue {
   kidPinRequired: boolean;
   kidPinUnlocked: boolean;
   unlockKidPin: (pin: string) => boolean;
+  /** Switch active profile on this device (PIN required if target has one). */
+  switchProfile: (memberId: string, pin?: string) => { ok: boolean; error?: string };
+  /** Set theme for the current member (kids can change their own). */
+  setMyTheme: (theme: import('../types').ThemeId) => void;
   connectCloud: (cfg: FirebaseConfig) => Promise<boolean>;
   createFamily: (displayName: string) => Promise<string>;
   joinFamily: (inviteCode: string, displayName: string) => Promise<string>;
@@ -130,8 +135,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
           let currentUserId = preferredMemberId || prev.settings.currentUserId;
           const auth = getFirebaseAuth();
           const linked = remote.members.find((m) => m.uid && auth?.currentUser && m.uid === auth.currentUser.uid);
-          if (linked) currentUserId = linked.id;
-          else if (!remote.members.some((m) => m.id === currentUserId)) {
+          const override = sessionStorage.getItem(PROFILE_OVERRIDE_KEY);
+          if (override && remote.members.some((m) => m.id === override)) {
+            // Explicit profile switch on this device
+            currentUserId = override;
+          } else if (linked) {
+            currentUserId = linked.id;
+          } else if (!remote.members.some((m) => m.id === currentUserId)) {
             currentUserId = remote.members[0]?.id || currentUserId;
           }
           let migrated = remote;
@@ -289,9 +299,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     (updater: FamilyData | ((prev: FamilyData) => FamilyData)) => {
       setData((prev) => {
         const next = typeof updater === 'function' ? updater(prev) : updater;
-        // When signed in, lock identity to the auth-linked member — no role hopping.
+        // Keep profile override if set; otherwise stay on auth-linked member.
         const auth = getFirebaseAuth();
-        if (auth?.currentUser) {
+        const override = sessionStorage.getItem(PROFILE_OVERRIDE_KEY);
+        if (override && next.members.some((m) => m.id === override)) {
+          if (next.settings.currentUserId !== override) {
+            next.settings = { ...next.settings, currentUserId: override };
+          }
+        } else if (auth?.currentUser) {
           const linked = next.members.find((m) => m.uid === auth.currentUser!.uid)
             || prev.members.find((m) => m.uid === auth.currentUser!.uid);
           if (linked && next.settings.currentUserId !== linked.id) {
@@ -309,12 +324,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
-  const root = document.documentElement;
-  const t = data.settings.theme;
-  root.classList.toggle('dark', t === 'dark');
-  root.classList.toggle('light', t === 'light');
-  root.classList.toggle('neon', t === 'neon');
-}, [data.settings.theme]);
+    const root = document.documentElement;
+    const uid = data.settings.currentUserId;
+    const personal = data.appearance?.[uid]?.theme;
+    const t = personal || data.settings.theme || 'dark';
+    root.classList.toggle('dark', t === 'dark');
+    root.classList.toggle('light', t === 'light');
+    root.classList.toggle('neon', t === 'neon');
+  }, [data.settings.theme, data.settings.currentUserId, data.appearance]);
 
   const currentUserRaw = data.members.find((m) => m.id === data.settings.currentUserId);
   const currentUser = currentUserRaw
@@ -501,6 +518,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOutUser = useCallback(async () => {
+    sessionStorage.removeItem(PROFILE_OVERRIDE_KEY);
+    sessionStorage.removeItem(KID_PIN_SESSION_KEY);
+    setKidPinUnlocked(false);
     if (unsubRef.current) {
       unsubRef.current();
       unsubRef.current = null;
@@ -602,6 +622,61 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setNeedsFamilySetup(false);
   }, [leaveFamily]);
 
+
+  const switchProfile = useCallback(
+    (memberId: string, pin?: string): { ok: boolean; error?: string } => {
+      const target = dataRef.current.members.find((m) => m.id === memberId);
+      if (!target) return { ok: false, error: 'Member not found' };
+      if (target.id === dataRef.current.settings.currentUserId) {
+        return { ok: true };
+      }
+      const hasPin = !!(target.pin && target.pin.length >= 4);
+      if (hasPin) {
+        if (!pin || pin !== target.pin) return { ok: false, error: 'Wrong PIN' };
+      } else if (target.role === 'parent' && dataRef.current.settings.parentPin) {
+        // Protect parent profiles with the family parent PIN when no personal PIN
+        if (!pin || pin !== dataRef.current.settings.parentPin) {
+          return { ok: false, error: 'Parent PIN required' };
+        }
+      }
+      sessionStorage.setItem(PROFILE_OVERRIDE_KEY, memberId);
+      localStorage.setItem(CURRENT_USER_KEY, memberId);
+      // Fresh PIN session for the new profile
+      if (hasPin || target.role === 'kid') {
+        setKidPinUnlocked(true);
+        sessionStorage.setItem(KID_PIN_SESSION_KEY, '1');
+      }
+      setData((prev) => {
+        const next = {
+          ...prev,
+          settings: { ...prev.settings, currentUserId: memberId },
+        };
+        void persist(next);
+        return next;
+      });
+      return { ok: true };
+    },
+    [persist],
+  );
+
+  const setMyTheme = useCallback(
+    (theme: 'dark' | 'light' | 'neon') => {
+      update((d) => {
+        const id = d.settings.currentUserId;
+        if (!id) return d;
+        const prev = d.appearance?.[id] || {};
+        return {
+          ...d,
+          appearance: {
+            ...(d.appearance || {}),
+            [id]: { ...prev, theme },
+          },
+        };
+      });
+    },
+    [update],
+  );
+
   const value: AppContextValue = {
     data,
     update,
@@ -624,6 +699,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     kidPinRequired,
     kidPinUnlocked: kidPinUnlocked || !kidPinRequired,
     unlockKidPin,
+    switchProfile,
+    setMyTheme,
     connectCloud,
     createFamily,
     joinFamily,

@@ -6,6 +6,7 @@ export type ChoreCadence = 'daily' | 'weekly' | 'once'; // legacy
 export type ChoreStatus = 'open' | 'pending' | 'done';
 /** Simple presence — no GPS. */
 export type PresenceStatus = 'home' | 'school' | 'work' | 'out' | 'away';
+export type ThemeId = 'dark' | 'light' | 'neon';
 
 /** Shared family-wide todo list (not assigned to one person). */
 export const FAMILY_LIST_ID = '__family__';
@@ -151,7 +152,8 @@ export interface Settings {
   familyName: string;
   embyUrl: string;
   komgaUrl: string;
-  theme: 'dark' | 'light' | 'neon';
+  /** Family default theme (used when member has no personal theme). */
+  theme: ThemeId;
   currentUserId: string;
   embedMedia: boolean;
   pinnedAnnouncement: string;
@@ -178,7 +180,7 @@ export interface FamilyData {
   /** memberId → presence (writable by all members; not on the members array). */
   presence?: Record<string, PresenceEntry>;
   /** memberId → emoji/color overrides (self-serve). */
-  appearance?: Record<string, { emoji?: string; color?: string }>;
+  appearance?: Record<string, { emoji?: string; color?: string; theme?: ThemeId }>;
   /** memberId → earned screen-time minutes balance. */
   screenTime?: Record<string, number>;
   /** Recent earn/spend history (newest first, trimmed client-side). */
