@@ -220,7 +220,7 @@ export function TodosPage() {
                     )}
                     style={{
                       borderLeftColor: color,
-                      backgroundColor: tint(color, t.completed ? 0.06 : 0.12),
+                      backgroundColor: tint(color, t.completed ? 0.08 : 0.18),
                     }}
                   >
                     <button
