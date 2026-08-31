@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ChevronLeft, ChevronRight, Download, Plus, Square, Upload } from 'lucide-react';
 import {
   addDays,
   addMonths,
@@ -23,11 +23,13 @@ import { Input, Textarea } from '../components/ui/Input';
 import { Modal } from '../components/ui/Modal';
 import { uid } from '../lib/uid';
 import { eventOverlapsDay, expandEvents, packOverlapping } from '../lib/recurrence';
-import type { CalendarEvent, ExpandedEvent } from '../types';
+import { downloadIcs, exportEventsToIcs, importEventsFromIcs, type ImportResult } from '../lib/ical';
+import type { CalendarEvent, ExpandedEvent, Todo } from '../types';
 import { cn } from '../lib/cn';
 
 type CalView = 'month' | 'week' | 'day';
 const VIEW_KEY = 'fcc-calendar-view';
+const TASKS_KEY = 'fcc-calendar-show-tasks';
 const HOUR_START = 6;
 const HOUR_END = 22;
 const HOUR_HEIGHT = 48; // px per hour
@@ -40,6 +42,16 @@ function loadView(): CalView {
     /* ignore */
   }
   return 'month';
+}
+
+function loadShowTasks(): boolean {
+  try {
+    const v = localStorage.getItem(TASKS_KEY);
+    if (v === '0' || v === 'false') return false;
+  } catch {
+    /* ignore */
+  }
+  return true;
 }
 
 function localDateStr(d: Date): string {
@@ -114,11 +126,14 @@ export function CalendarPage() {
   const { data, update, getMember } = useApp();
   const [cursor, setCursor] = useState(new Date());
   const [view, setViewState] = useState<CalView>(loadView);
+  const [showTasks, setShowTasksState] = useState(loadShowTasks);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<FormState>(() => emptyForm(data.settings.currentUserId));
   const [editingMasterId, setEditingMasterId] = useState<string | null>(null);
   const [editingInstance, setEditingInstance] = useState<ExpandedEvent | null>(null);
   const [scopePrompt, setScopePrompt] = useState<'edit' | 'delete' | null>(null);
+  const [importResult, setImportResult] = useState<ImportResult | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const setView = (v: CalView) => {
     setViewState(v);
@@ -127,6 +142,49 @@ export function CalendarPage() {
     } catch {
       /* ignore */
     }
+  };
+
+  const setShowTasks = (on: boolean) => {
+    setShowTasksState(on);
+    try {
+      localStorage.setItem(TASKS_KEY, on ? '1' : '0');
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const openTodos = data.todos.filter((t) => !t.completed && t.dueAt);
+
+  const tasksOnDay = (day: Date): Todo[] => {
+    if (!showTasks) return [];
+    return openTodos.filter((t) => isSameDay(new Date(t.dueAt!), day));
+  };
+
+  const toggleTodo = (id: string) => {
+    update((d) => ({
+      ...d,
+      todos: d.todos.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t)),
+    }));
+  };
+
+  const handleExport = () => {
+    const result = exportEventsToIcs(data.events, data.settings.familyName || 'GreenHQ');
+    if (result.ok === false) {
+      alert(result.error);
+      return;
+    }
+    downloadIcs(result.ics);
+  };
+
+  const handleImportFile = async (file: File | null) => {
+    if (!file) return;
+    const text = await file.text();
+    const result = importEventsFromIcs(text, data.settings.currentUserId);
+    if (result.imported > 0) {
+      update((d) => ({ ...d, events: [...d.events, ...result.events] }));
+    }
+    setImportResult(result);
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   useEffect(() => {
@@ -403,7 +461,7 @@ export function CalendarPage() {
             Today
           </Button>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <div className="flex rounded-xl border border-border-strong overflow-hidden">
             {(['month', 'week', 'day'] as CalView[]).map((v) => (
               <button
@@ -421,6 +479,39 @@ export function CalendarPage() {
               </button>
             ))}
           </div>
+          <button
+            type="button"
+            onClick={() => setShowTasks(!showTasks)}
+            className={cn(
+              'px-3 py-1.5 text-sm font-medium rounded-xl border transition-colors',
+              showTasks
+                ? 'border-warn/40 bg-warn-tint text-warn'
+                : 'border-border-strong bg-surface-2 text-fg-secondary hover:bg-surface-3',
+            )}
+            title={showTasks ? 'Hide tasks on calendar' : 'Show tasks on calendar'}
+          >
+            Tasks {showTasks ? 'on' : 'off'}
+          </button>
+          <Button size="sm" variant="secondary" onClick={handleExport} title="Export .ics">
+            <Download className="w-4 h-4" />
+            <span className="hidden sm:inline">Export</span>
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => fileInputRef.current?.click()}
+            title="Import .ics"
+          >
+            <Upload className="w-4 h-4" />
+            <span className="hidden sm:inline">Import</span>
+          </Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".ics,text/calendar"
+            className="hidden"
+            onChange={(e) => void handleImportFile(e.target.files?.[0] || null)}
+          />
           <Button size="sm" onClick={() => openNew()}>
             <Plus className="w-4 h-4" /> Add
           </Button>
@@ -432,10 +523,12 @@ export function CalendarPage() {
           cursor={cursor}
           weeks={monthWeeks}
           expanded={expanded}
+          tasksOnDay={tasksOnDay}
           getMember={getMember}
           memberColor={memberColor}
           onDayClick={(d) => openNew(d)}
           onEventClick={openEdit}
+          onToggleTodo={toggleTodo}
         />
       )}
 
@@ -443,10 +536,12 @@ export function CalendarPage() {
         <TimeGridView
           days={daysInRange}
           expanded={expanded}
+          tasksOnDay={tasksOnDay}
           getMember={getMember}
           memberColor={memberColor}
           onSlotClick={(d, hour) => openNew(d, hour)}
           onEventClick={openEdit}
+          onToggleTodo={toggleTodo}
           showDayHeaders
         />
       )}
@@ -455,10 +550,12 @@ export function CalendarPage() {
         <TimeGridView
           days={[startOfDay(cursor)]}
           expanded={expanded}
+          tasksOnDay={tasksOnDay}
           getMember={getMember}
           memberColor={memberColor}
           onSlotClick={(d, hour) => openNew(d, hour)}
           onEventClick={openEdit}
+          onToggleTodo={toggleTodo}
           showDayHeaders={false}
         />
       )}
@@ -644,6 +741,39 @@ export function CalendarPage() {
           </div>
         </div>
       </Modal>
+
+      {/* ICS import result */}
+      <Modal
+        open={importResult !== null}
+        onClose={() => setImportResult(null)}
+        title="Import calendar"
+      >
+        {importResult && (
+          <div className="space-y-3 text-sm">
+            <p>
+              Imported <span className="font-semibold text-accent">{importResult.imported}</span> event
+              {importResult.imported === 1 ? '' : 's'}
+              {importResult.skipped > 0 && (
+                <>
+                  {' '}
+                  · skipped <span className="font-semibold text-warn">{importResult.skipped}</span>
+                </>
+              )}
+              .
+            </p>
+            {importResult.skipReasons.length > 0 && (
+              <ul className="text-xs text-muted space-y-1 max-h-40 overflow-y-auto">
+                {importResult.skipReasons.map((r, i) => (
+                  <li key={i}>· {r}</li>
+                ))}
+              </ul>
+            )}
+            <Button className="w-full" onClick={() => setImportResult(null)}>
+              Done
+            </Button>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }
@@ -654,18 +784,22 @@ function MonthView({
   cursor,
   weeks,
   expanded,
+  tasksOnDay,
   getMember,
   memberColor,
   onDayClick,
   onEventClick,
+  onToggleTodo,
 }: {
   cursor: Date;
   weeks: Date[][];
   expanded: ExpandedEvent[];
+  tasksOnDay: (day: Date) => Todo[];
   getMember: (id: string) => { emoji?: string; name: string; color: string } | undefined;
   memberColor: (id: string) => string;
   onDayClick: (d: Date) => void;
   onEventClick: (ev: ExpandedEvent) => void;
+  onToggleTodo: (id: string) => void;
 }) {
   return (
     <Card className="!p-2 sm:!p-4 overflow-x-auto">
@@ -684,10 +818,12 @@ function MonthView({
               week={week}
               cursor={cursor}
               expanded={expanded}
+              tasksOnDay={tasksOnDay}
               getMember={getMember}
               memberColor={memberColor}
               onDayClick={onDayClick}
               onEventClick={onEventClick}
+              onToggleTodo={onToggleTodo}
             />
           ))}
         </div>
@@ -700,18 +836,22 @@ function MonthWeekRow({
   week,
   cursor,
   expanded,
+  tasksOnDay,
   getMember,
   memberColor,
   onDayClick,
   onEventClick,
+  onToggleTodo,
 }: {
   week: Date[];
   cursor: Date;
   expanded: ExpandedEvent[];
+  tasksOnDay: (day: Date) => Todo[];
   getMember: (id: string) => { emoji?: string; name: string; color: string } | undefined;
   memberColor: (id: string) => string;
   onDayClick: (d: Date) => void;
   onEventClick: (ev: ExpandedEvent) => void;
+  onToggleTodo: (id: string) => void;
 }) {
   // Multi-day / all-day spanning: events that cover more than one calendar day in this week
   const weekStart = startOfDay(week[0]);
@@ -824,8 +964,24 @@ function MonthWeekRow({
                     </div>
                   );
                 })}
-                {list.length > 2 && (
-                  <span className="text-[9px] text-muted pl-1">+{list.length - 2}</span>
+                {tasksOnDay(day).slice(0, 2).map((t) => (
+                  <div
+                    key={t.id}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onToggleTodo(t.id);
+                    }}
+                    className="text-[9px] sm:text-[10px] truncate px-1 rounded flex items-center gap-0.5 border border-dashed border-warn/50 bg-warn-tint text-warn"
+                    title={`Task: ${t.text} (tap to complete)`}
+                  >
+                    <Square className="w-2.5 h-2.5 shrink-0" />
+                    <span className="truncate">{t.text}</span>
+                  </div>
+                ))}
+                {(list.length > 2 || tasksOnDay(day).length > 2) && (
+                  <span className="text-[9px] text-muted pl-1">
+                    +{Math.max(0, list.length - 2) + Math.max(0, tasksOnDay(day).length - 2)} more
+                  </span>
                 )}
               </div>
             </button>
@@ -870,18 +1026,22 @@ function MonthWeekRow({
 function TimeGridView({
   days,
   expanded,
+  tasksOnDay,
   getMember,
   memberColor,
   onSlotClick,
   onEventClick,
+  onToggleTodo,
   showDayHeaders,
 }: {
   days: Date[];
   expanded: ExpandedEvent[];
+  tasksOnDay: (day: Date) => Todo[];
   getMember: (id: string) => { emoji?: string; name: string; color: string } | undefined;
   memberColor: (id: string) => string;
   onSlotClick: (d: Date, hour: number) => void;
   onEventClick: (ev: ExpandedEvent) => void;
+  onToggleTodo: (id: string) => void;
   showDayHeaders: boolean;
 }) {
   const hours = Array.from({ length: HOUR_END - HOUR_START }, (_, i) => HOUR_START + i);
@@ -982,6 +1142,18 @@ function TimeGridView({
                     </button>
                   );
                 })}
+                {tasksOnDay(day).map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => onToggleTodo(t.id)}
+                    className="w-full text-left text-[10px] truncate px-1 py-0.5 rounded flex items-center gap-0.5 border border-dashed border-warn/50 bg-warn-tint text-warn"
+                    title={`Task: ${t.text} (tap to complete)`}
+                  >
+                    <Square className="w-3 h-3 shrink-0" />
+                    <span className="truncate">{t.text}</span>
+                  </button>
+                ))}
               </div>
             ))}
           </div>
