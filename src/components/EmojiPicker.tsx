@@ -158,7 +158,7 @@ export function EmojiPickerPanel({ onPick, selected, className, tall }: PanelPro
             type="button"
             onClick={() => onPick(emoji)}
             className={cn(
-              'w-10 h-10 flex items-center justify-center text-2xl rounded-xl hover:bg-nav-hover active:scale-95 transition-transform leading-none',
+              'w-12 h-12 flex items-center justify-center text-3xl rounded-xl hover:bg-nav-hover active:scale-95 transition-transform leading-none',
               selected === emoji && 'bg-accent/20 ring-2 ring-accent',
             )}
             title={emoji}

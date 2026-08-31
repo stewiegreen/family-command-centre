@@ -56,7 +56,7 @@ export function ProfileLookEditor() {
               emoji={emoji}
               color={color}
               size="lg"
-              className="!w-20 !h-20 !text-4xl"
+              className="!w-24 !h-24 !text-5xl"
             />
           </div>
 
@@ -133,7 +133,7 @@ export function ProfileLookCard() {
             <h2 className="font-semibold text-fg text-sm">Your look</h2>
             <p className="text-xs text-muted">Pick any emoji and a colour — kids love this.</p>
           </div>
-          <Avatar {...look} size="md" className="!text-xl" />
+          <Avatar {...look} size="md" className="!text-2xl" />
         </div>
 
         <button
@@ -141,7 +141,7 @@ export function ProfileLookCard() {
           onClick={openEditor}
           className="w-full flex items-center justify-center gap-3 py-3 rounded-xl border border-border bg-inset hover:bg-nav-hover transition-colors"
         >
-          <span className="text-3xl leading-none">{look.emoji || '😀'}</span>
+          <span className="text-4xl leading-none">{look.emoji || '😀'}</span>
           <span className="text-sm text-muted">Tap to change emoji & colour</span>
         </button>
       </Card>
@@ -154,7 +154,7 @@ export function ProfileLookCard() {
               emoji={emoji}
               color={color}
               size="lg"
-              className="!w-20 !h-20 !text-4xl"
+              className="!w-24 !h-24 !text-5xl"
             />
           </div>
 

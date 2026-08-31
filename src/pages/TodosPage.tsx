@@ -10,8 +10,18 @@ import { uid } from '../lib/uid';
 import type { Priority } from '../types';
 import { cn } from '../lib/cn';
 
+/** Soft tint of a hex colour for card backgrounds. */
+function tint(hex: string, alpha = 0.14): string {
+  const c = (hex || '#6366f1').replace('#', '');
+  if (c.length < 6) return `rgba(99, 102, 241, ${alpha})`;
+  const r = parseInt(c.slice(0, 2), 16);
+  const g = parseInt(c.slice(2, 4), 16);
+  const b = parseInt(c.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 export function TodosPage() {
-  const { data, update, currentUser, isParent } = useApp();
+  const { data, update, currentUser, getMember, isParent } = useApp();
   const myId = currentUser?.id || data.settings.currentUserId;
   const [activeId, setActiveId] = useState(isParent ? data.settings.currentUserId : myId);
 
@@ -28,9 +38,12 @@ export function TodosPage() {
     };
   }, []);
 
-  const members = data.members.filter((m) => m.role !== 'media');
+  const members = data.members
+    .filter((m) => m.role !== 'media')
+    .map((m) => getMember(m.id) || m);
 
   const listId = isParent ? activeId : myId;
+  const listOwner = getMember(listId);
   const list = data.todos.filter((t) => t.memberId === listId);
   const open = list.filter((t) => !t.completed);
   const done = list.filter((t) => t.completed);
@@ -112,8 +125,13 @@ export function TodosPage() {
                   ? 'border-accent bg-accent-tint text-accent'
                   : 'border-border-strong text-muted hover:bg-nav-hover',
               )}
+              style={
+                activeId === m.id && m.color
+                  ? { borderColor: m.color, backgroundColor: tint(m.color, 0.18), color: m.color }
+                  : undefined
+              }
             >
-              <Avatar {...m} size="sm" className="!w-8 !h-8 !text-base" />
+              <Avatar {...m} size="sm" />
               {m.name}
               <span className="text-xs opacity-70">
                 {data.todos.filter((t) => t.memberId === m.id && !t.completed).length}
@@ -165,6 +183,7 @@ export function TodosPage() {
               >
                 {members.map((m) => (
                   <option key={m.id} value={m.id}>
+                    {m.emoji ? `${m.emoji} ` : ''}
                     {m.name}
                   </option>
                 ))}
@@ -187,11 +206,23 @@ export function TodosPage() {
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted px-1">Open · {open.length}</p>
               )}
               {[...open, ...done].map((t) => {
+                const assignee = getMember(t.memberId) || listOwner;
+                const color = assignee?.color || '#6366f1';
                 const creator = data.members.find((m) => m.id === t.createdById);
                 const fromParent = creator && creator.role === 'parent' && t.createdById !== t.memberId;
                 const canDelete = isParent || (!fromParent && (t.createdById === myId || t.memberId === myId));
                 return (
-                  <Card key={t.id} className={cn('!p-4 flex items-start gap-4', t.completed && 'opacity-55')}>
+                  <Card
+                    key={t.id}
+                    className={cn(
+                      '!p-4 flex items-start gap-3 border-l-4 overflow-hidden',
+                      t.completed && 'opacity-55',
+                    )}
+                    style={{
+                      borderLeftColor: color,
+                      backgroundColor: tint(color, t.completed ? 0.06 : 0.12),
+                    }}
+                  >
                     <button
                       type="button"
                       onClick={() => toggleTodo(t.id)}
@@ -201,6 +232,7 @@ export function TodosPage() {
                           ? 'bg-accent border-accent text-accent-ink'
                           : 'border-border-strong hover:border-accent',
                       )}
+                      style={!t.completed ? { borderColor: color } : undefined}
                     >
                       {t.completed && <span className="text-xs">✓</span>}
                     </button>
@@ -209,6 +241,12 @@ export function TodosPage() {
                         {t.text}
                       </p>
                       <div className="flex flex-wrap gap-2 mt-1.5 items-center">
+                        {assignee && (
+                          <span className="inline-flex items-center gap-1.5 text-xs text-muted">
+                            <Avatar {...assignee} size="sm" className="!w-7 !h-7 !text-sm" />
+                            {assignee.name}
+                          </span>
+                        )}
                         <span
                           className="text-[11px] font-semibold uppercase tracking-wide"
                           style={{

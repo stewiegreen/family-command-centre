@@ -112,7 +112,7 @@ export function MessagesPage() {
                 chatId === m.id ? 'border-accent bg-accent/15' : 'border-border-strong',
               )}
             >
-              <Avatar {...m} size="sm" className="!w-8 !h-8 !text-base" />
+              <Avatar {...m} size="sm" />
               {m.name}
               {unread > 0 && (
                 <span className="bg-accent text-accent-ink text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
@@ -143,7 +143,7 @@ export function MessagesPage() {
                     emoji={sender?.emoji}
                     color={sender?.color}
                     size="sm"
-                    className="!w-8 !h-8 !text-base mb-0.5"
+                    className="mb-0.5"
                   />
                 )}
                 <div
@@ -164,7 +164,7 @@ export function MessagesPage() {
                     emoji={sender?.emoji}
                     color={sender?.color}
                     size="sm"
-                    className="!w-8 !h-8 !text-base mb-0.5"
+                    className="mb-0.5"
                   />
                 )}
               </div>
