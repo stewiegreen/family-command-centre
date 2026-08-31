@@ -129,12 +129,14 @@ export function Layout({ children }: { children: ReactNode }) {
       >
         <div className={cn('border-b border-border', collapsed ? 'p-3' : 'p-5')}>
           <div className={cn('flex items-center', collapsed ? 'justify-center' : 'gap-3')}>
-            <div
-              className="w-10 h-10 rounded-xl bg-accent flex items-center justify-center text-accent-ink font-bold text-lg shrink-0"
+            <img
+              src="/hq-mark.svg"
+              alt="GreenHQ"
+              width={40}
+              height={40}
+              className="w-10 h-10 rounded-xl shrink-0 shadow-sm"
               title={settings.familyName}
-            >
-              {settings.familyName.charAt(0)}
-            </div>
+            />
             {!collapsed && (
               <div className="min-w-0">
                 <h1 className="font-semibold truncate text-fg">{settings.familyName}</h1>
@@ -368,9 +370,13 @@ export function Layout({ children }: { children: ReactNode }) {
           <div className="relative w-[min(100%,18rem)] max-w-full h-full bg-sidebar border-r border-border flex flex-col shadow-2xl">
             <div className="flex items-center justify-between p-4 border-b border-border">
               <div className="flex items-center gap-3 min-w-0">
-                <div className="w-9 h-9 rounded-xl bg-accent flex items-center justify-center text-accent-ink font-bold">
-                  {settings.familyName.charAt(0)}
-                </div>
+                <img
+                  src="/hq-mark.svg"
+                  alt="GreenHQ"
+                  width={36}
+                  height={36}
+                  className="w-9 h-9 rounded-xl shrink-0"
+                />
                 <div className="min-w-0">
                   <p className="font-semibold truncate">{settings.familyName}</p>
                   <p className="text-xs text-faint truncate">
