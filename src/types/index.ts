@@ -38,7 +38,10 @@ export interface CalendarEvent {
   /** ISO datetime (UTC). Exclusive end for all-day (local midnight of day after last day). */
   end: string;
   allDay: boolean;
+  /** Primary / legacy single assignee (first of memberIds after migration). */
   memberId: string;
+  /** All assigned members (kids doing an activity together, etc.). Prefer this over memberId. */
+  memberIds?: string[];
   /** none | daily | weekly | monthly — expanded on read, not stored as instances. */
   recurrence?: string;
   /** Optional ISO end date for repeating series (inclusive day). */

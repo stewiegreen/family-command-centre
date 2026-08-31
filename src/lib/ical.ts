@@ -201,6 +201,7 @@ export function importEventsFromIcs(
         end,
         allDay,
         memberId: defaultMemberId,
+        memberIds: [defaultMemberId],
         recurrence,
         recurrenceUntil,
         exceptionDates: exceptionDates.length ? exceptionDates : undefined,

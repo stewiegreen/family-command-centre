@@ -91,10 +91,25 @@ function formatEventTimeLabel(ev: ExpandedEvent): string {
   return format(new Date(ev.instanceStart), 'H:mm') + ' ';
 }
 
+/** Assigned members for an event (supports multi-assignee). */
+function eventMemberIds(ev: { memberId: string; memberIds?: string[] }): string[] {
+  if (ev.memberIds && ev.memberIds.length > 0) return ev.memberIds;
+  return ev.memberId ? [ev.memberId] : [];
+}
+
+/** Primary color from first assigned member. */
+function primaryMemberColor(
+  ev: { memberId: string; memberIds?: string[] },
+  memberColor: (id: string) => string,
+): string {
+  const ids = eventMemberIds(ev);
+  return memberColor(ids[0] || ev.memberId);
+}
+
 type FormState = {
   title: string;
   allDay: boolean;
-  memberId: string;
+  memberIds: string[];
   start: string;
   endDate: string;
   time: string;
@@ -110,7 +125,7 @@ function emptyForm(memberId: string, day?: Date): FormState {
   return {
     title: '',
     allDay: true,
-    memberId,
+    memberIds: memberId ? [memberId] : [],
     start: d,
     endDate: d,
     time: '09:00',
@@ -284,7 +299,7 @@ export function CalendarPage() {
     setForm({
       title: master.title,
       allDay: master.allDay,
-      memberId: master.memberId,
+      memberIds: eventMemberIds(master),
       start: localDateStr(s),
       endDate,
       time: localTimeStr(s),
@@ -321,7 +336,8 @@ export function CalendarPage() {
       start,
       end,
       allDay: form.allDay,
-      memberId: form.memberId,
+      memberId: (form.memberIds[0] || data.settings.currentUserId),
+      memberIds: form.memberIds.length ? form.memberIds : [data.settings.currentUserId],
       recurrence: form.recurrence === 'none' ? undefined : form.recurrence,
       recurrenceUntil:
         form.recurrence !== 'none' && form.recurrenceUntil
@@ -625,10 +641,10 @@ export function CalendarPage() {
             />
             All day
           </label>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div className="space-y-3">
             <div>
               <label className="text-xs text-muted mb-1 block">Starts</label>
-              <div className="flex gap-2">
+              <div className={form.allDay ? '' : 'grid grid-cols-[1fr_auto] gap-2'}>
                 <Input
                   type="date"
                   value={form.start}
@@ -639,53 +655,82 @@ export function CalendarPage() {
                       endDate: f.endDate < e.target.value ? e.target.value : f.endDate,
                     }))
                   }
-                  className="flex-1"
+                  className="min-w-0 w-full"
                 />
                 {!form.allDay && (
                   <Input
                     type="time"
                     value={form.time}
                     onChange={(e) => setForm((f) => ({ ...f, time: e.target.value }))}
+                    className="w-[7.5rem] shrink-0"
                   />
                 )}
               </div>
             </div>
             <div>
               <label className="text-xs text-muted mb-1 block">Ends</label>
-              <div className="flex gap-2">
+              <div className={form.allDay ? '' : 'grid grid-cols-[1fr_auto] gap-2'}>
                 <Input
                   type="date"
                   value={form.endDate}
                   onChange={(e) => setForm((f) => ({ ...f, endDate: e.target.value }))}
-                  className="flex-1"
+                  className="min-w-0 w-full"
                 />
                 {!form.allDay && (
                   <Input
                     type="time"
                     value={form.endTime}
                     onChange={(e) => setForm((f) => ({ ...f, endTime: e.target.value }))}
+                    className="w-[7.5rem] shrink-0"
                   />
                 )}
               </div>
             </div>
           </div>
-          <select
-            value={form.memberId}
-            onChange={(e) => setForm((f) => ({ ...f, memberId: e.target.value }))}
-            className="w-full bg-surface border border-border-strong rounded-xl px-3 py-2.5 text-sm"
-          >
-            {data.members
-              .filter((m) => m.role !== 'media')
-              .map((m) => {
-                const look = getMember(m.id) || m;
-                return (
-                  <option key={m.id} value={m.id}>
-                    {look.emoji ? `${look.emoji} ` : ''}
-                    {look.name}
-                  </option>
-                );
-              })}
-          </select>
+          <div>
+            <label className="text-xs text-muted mb-1.5 block">Who&apos;s involved</label>
+            <div className="flex flex-wrap gap-2">
+              {data.members
+                .filter((m) => m.role !== 'media')
+                .map((m) => {
+                  const look = getMember(m.id) || m;
+                  const checked = form.memberIds.includes(m.id);
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() =>
+                        setForm((f) => {
+                          const has = f.memberIds.includes(m.id);
+                          // Keep at least one selected
+                          if (has && f.memberIds.length === 1) return f;
+                          return {
+                            ...f,
+                            memberIds: has
+                              ? f.memberIds.filter((id) => id !== m.id)
+                              : [...f.memberIds, m.id],
+                          };
+                        })
+                      }
+                      className={cn(
+                        'inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-sm border transition-colors',
+                        checked
+                          ? 'border-accent bg-accent-tint text-fg'
+                          : 'border-border-strong bg-surface text-fg-secondary hover:bg-surface-2',
+                      )}
+                    >
+                      <span
+                        className="w-2.5 h-2.5 rounded-full shrink-0"
+                        style={{ backgroundColor: look.color || '#6366f1' }}
+                      />
+                      {look.emoji ? `${look.emoji} ` : ''}
+                      {look.name}
+                    </button>
+                  );
+                })}
+            </div>
+            <p className="text-[11px] text-faint mt-1">Select one or more people (e.g. both kids at the same activity).</p>
+          </div>
           <div>
             <label className="text-xs text-muted mb-1 block">Location (optional)</label>
             <Input
@@ -932,8 +977,17 @@ function MonthWeekRow({
               <div style={{ height: spanRows * 16 }} className="shrink-0" />
               <div className="mt-0.5 space-y-0.5 flex-1 min-h-0">
                 {list.slice(0, 2).map((ev) => {
-                  const m = getMember(ev.memberId);
-                  const col = memberColor(ev.memberId);
+                  const ids = eventMemberIds(ev);
+                  const col = primaryMemberColor(ev, memberColor);
+                  const names = ids
+                    .map((id) => getMember(id))
+                    .filter(Boolean)
+                    .map((m) => `${m!.emoji || ''} ${m!.name}`.trim())
+                    .join(', ');
+                  const emojis = ids
+                    .map((id) => getMember(id)?.emoji)
+                    .filter(Boolean)
+                    .join('');
                   return (
                     <div
                       key={ev.id}
@@ -947,14 +1001,10 @@ function MonthWeekRow({
                         color: col,
                         borderLeft: `3px solid ${col}`,
                       }}
-                      title={
-                        (m ? `${m.emoji || ''} ${m.name}: ` : '') +
-                        formatEventTimeLabel(ev) +
-                        ev.title
-                      }
+                      title={(names ? names + ': ' : '') + formatEventTimeLabel(ev) + ev.title}
                     >
-                      {m?.emoji && (
-                        <span className="shrink-0 text-[11px] leading-none">{m.emoji}</span>
+                      {emojis && (
+                        <span className="shrink-0 text-[11px] leading-none">{emojis}</span>
                       )}
                       <span className="truncate">
                         {formatEventTimeLabel(ev)}
@@ -990,8 +1040,17 @@ function MonthWeekRow({
       </div>
       {/* Spanning bars overlaid on the week row */}
       {layouts.map(({ ev, startCol, endCol, row }) => {
-        const col = memberColor(ev.memberId);
-        const m = getMember(ev.memberId);
+        const ids = eventMemberIds(ev);
+        const col = primaryMemberColor(ev, memberColor);
+        const names = ids
+          .map((id) => getMember(id))
+          .filter(Boolean)
+          .map((m) => `${m!.emoji || ''} ${m!.name}`.trim())
+          .join(', ');
+        const emojis = ids
+          .map((id) => getMember(id)?.emoji)
+          .filter(Boolean)
+          .join('');
         return (
           <div
             key={ev.id + '-span'}
@@ -1009,9 +1068,9 @@ function MonthWeekRow({
               e.stopPropagation();
               onEventClick(ev);
             }}
-            title={(m ? `${m.emoji || ''} ${m.name}: ` : '') + ev.title}
+            title={(names ? names + ': ' : '') + ev.title}
           >
-            {m?.emoji ? `${m.emoji} ` : ''}
+            {emojis ? `${emojis} ` : ''}
             {ev.title}
             {ev.recurrence && ev.recurrence !== 'none' ? ' ↻' : ''}
           </div>
@@ -1122,8 +1181,12 @@ function TimeGridView({
                 className="min-h-[2rem] p-0.5 space-y-0.5 border-l border-border"
               >
                 {allDayByDay[di].map((ev) => {
-                  const col = memberColor(ev.memberId);
-                  const m = getMember(ev.memberId);
+                  const ids = eventMemberIds(ev);
+                  const col = primaryMemberColor(ev, memberColor);
+                  const emojis = ids
+                    .map((id) => getMember(id)?.emoji)
+                    .filter(Boolean)
+                    .join('');
                   return (
                     <button
                       key={ev.id}
@@ -1137,7 +1200,7 @@ function TimeGridView({
                       }}
                       title={ev.title}
                     >
-                      {m?.emoji ? `${m.emoji} ` : ''}
+                      {emojis ? `${emojis} ` : ''}
                       {ev.title}
                     </button>
                   );
@@ -1216,8 +1279,12 @@ function TimeGridView({
                     const layout = pack.get(ev.id) || { column: 0, columnCount: 1 };
                     const widthPct = 100 / layout.columnCount;
                     const leftPct = layout.column * widthPct;
-                    const col = memberColor(ev.memberId);
-                    const m = getMember(ev.memberId);
+                    const ids = eventMemberIds(ev);
+                    const col = primaryMemberColor(ev, memberColor);
+                    const emojis = ids
+                      .map((id) => getMember(id)?.emoji)
+                      .filter(Boolean)
+                      .join('');
                     return (
                       <button
                         key={ev.id}
@@ -1239,7 +1306,7 @@ function TimeGridView({
                         title={`${format(s, 'H:mm')}–${format(e, 'H:mm')} ${ev.title}`}
                       >
                         <div className="font-medium truncate leading-tight">
-                          {m?.emoji ? `${m.emoji} ` : ''}
+                          {emojis ? `${emojis} ` : ''}
                           {ev.title}
                         </div>
                         {height > 28 && (

@@ -100,7 +100,8 @@ export function migratePayload(p: Partial<FamilyData>): FamilyData {
       start: string;
       end?: string;
       allDay: boolean;
-      memberId: string;
+      memberId?: string;
+      memberIds?: string[];
       recurrence?: string;
       recurrenceUntil?: string;
       exceptionDates?: string[];
@@ -119,13 +120,21 @@ export function migratePayload(p: Partial<FamilyData>): FamilyData {
           end = new Date(s.getTime() + 60 * 60 * 1000).toISOString();
         }
       }
+      const memberIds =
+        e.memberIds?.length
+          ? e.memberIds
+          : e.memberId
+            ? [e.memberId]
+            : [];
+      const memberId = memberIds[0] || e.memberId || '';
       return {
         id: e.id,
         title: e.title,
         start,
         end,
         allDay: !!e.allDay,
-        memberId: e.memberId,
+        memberId,
+        memberIds,
         recurrence: e.recurrence,
         recurrenceUntil: e.recurrenceUntil,
         exceptionDates: e.exceptionDates,
