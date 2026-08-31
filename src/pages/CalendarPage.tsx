@@ -489,9 +489,9 @@ export function CalendarPage() {
   }, [daysInRange, view]);
 
   return (
-    <div className="p-4 lg:p-6 max-w-5xl mx-auto space-y-4">
-      {/* Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="h-full min-h-0 flex flex-col p-2 sm:p-3 lg:p-4 gap-2 w-full max-w-[1600px] mx-auto">
+      {/* Header — keep compact so the grid can grow */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between shrink-0">
         <div className="flex items-center gap-1 sm:gap-2 min-w-0">
           <button
             type="button"
@@ -571,53 +571,57 @@ export function CalendarPage() {
         </div>
       </div>
 
-      {view === 'month' && (
-        <MonthView
-          cursor={cursor}
-          weeks={monthWeeks}
-          expanded={expanded}
-          tasksOnDay={tasksOnDay}
-          getMember={getMember}
-          memberColor={memberColor}
-          onDayClick={(d) => openNew(d)}
-          onEventClick={openEdit}
-          onToggleTodo={toggleTodo}
-        />
-      )}
+      <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+        {view === 'month' && (
+          <MonthView
+            cursor={cursor}
+            weeks={monthWeeks}
+            expanded={expanded}
+            tasksOnDay={tasksOnDay}
+            getMember={getMember}
+            memberColor={memberColor}
+            onDayClick={(d) => openNew(d)}
+            onEventClick={openEdit}
+            onToggleTodo={toggleTodo}
+          />
+        )}
+        {view === 'week' && (
+          <div className="h-full min-h-0 overflow-auto">
+            <TimeGridView
+              days={daysInRange}
+              expanded={expanded}
+              tasksOnDay={tasksOnDay}
+              getMember={getMember}
+              memberColor={memberColor}
+              onSlotClick={(d, hour) => openNew(d, hour)}
+              onCreateRange={openNewRange}
+              onResizeEvent={resizeEvent}
+              onEventClick={openEdit}
+              onToggleTodo={toggleTodo}
+              showDayHeaders
+            />
+          </div>
+        )}
+        {view === 'day' && (
+          <div className="h-full min-h-0 overflow-auto">
+            <TimeGridView
+              days={[startOfDay(cursor)]}
+              expanded={expanded}
+              tasksOnDay={tasksOnDay}
+              getMember={getMember}
+              memberColor={memberColor}
+              onSlotClick={(d, hour) => openNew(d, hour)}
+              onCreateRange={openNewRange}
+              onResizeEvent={resizeEvent}
+              onEventClick={openEdit}
+              onToggleTodo={toggleTodo}
+              showDayHeaders={false}
+            />
+          </div>
+        )}
+      </div>
 
-      {view === 'week' && (
-        <TimeGridView
-          days={daysInRange}
-          expanded={expanded}
-          tasksOnDay={tasksOnDay}
-          getMember={getMember}
-          memberColor={memberColor}
-          onSlotClick={(d, hour) => openNew(d, hour)}
-          onCreateRange={openNewRange}
-          onResizeEvent={resizeEvent}
-          onEventClick={openEdit}
-          onToggleTodo={toggleTodo}
-          showDayHeaders
-        />
-      )}
-
-      {view === 'day' && (
-        <TimeGridView
-          days={[startOfDay(cursor)]}
-          expanded={expanded}
-          tasksOnDay={tasksOnDay}
-          getMember={getMember}
-          memberColor={memberColor}
-          onSlotClick={(d, hour) => openNew(d, hour)}
-          onCreateRange={openNewRange}
-          onResizeEvent={resizeEvent}
-          onEventClick={openEdit}
-          onToggleTodo={toggleTodo}
-          showDayHeaders={false}
-        />
-      )}
-
-      <p className="text-xs text-muted text-center">
+      <p className="text-[11px] text-muted text-center shrink-0 leading-tight">
         {view === 'month'
           ? 'Tap a day to add · tap an event to edit. Multi-day events span across days.'
           : 'Timed events sit on the timeline · all-day events are in the top strip.'}
@@ -888,16 +892,19 @@ function MonthView({
   onToggleTodo: (id: string) => void;
 }) {
   return (
-    <Card className="!p-2 sm:!p-4 overflow-x-auto">
-      <div className="min-w-[280px]">
-        <div className="grid grid-cols-7 gap-1 mb-1">
+    <Card className="!p-1.5 sm:!p-2 h-full min-h-0 flex flex-col overflow-hidden">
+      <div className="min-w-0 h-full min-h-0 flex flex-col">
+        <div className="grid grid-cols-7 gap-0.5 sm:gap-1 shrink-0">
           {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
-            <div key={d} className="text-center text-[10px] sm:text-xs text-muted font-medium py-1">
+            <div key={d} className="text-center text-xs sm:text-sm text-muted font-medium py-1">
               {d}
             </div>
           ))}
         </div>
-        <div className="space-y-1">
+        <div
+          className="flex-1 min-h-0 grid gap-0.5 sm:gap-1"
+          style={{ gridTemplateRows: `repeat(${Math.max(weeks.length, 1)}, minmax(0, 1fr))` }}
+        >
           {weeks.map((week) => (
             <MonthWeekRow
               key={week[0].toISOString()}
@@ -994,8 +1001,8 @@ function MonthWeekRow({
   const spanRows = Math.max(0, ...layouts.map((l) => l.row + 1), 0);
 
   return (
-    <div className="relative">
-      <div className="grid grid-cols-7 gap-1">
+    <div className="relative h-full min-h-0">
+      <div className="grid grid-cols-7 gap-0.5 sm:gap-1 h-full min-h-0">
         {week.map((day, di) => {
           const inMonth = isSameMonth(day, cursor);
           const isToday = isSameDay(day, new Date());
@@ -1006,18 +1013,18 @@ function MonthWeekRow({
               type="button"
               onClick={() => onDayClick(day)}
               className={cn(
-                'min-h-[4.5rem] sm:min-h-[5.5rem] p-1 rounded-xl text-left transition-colors flex flex-col',
+                'h-full min-h-0 p-1 sm:p-1.5 rounded-lg sm:rounded-xl text-left transition-colors flex flex-col overflow-hidden',
                 inMonth ? 'hover:bg-nav-hover' : 'opacity-40',
                 isToday && 'ring-1 ring-accent/50 bg-accent/10',
               )}
             >
-              <span className={cn('text-xs font-medium', isToday ? 'text-accent' : 'text-muted')}>
+              <span className={cn('text-sm font-semibold leading-none mb-0.5', isToday ? 'text-accent' : 'text-muted')}>
                 {format(day, 'd')}
               </span>
               {/* Spacer for spanning bars */}
-              <div style={{ height: spanRows * 16 }} className="shrink-0" />
+              <div style={{ height: spanRows * 20 }} className="shrink-0" />
               <div className="mt-0.5 space-y-0.5 flex-1 min-h-0">
-                {list.slice(0, 2).map((ev) => {
+                {list.slice(0, 3).map((ev) => {
                   const ids = eventMemberIds(ev);
                   const col = primaryMemberColor(ev, memberColor);
                   const names = ids
@@ -1036,7 +1043,7 @@ function MonthWeekRow({
                         e.stopPropagation();
                         onEventClick(ev);
                       }}
-                      className="text-[9px] sm:text-[10px] truncate px-1 rounded flex items-center gap-0.5"
+                      className="text-[11px] sm:text-xs truncate px-1 py-0.5 rounded flex items-center gap-0.5 leading-tight"
                       style={{
                         backgroundColor: col + '40',
                         color: col,
@@ -1062,16 +1069,16 @@ function MonthWeekRow({
                       e.stopPropagation();
                       onToggleTodo(t.id);
                     }}
-                    className="text-[9px] sm:text-[10px] truncate px-1 rounded flex items-center gap-0.5 border border-dashed border-warn/50 bg-warn-tint text-warn"
+                    className="text-[11px] sm:text-xs truncate px-1 py-0.5 rounded flex items-center gap-0.5 border border-dashed border-warn/50 bg-warn-tint text-warn leading-tight"
                     title={`Task: ${t.text} (tap to complete)`}
                   >
                     <Square className="w-2.5 h-2.5 shrink-0" />
                     <span className="truncate">{t.text}</span>
                   </div>
                 ))}
-                {(list.length > 2 || tasksOnDay(day).length > 2) && (
-                  <span className="text-[9px] text-muted pl-1">
-                    +{Math.max(0, list.length - 2) + Math.max(0, tasksOnDay(day).length - 2)} more
+                {(list.length > 3 || tasksOnDay(day).length > 2) && (
+                  <span className="text-[11px] text-muted pl-1">
+                    +{Math.max(0, list.length - 3) + Math.max(0, tasksOnDay(day).length - 2)} more
                   </span>
                 )}
               </div>
@@ -1095,12 +1102,12 @@ function MonthWeekRow({
         return (
           <div
             key={ev.id + '-span'}
-            className="absolute pointer-events-auto text-[9px] sm:text-[10px] truncate px-1.5 rounded-md font-medium cursor-pointer z-[1]"
+            className="absolute pointer-events-auto text-[11px] sm:text-xs truncate px-1.5 rounded-md font-medium cursor-pointer z-[1] leading-tight"
             style={{
               left: `calc(${(startCol / 7) * 100}% + 2px)`,
               width: `calc(${((endCol - startCol) / 7) * 100}% - 4px)`,
-              top: 22 + row * 16,
-              height: 14,
+              top: 26 + row * 20,
+              height: 18,
               backgroundColor: col + '55',
               color: col,
               borderLeft: `3px solid ${col}`,
@@ -1385,7 +1392,7 @@ function TimeGridView({
                       key={ev.id}
                       type="button"
                       onClick={() => onEventClick(ev)}
-                      className="w-full text-left text-[10px] sm:text-[11px] truncate px-1.5 py-1 rounded min-h-[28px]"
+                      className="w-full text-left text-xs sm:text-sm truncate px-1.5 py-1 rounded min-h-[28px]"
                       style={{
                         backgroundColor: col + '40',
                         color: col,
@@ -1403,7 +1410,7 @@ function TimeGridView({
                     key={t.id}
                     type="button"
                     onClick={() => onToggleTodo(t.id)}
-                    className="w-full text-left text-[10px] sm:text-[11px] truncate px-1.5 py-1 rounded flex items-center gap-1 border border-dashed border-warn/50 bg-warn-tint text-warn min-h-[28px]"
+                    className="w-full text-left text-xs sm:text-sm truncate px-1.5 py-1 rounded flex items-center gap-1 border border-dashed border-warn/50 bg-warn-tint text-warn min-h-[28px]"
                     title={`Task: ${t.text} (tap to complete)`}
                   >
                     <Square className="w-3.5 h-3.5 shrink-0" />
@@ -1508,7 +1515,7 @@ function TimeGridView({
                       <div
                         key={ev.id}
                         data-event-block
-                        className="absolute z-[1] text-left text-[10px] sm:text-[11px] rounded-md overflow-hidden border border-black/10 group"
+                        className="absolute z-[1] text-left text-xs sm:text-sm rounded-md overflow-hidden border border-black/10 group"
                         style={{
                           top,
                           height,
