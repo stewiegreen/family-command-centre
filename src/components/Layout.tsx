@@ -119,11 +119,11 @@ export function Layout({ children }: { children: ReactNode }) {
     );
 
   return (
-    <div className="min-h-dvh flex bg-page text-fg">
+    <div className="h-dvh max-h-dvh flex overflow-hidden bg-page text-fg">
       {/* Desktop sidebar */}
       <aside
         className={cn(
-          'hidden lg:flex flex-col shrink-0 border-r border-border bg-sidebar transition-[width] duration-200 ease-out',
+          'hidden lg:flex flex-col shrink-0 h-full max-h-dvh border-r border-border bg-sidebar transition-[width] duration-200 ease-out',
           collapsed ? 'w-[4.25rem]' : 'w-64',
         )}
       >
@@ -154,7 +154,7 @@ export function Layout({ children }: { children: ReactNode }) {
           </div>
         </div>
 
-        <nav className={cn('flex-1 space-y-1', collapsed ? 'p-2' : 'p-3')}>
+        <nav className={cn('flex-1 min-h-0 overflow-y-auto space-y-1', collapsed ? 'p-2' : 'p-3')}>
           {navItems.map((item) => (
             <button
               key={item.id}
@@ -284,7 +284,7 @@ export function Layout({ children }: { children: ReactNode }) {
         </div>
       </aside>
 
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 min-h-0 h-full">
         <header className="sticky top-0 z-30 flex items-center justify-between gap-3 px-4 lg:px-6 h-14 border-b border-border bg-header backdrop-blur-xl">
           <div className="flex items-center gap-3 min-w-0">
             <button
@@ -333,7 +333,7 @@ export function Layout({ children }: { children: ReactNode }) {
             {currentUser && <Avatar {...currentUser} size="sm" />}
           </div>
         </header>
-        <main className="flex-1 overflow-y-auto pb-24 lg:pb-6">{children}</main>
+        <main className="flex-1 min-h-0 overflow-y-auto pb-24 lg:pb-6">{children}</main>
       </div>
 
       {/* Mobile bottom nav */}
