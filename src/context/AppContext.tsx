@@ -17,6 +17,7 @@ import {
   saveCloudConfig,
   saveLocalData,
 } from '../lib/storage';
+import { migratePayload } from '../lib/defaults';
 import {
   cloudCreateInvite,
   cloudDeleteMessage,
@@ -133,11 +134,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
           else if (!remote.members.some((m) => m.id === currentUserId)) {
             currentUserId = remote.members[0]?.id || currentUserId;
           }
+          const migrated = migratePayload(remote);
           return {
-            ...remote,
+            ...migrated,
             // Messages come from the subcollection listener — keep them.
             messages: prev.messages,
-            settings: { ...remote.settings, currentUserId },
+            settings: { ...migrated.settings, currentUserId },
           };
         });
         setSyncStatus('live');

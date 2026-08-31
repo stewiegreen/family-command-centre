@@ -33,13 +33,20 @@ export interface Member {
 export interface CalendarEvent {
   id: string;
   title: string;
+  /** ISO datetime (UTC). For all-day events, use local noon on the start date. */
   start: string;
+  /** ISO datetime (UTC). Exclusive end for all-day (local midnight of day after last day). */
+  end: string;
   allDay: boolean;
   memberId: string;
   /** none | daily | weekly | monthly — expanded on read, not stored as instances. */
   recurrence?: string;
   /** Optional ISO end date for repeating series (inclusive day). */
   recurrenceUntil?: string;
+  /** Local YYYY-MM-DD dates to skip when expanding a recurring series. */
+  exceptionDates?: string[];
+  location?: string;
+  notes?: string;
 }
 
 /** Virtual instance produced by expanding a recurring master event. */
@@ -48,6 +55,8 @@ export interface ExpandedEvent extends CalendarEvent {
   masterId: string;
   /** Instance start (ISO). */
   instanceStart: string;
+  /** Instance end (ISO). */
+  instanceEnd: string;
 }
 
 export interface Todo {

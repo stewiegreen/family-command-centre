@@ -94,7 +94,45 @@ export function migratePayload(p: Partial<FamilyData>): FamilyData {
       createdAt: c.createdAt || new Date().toISOString(),
     })),
     shopping: p.shopping || [],
-    events: p.events || [],
+    events: (p.events || []).map((e: {
+      id: string;
+      title: string;
+      start: string;
+      end?: string;
+      allDay: boolean;
+      memberId: string;
+      recurrence?: string;
+      recurrenceUntil?: string;
+      exceptionDates?: string[];
+      location?: string;
+      notes?: string;
+    }) => {
+      const start = e.start || new Date().toISOString();
+      let end = e.end;
+      if (!end) {
+        const s = new Date(start);
+        if (e.allDay) {
+          // Exclusive end-of-day: next local midnight after start's local calendar day
+          const next = new Date(s.getFullYear(), s.getMonth(), s.getDate() + 1);
+          end = next.toISOString();
+        } else {
+          end = new Date(s.getTime() + 60 * 60 * 1000).toISOString();
+        }
+      }
+      return {
+        id: e.id,
+        title: e.title,
+        start,
+        end,
+        allDay: !!e.allDay,
+        memberId: e.memberId,
+        recurrence: e.recurrence,
+        recurrenceUntil: e.recurrenceUntil,
+        exceptionDates: e.exceptionDates,
+        location: e.location,
+        notes: e.notes,
+      };
+    }),
     notes: p.notes || [],
     messages: p.messages || [],
     presence: p.presence || {},
