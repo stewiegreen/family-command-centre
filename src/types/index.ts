@@ -151,7 +151,7 @@ export interface Settings {
   familyName: string;
   embyUrl: string;
   komgaUrl: string;
-  theme: 'dark' | 'light';
+  theme: 'dark' | 'light' | 'neon';
   currentUserId: string;
   embedMedia: boolean;
   pinnedAnnouncement: string;

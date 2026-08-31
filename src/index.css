@@ -3,7 +3,7 @@
 /* Semantic tokens — dark is default */
 :root,
 .dark {
-  /* Deep charcoal with a whisper of forest — not muddy olive */
+  /* Deep charcoal with a whisper of forest */
   --app-page: #0e1110;
   --app-surface: #161a18;
   --app-surface-2: #1e2421;
@@ -21,7 +21,6 @@
   --app-nav-hover: #1e2421;
   --app-input: #1a1f1d;
   --app-scrollbar: #3a443f;
-  /* Hero / accent washes */
   --app-hero-from: rgba(109, 190, 139, 0.14);
   --app-hero-via: rgba(109, 190, 139, 0.05);
   --app-hero-to: #161a18;
@@ -30,7 +29,6 @@
   --app-hero-sub: #8fd4a8;
   --app-hero-body: #a8b2ac;
   --app-ring-offset: #0e1110;
-  /* Accent — bright enough to pop on dark surfaces */
   --app-accent: #6dbe8b;
   --app-accent-hover: #82c99a;
   --app-accent-tint: #15231c;
@@ -42,7 +40,7 @@
   --app-danger-tint: #2c1a17;
 }
 
-/* Day mode — unchanged */
+/* Day mode */
 .light {
   --app-page: #fafaf8;
   --app-surface: #ffffff;
@@ -78,6 +76,46 @@
   --app-warn-tint: #fbf1df;
   --app-danger: #b4432f;
   --app-danger-tint: #fbebe7;
+}
+
+/* Neon / cyberpunk night */
+.neon {
+  --app-page: #07060f;
+  --app-surface: #0f0e1a;
+  --app-surface-2: #17162a;
+  --app-surface-3: #221f38;
+  --app-inset: rgba(7, 6, 15, 0.75);
+  --app-elevated: rgba(23, 22, 42, 0.92);
+  --app-border: #2a2750;
+  --app-border-strong: #3d3880;
+  --app-fg: #f0ecff;
+  --app-fg-secondary: #b0a8d9;
+  --app-muted: #8b83b8;
+  --app-faint: #5c5688;
+  --app-header: rgba(7, 6, 15, 0.9);
+  --app-sidebar: #0b0a14;
+  --app-nav-hover: #1c1a33;
+  --app-input: #12111f;
+  --app-scrollbar: #3d3880;
+  /* Electric cyan + magenta hero */
+  --app-hero-from: rgba(0, 240, 255, 0.16);
+  --app-hero-via: rgba(255, 45, 149, 0.08);
+  --app-hero-to: #0f0e1a;
+  --app-hero-border: rgba(0, 240, 255, 0.35);
+  --app-hero-title: #f0ecff;
+  --app-hero-sub: #00f0ff;
+  --app-hero-body: #b0a8d9;
+  --app-ring-offset: #07060f;
+  /* Primary accent = electric cyan */
+  --app-accent: #00e5ff;
+  --app-accent-hover: #5dffff;
+  --app-accent-tint: #0a2430;
+  --app-accent-tint-strong: #0f3544;
+  --app-accent-ink: #041016;
+  --app-warn: #ffcc33;
+  --app-warn-tint: #2e2610;
+  --app-danger: #ff2d6a;
+  --app-danger-tint: #2e0d18;
 }
 
 @theme {

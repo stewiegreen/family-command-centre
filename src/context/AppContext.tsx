@@ -309,9 +309,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
-    document.documentElement.classList.toggle('dark', data.settings.theme === 'dark');
-    document.documentElement.classList.toggle('light', data.settings.theme === 'light');
-  }, [data.settings.theme]);
+  const root = document.documentElement;
+  const t = data.settings.theme;
+  root.classList.toggle('dark', t === 'dark');
+  root.classList.toggle('light', t === 'light');
+  root.classList.toggle('neon', t === 'neon');
+}, [data.settings.theme]);
 
   const currentUserRaw = data.members.find((m) => m.id === data.settings.currentUserId);
   const currentUser = currentUserRaw
