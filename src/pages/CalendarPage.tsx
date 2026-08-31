@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { ChevronLeft, ChevronRight, Download, Plus, Square, Upload } from 'lucide-react';
 import {
   addDays,
@@ -32,7 +32,8 @@ const VIEW_KEY = 'fcc-calendar-view';
 const TASKS_KEY = 'fcc-calendar-show-tasks';
 const HOUR_START = 6;
 const HOUR_END = 22;
-const HOUR_HEIGHT = 48; // px per hour
+const HOUR_HEIGHT = 52; // px per hour (a bit taller for touch)
+const SNAP_MIN = 15; // drag snap in minutes
 
 function loadView(): CalView {
   try {
@@ -257,19 +258,55 @@ export function CalendarPage() {
     });
   };
 
-  const openNew = (day?: Date, hour?: number) => {
+  const minsToHHMM = (mins: number) => {
+    const clamped = Math.max(0, Math.min(24 * 60 - SNAP_MIN, mins));
+    const h = Math.floor(clamped / 60);
+    const m = clamped % 60;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  };
+
+  const openNew = (day?: Date, hour?: number, endHour?: number) => {
     setEditingMasterId(null);
     setEditingInstance(null);
     const base = emptyForm(data.settings.currentUserId, day);
     if (hour != null) {
       base.allDay = false;
-      const t = `${String(hour).padStart(2, '0')}:00`;
-      const t2 = `${String(Math.min(hour + 1, 23)).padStart(2, '0')}:00`;
-      base.time = t;
-      base.endTime = t2;
+      const startMins = Math.round(hour * 60);
+      const endMins =
+        endHour != null ? Math.round(endHour * 60) : startMins + 60;
+      base.time = minsToHHMM(Math.min(startMins, endMins));
+      base.endTime = minsToHHMM(Math.max(startMins, endMins));
+      if (base.endTime <= base.time) {
+        base.endTime = minsToHHMM(Math.min(startMins, endMins) + 60);
+      }
     }
     setForm(base);
     setShowForm(true);
+  };
+
+  /** Create form from a drag range (minutes from midnight). */
+  const openNewRange = (day: Date, startMins: number, endMins: number) => {
+    const a = Math.min(startMins, endMins);
+    const b = Math.max(startMins, endMins);
+    openNew(day, a / 60, Math.max(b, a + SNAP_MIN) / 60);
+  };
+
+  /** Persist resized times onto the master event (series). */
+  const resizeEvent = (ev: ExpandedEvent, newStart: Date, newEnd: Date) => {
+    if (newEnd.getTime() <= newStart.getTime()) return;
+    update((d) => ({
+      ...d,
+      events: d.events.map((e) => {
+        if (e.id !== ev.masterId) return e;
+        // Keep date from original master; apply new local times
+        return {
+          ...e,
+          start: newStart.toISOString(),
+          end: newEnd.toISOString(),
+          allDay: false,
+        };
+      }),
+    }));
   };
 
   const openEdit = (ev: ExpandedEvent) => {
@@ -556,6 +593,8 @@ export function CalendarPage() {
           getMember={getMember}
           memberColor={memberColor}
           onSlotClick={(d, hour) => openNew(d, hour)}
+          onCreateRange={openNewRange}
+          onResizeEvent={resizeEvent}
           onEventClick={openEdit}
           onToggleTodo={toggleTodo}
           showDayHeaders
@@ -570,6 +609,8 @@ export function CalendarPage() {
           getMember={getMember}
           memberColor={memberColor}
           onSlotClick={(d, hour) => openNew(d, hour)}
+          onCreateRange={openNewRange}
+          onResizeEvent={resizeEvent}
           onEventClick={openEdit}
           onToggleTodo={toggleTodo}
           showDayHeaders={false}
@@ -1082,6 +1123,16 @@ function MonthWeekRow({
 
 /* ——— Week / Day time grid ——— */
 
+function snapMins(mins: number): number {
+  return Math.round(mins / SNAP_MIN) * SNAP_MIN;
+}
+
+function yToMins(clientY: number, gridTop: number): number {
+  const y = clientY - gridTop;
+  const mins = HOUR_START * 60 + (y / HOUR_HEIGHT) * 60;
+  return snapMins(Math.max(HOUR_START * 60, Math.min(HOUR_END * 60, mins)));
+}
+
 function TimeGridView({
   days,
   expanded,
@@ -1089,6 +1140,8 @@ function TimeGridView({
   getMember,
   memberColor,
   onSlotClick,
+  onCreateRange,
+  onResizeEvent,
   onEventClick,
   onToggleTodo,
   showDayHeaders,
@@ -1099,12 +1152,15 @@ function TimeGridView({
   getMember: (id: string) => { emoji?: string; name: string; color: string } | undefined;
   memberColor: (id: string) => string;
   onSlotClick: (d: Date, hour: number) => void;
+  onCreateRange: (day: Date, startMins: number, endMins: number) => void;
+  onResizeEvent: (ev: ExpandedEvent, newStart: Date, newEnd: Date) => void;
   onEventClick: (ev: ExpandedEvent) => void;
   onToggleTodo: (id: string) => void;
   showDayHeaders: boolean;
 }) {
   const hours = Array.from({ length: HOUR_END - HOUR_START }, (_, i) => HOUR_START + i);
   const gridHeight = (HOUR_END - HOUR_START) * HOUR_HEIGHT;
+  const colMinPx = days.length > 1 ? 112 : 0; // wider columns on week view for phones
 
   const allDayByDay = days.map((day) =>
     expanded.filter((ev) => {
@@ -1130,18 +1186,149 @@ function TimeGridView({
 
   const packs = timedByDay.map((list) => packOverlapping(list));
 
+  // Drag-create state
+  const [draft, setDraft] = useState<null | {
+    dayIndex: number;
+    startMins: number;
+    endMins: number;
+  }>(null);
+  const dragMode = useRef<'none' | 'create' | 'resize-start' | 'resize-end'>('none');
+  const dragEv = useRef<ExpandedEvent | null>(null);
+  const resizeDraft = useRef<{ start: Date; end: Date } | null>(null);
+  const gridEls = useRef<(HTMLDivElement | null)[]>([]);
+  const suppressClick = useRef(false);
+  // Local preview overrides while resizing (event id → times)
+  const [resizePreview, setResizePreview] = useState<Record<
+    string,
+    { start: number; end: number }
+  >>({});
+
+  const onGridPointerDown = (dayIndex: number, e: ReactPointerEvent) => {
+    // Ignore if starting on an event block
+    if ((e.target as HTMLElement).closest('[data-event-block]')) return;
+    const el = gridEls.current[dayIndex];
+    if (!el) return;
+    el.setPointerCapture(e.pointerId);
+    const top = el.getBoundingClientRect().top;
+    const mins = yToMins(e.clientY, top);
+    dragMode.current = 'create';
+    suppressClick.current = false;
+    setDraft({ dayIndex, startMins: mins, endMins: mins + 60 });
+  };
+
+  const onGridPointerMove = (dayIndex: number, e: ReactPointerEvent) => {
+    if (dragMode.current === 'none') return;
+    const el = gridEls.current[dayIndex];
+    if (!el) return;
+    const top = el.getBoundingClientRect().top;
+    const mins = yToMins(e.clientY, top);
+
+    if (dragMode.current === 'create' && draft && draft.dayIndex === dayIndex) {
+      if (Math.abs(mins - draft.startMins) >= SNAP_MIN) suppressClick.current = true;
+      setDraft({ ...draft, endMins: mins });
+      return;
+    }
+
+    if (
+      (dragMode.current === 'resize-start' || dragMode.current === 'resize-end') &&
+      dragEv.current
+    ) {
+      suppressClick.current = true;
+      const ev = dragEv.current;
+      const baseStart = resizeDraft.current?.start ?? new Date(ev.instanceStart);
+      const baseEnd = resizeDraft.current?.end ?? new Date(ev.instanceEnd);
+      const day = days[dayIndex];
+      const next = new Date(day);
+      next.setHours(0, 0, 0, 0);
+      next.setMinutes(mins);
+      let s = baseStart;
+      let en = baseEnd;
+      if (dragMode.current === 'resize-end') {
+        if (next.getTime() > s.getTime() + SNAP_MIN * 60_000) en = next;
+      } else {
+        if (en.getTime() > next.getTime() + SNAP_MIN * 60_000) s = next;
+      }
+      resizeDraft.current = { start: s, end: en };
+      setResizePreview((prev) => ({
+        ...prev,
+        [ev.id]: { start: s.getTime(), end: en.getTime() },
+      }));
+    }
+  };
+
+  const onGridPointerUp = (dayIndex: number, e: ReactPointerEvent) => {
+    const mode = dragMode.current;
+    dragMode.current = 'none';
+    const el = gridEls.current[dayIndex];
+    try {
+      el?.releasePointerCapture(e.pointerId);
+    } catch {
+      /* ignore */
+    }
+
+    if (mode === 'create' && draft && draft.dayIndex === dayIndex) {
+      const a = Math.min(draft.startMins, draft.endMins);
+      const b = Math.max(draft.startMins, draft.endMins);
+      const end = b - a < SNAP_MIN ? a + 60 : b;
+      setDraft(null);
+      if (suppressClick.current || end - a >= 30) {
+        onCreateRange(days[dayIndex], a, end);
+      } else {
+        // Treat as click → 1 hour slot
+        onSlotClick(days[dayIndex], Math.floor(a / 60));
+      }
+      return;
+    }
+
+    if (
+      (mode === 'resize-start' || mode === 'resize-end') &&
+      dragEv.current &&
+      resizeDraft.current
+    ) {
+      onResizeEvent(dragEv.current, resizeDraft.current.start, resizeDraft.current.end);
+    }
+    setDraft(null);
+    setResizePreview({});
+    dragEv.current = null;
+    resizeDraft.current = null;
+  };
+
+  const startResize = (
+    ev: ExpandedEvent,
+    edge: 'start' | 'end',
+    dayIndex: number,
+    e: ReactPointerEvent,
+  ) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const el = gridEls.current[dayIndex];
+    if (!el) return;
+    el.setPointerCapture(e.pointerId);
+    dragMode.current = edge === 'start' ? 'resize-start' : 'resize-end';
+    dragEv.current = ev;
+    resizeDraft.current = {
+      start: new Date(ev.instanceStart),
+      end: new Date(ev.instanceEnd),
+    };
+    suppressClick.current = true;
+  };
+
   return (
     <Card className="!p-0 overflow-hidden">
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto -mx-0 touch-pan-x">
         <div
           className="min-w-full"
-          style={{ minWidth: days.length > 1 ? days.length * 100 + 56 : undefined }}
+          style={{
+            minWidth: days.length > 1 ? days.length * colMinPx + 52 : undefined,
+          }}
         >
           {/* Day headers */}
           {showDayHeaders && (
             <div
               className="grid border-b border-border sticky top-0 bg-surface z-10"
-              style={{ gridTemplateColumns: `56px repeat(${days.length}, minmax(0, 1fr))` }}
+              style={{
+                gridTemplateColumns: `52px repeat(${days.length}, minmax(${colMinPx}px, 1fr))`,
+              }}
             >
               <div />
               {days.map((day) => {
@@ -1150,14 +1337,14 @@ function TimeGridView({
                   <div
                     key={day.toISOString()}
                     className={cn(
-                      'text-center py-2 text-xs sm:text-sm font-medium',
+                      'text-center py-2 text-xs sm:text-sm font-medium min-w-0',
                       isToday ? 'text-accent' : 'text-muted',
                     )}
                   >
                     <div>{format(day, 'EEE')}</div>
                     <div
                       className={cn(
-                        'inline-flex items-center justify-center w-7 h-7 rounded-full text-sm',
+                        'inline-flex items-center justify-center w-8 h-8 rounded-full text-sm',
                         isToday && 'bg-accent text-accent-ink',
                       )}
                     >
@@ -1172,13 +1359,19 @@ function TimeGridView({
           {/* All-day strip */}
           <div
             className="grid border-b border-border bg-surface-2/40"
-            style={{ gridTemplateColumns: `56px repeat(${days.length}, minmax(0, 1fr))` }}
+            style={{
+              gridTemplateColumns: `52px repeat(${days.length}, minmax(${colMinPx}px, 1fr))`,
+            }}
           >
-            <div className="text-[10px] text-muted p-1 text-right pr-2 pt-2">All day</div>
+            <div className="text-[10px] text-muted p-1 text-right pr-2 pt-2 leading-tight">
+              All
+              <br />
+              day
+            </div>
             {days.map((day, di) => (
               <div
                 key={day.toISOString()}
-                className="min-h-[2rem] p-0.5 space-y-0.5 border-l border-border"
+                className="min-h-[2.25rem] p-0.5 space-y-0.5 border-l border-border"
               >
                 {allDayByDay[di].map((ev) => {
                   const ids = eventMemberIds(ev);
@@ -1192,7 +1385,7 @@ function TimeGridView({
                       key={ev.id}
                       type="button"
                       onClick={() => onEventClick(ev)}
-                      className="w-full text-left text-[10px] truncate px-1 py-0.5 rounded"
+                      className="w-full text-left text-[10px] sm:text-[11px] truncate px-1.5 py-1 rounded min-h-[28px]"
                       style={{
                         backgroundColor: col + '40',
                         color: col,
@@ -1210,10 +1403,10 @@ function TimeGridView({
                     key={t.id}
                     type="button"
                     onClick={() => onToggleTodo(t.id)}
-                    className="w-full text-left text-[10px] truncate px-1 py-0.5 rounded flex items-center gap-0.5 border border-dashed border-warn/50 bg-warn-tint text-warn"
+                    className="w-full text-left text-[10px] sm:text-[11px] truncate px-1.5 py-1 rounded flex items-center gap-1 border border-dashed border-warn/50 bg-warn-tint text-warn min-h-[28px]"
                     title={`Task: ${t.text} (tap to complete)`}
                   >
-                    <Square className="w-3 h-3 shrink-0" />
+                    <Square className="w-3.5 h-3.5 shrink-0" />
                     <span className="truncate">{t.text}</span>
                   </button>
                 ))}
@@ -1225,16 +1418,15 @@ function TimeGridView({
           <div
             className="grid relative"
             style={{
-              gridTemplateColumns: `56px repeat(${days.length}, minmax(0, 1fr))`,
+              gridTemplateColumns: `52px repeat(${days.length}, minmax(${colMinPx}px, 1fr))`,
               height: gridHeight,
             }}
           >
-            {/* Time labels + hour lines */}
-            <div className="relative">
+            <div className="relative select-none">
               {hours.map((h) => (
                 <div
                   key={h}
-                  className="absolute right-0 text-[10px] text-muted pr-2 -translate-y-1/2"
+                  className="absolute right-0 text-[10px] text-muted pr-1.5 -translate-y-1/2"
                   style={{ top: (h - HOUR_START) * HOUR_HEIGHT }}
                 >
                   {format(new Date(2000, 0, 1, h), 'h a')}
@@ -1245,25 +1437,52 @@ function TimeGridView({
             {days.map((day, di) => {
               const pack = packs[di];
               const list = timedByDay[di];
+              const isDraftHere = draft?.dayIndex === di;
               return (
                 <div
                   key={day.toISOString()}
-                  className="relative border-l border-border"
+                  ref={(el) => {
+                    gridEls.current[di] = el;
+                  }}
+                  className="relative border-l border-border touch-none select-none"
                   style={{ height: gridHeight }}
+                  onPointerDown={(e) => onGridPointerDown(di, e)}
+                  onPointerMove={(e) => onGridPointerMove(di, e)}
+                  onPointerUp={(e) => onGridPointerUp(di, e)}
+                  onPointerCancel={() => {
+                    dragMode.current = 'none';
+                    setDraft(null);
+                    dragEv.current = null;
+                  }}
                 >
                   {hours.map((h) => (
-                    <button
+                    <div
                       key={h}
-                      type="button"
-                      className="absolute left-0 right-0 border-t border-border/60 hover:bg-nav-hover/50"
+                      className="absolute left-0 right-0 border-t border-border/60 pointer-events-none"
                       style={{ top: (h - HOUR_START) * HOUR_HEIGHT, height: HOUR_HEIGHT }}
-                      onClick={() => onSlotClick(day, h)}
-                      aria-label={`Add event at ${h}:00`}
                     />
                   ))}
+
+                  {/* Drag-create preview */}
+                  {isDraftHere && draft && (
+                    <div
+                      className="absolute left-1 right-1 rounded-md bg-accent/30 border border-accent/50 pointer-events-none z-[2]"
+                      style={{
+                        top:
+                          ((Math.min(draft.startMins, draft.endMins) - HOUR_START * 60) / 60) *
+                          HOUR_HEIGHT,
+                        height: Math.max(
+                          8,
+                          (Math.abs(draft.endMins - draft.startMins) / 60) * HOUR_HEIGHT,
+                        ),
+                      }}
+                    />
+                  )}
+
                   {list.map((ev) => {
-                    const s = new Date(ev.instanceStart);
-                    const e = new Date(ev.instanceEnd);
+                    const preview = resizePreview[ev.id];
+                    const s = new Date(preview?.start ?? ev.instanceStart);
+                    const e = new Date(preview?.end ?? ev.instanceEnd);
                     const startMin = s.getHours() * 60 + s.getMinutes();
                     const endMin = e.getHours() * 60 + e.getMinutes();
                     const gridStart = HOUR_START * 60;
@@ -1273,7 +1492,7 @@ function TimeGridView({
                     if (clampedEnd <= clampedStart) return null;
                     const top = ((clampedStart - gridStart) / 60) * HOUR_HEIGHT;
                     const height = Math.max(
-                      18,
+                      22,
                       ((clampedEnd - clampedStart) / 60) * HOUR_HEIGHT - 2,
                     );
                     const layout = pack.get(ev.id) || { column: 0, columnCount: 1 };
@@ -1286,35 +1505,55 @@ function TimeGridView({
                       .filter(Boolean)
                       .join('');
                     return (
-                      <button
+                      <div
                         key={ev.id}
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onEventClick(ev);
-                        }}
-                        className="absolute z-[1] text-left text-[10px] sm:text-[11px] px-1 py-0.5 rounded-md overflow-hidden border border-black/10"
+                        data-event-block
+                        className="absolute z-[1] text-left text-[10px] sm:text-[11px] rounded-md overflow-hidden border border-black/10 group"
                         style={{
                           top,
                           height,
-                          left: `calc(${leftPct}% + 1px)`,
-                          width: `calc(${widthPct}% - 2px)`,
+                          left: `calc(${leftPct}% + 2px)`,
+                          width: `calc(${widthPct}% - 4px)`,
                           backgroundColor: col + '55',
                           color: col,
                           borderLeft: `3px solid ${col}`,
                         }}
-                        title={`${format(s, 'H:mm')}–${format(e, 'H:mm')} ${ev.title}`}
                       >
-                        <div className="font-medium truncate leading-tight">
-                          {emojis ? `${emojis} ` : ''}
-                          {ev.title}
-                        </div>
-                        {height > 28 && (
-                          <div className="text-[9px] opacity-80 truncate">
-                            {format(s, 'H:mm')}–{format(e, 'H:mm')}
+                        {/* Resize handles */}
+                        <div
+                          className="absolute left-0 right-0 top-0 h-3 cursor-ns-resize touch-none opacity-0 group-hover:opacity-100 bg-gradient-to-b from-black/15 to-transparent"
+                          onPointerDown={(pe) => startResize(ev, 'start', di, pe)}
+                          title="Drag to change start"
+                        />
+                        <button
+                          type="button"
+                          className="w-full h-full text-left px-1 py-0.5 overflow-hidden"
+                          onClick={(ce) => {
+                            ce.stopPropagation();
+                            if (suppressClick.current) {
+                              suppressClick.current = false;
+                              return;
+                            }
+                            onEventClick(ev);
+                          }}
+                          title={`${format(s, 'H:mm')}–${format(e, 'H:mm')} ${ev.title}`}
+                        >
+                          <div className="font-medium truncate leading-tight">
+                            {emojis ? `${emojis} ` : ''}
+                            {ev.title}
                           </div>
-                        )}
-                      </button>
+                          {height > 30 && (
+                            <div className="text-[9px] opacity-80 truncate">
+                              {format(s, 'H:mm')}–{format(e, 'H:mm')}
+                            </div>
+                          )}
+                        </button>
+                        <div
+                          className="absolute left-0 right-0 bottom-0 h-3 cursor-ns-resize touch-none opacity-0 group-hover:opacity-100 sm:opacity-70 bg-gradient-to-t from-black/15 to-transparent"
+                          onPointerDown={(pe) => startResize(ev, 'end', di, pe)}
+                          title="Drag to change end"
+                        />
+                      </div>
                     );
                   })}
                 </div>
@@ -1323,6 +1562,9 @@ function TimeGridView({
           </div>
         </div>
       </div>
+      <p className="text-[10px] text-faint text-center py-1.5 px-2 border-t border-border">
+        Drag on the grid to create · drag event edges to resize
+      </p>
     </Card>
   );
 }

@@ -122,7 +122,6 @@ export function NotificationWatcher() {
       if (!seeded.current) return;
       const now = Date.now();
       const in24h = now + 24 * 60 * 60 * 1000;
-      const in1h = now + 60 * 60 * 1000;
 
       for (const t of data.todos) {
         if (t.completed || t.memberId !== me) continue;
@@ -146,20 +145,70 @@ export function NotificationWatcher() {
         markTodoNotified(key);
       }
 
-      const soonEvents = upcomingExpanded(data.events, new Date(now), 1).filter((ev) => {
+      // Calendar reminders: 1h and 15m before start; assigned to me (or unassigned family)
+      const upcoming = upcomingExpanded(data.events, new Date(now), 2);
+      const windows: { label: string; maxLead: number; minLead: number }[] = [
+        { label: '1h', maxLead: 60 * 60 * 1000, minLead: 45 * 60 * 1000 },
+        { label: '15m', maxLead: 15 * 60 * 1000, minLead: 0 },
+      ];
+      for (const ev of upcoming) {
+        if (ev.allDay) continue; // all-day handled below
+        const memberIds =
+          ev.memberIds && ev.memberIds.length > 0
+            ? ev.memberIds
+            : ev.memberId
+              ? [ev.memberId]
+              : [];
+        // Notify if I'm assigned, or event has no clear assignee list beyond legacy
+        if (memberIds.length > 0 && !memberIds.includes(me)) continue;
+
         const start = new Date(ev.instanceStart).getTime();
-        return start >= now && start <= in1h;
-      });
-      for (const ev of soonEvents) {
-        const key = `${ev.id}:soon`;
-        if (wasEventNotified(key)) continue;
-        const when = new Date(ev.instanceStart).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-        void showLocalNotification('Upcoming event', {
-          body: `${ev.title} at ${when}`,
-          tag: `event-${ev.id}`,
-          data: { view: 'calendar' },
-        });
-        markEventNotified(key);
+        if (start < now) continue;
+        const lead = start - now;
+        for (const w of windows) {
+          if (lead > w.maxLead || lead < w.minLead) continue;
+          const key = `${ev.id}:${w.label}`;
+          if (wasEventNotified(key)) continue;
+          const when = new Date(ev.instanceStart).toLocaleTimeString([], {
+            hour: 'numeric',
+            minute: '2-digit',
+          });
+          const body =
+            w.label === '15m'
+              ? `${ev.title} starts in 15 minutes (${when})`
+              : `${ev.title} at ${when}`;
+          void showLocalNotification('Upcoming event', {
+            body: body.slice(0, 160),
+            tag: `event-${ev.id}-${w.label}`,
+            data: { view: 'calendar' },
+          });
+          markEventNotified(key);
+        }
+      }
+
+      // All-day events: remind once on the morning of (05:00–10:00 local)
+      const hourNow = new Date(now).getHours();
+      if (hourNow >= 5 && hourNow < 10) {
+        for (const ev of upcoming) {
+          if (!ev.allDay) continue;
+          const memberIds =
+            ev.memberIds && ev.memberIds.length > 0
+              ? ev.memberIds
+              : ev.memberId
+                ? [ev.memberId]
+                : [];
+          if (memberIds.length > 0 && !memberIds.includes(me)) continue;
+          const dayKey = new Date(ev.instanceStart).toDateString();
+          if (dayKey !== new Date(now).toDateString()) continue;
+          const key = `${ev.masterId || ev.id}:allday:${dayKey}`;
+          if (wasEventNotified(key)) continue;
+          void showLocalNotification('Today', {
+            body: ev.title.slice(0, 160),
+            tag: `event-allday-${ev.masterId || ev.id}`,
+            data: { view: 'calendar' },
+          });
+          markEventNotified(key);
+        }
       }
     };
 
