@@ -340,6 +340,54 @@ export async function cloudMarkMessageRead(familyId: string, messageId: string):
   await fsMod.updateDoc(fsMod.doc(messagesCol(familyId), messageId), { read: true });
 }
 
+export async function cloudDeleteMessage(familyId: string, messageId: string): Promise<void> {
+  if (!db || !fsMod) throw new Error('Cloud not connected');
+  await fsMod.deleteDoc(fsMod.doc(messagesCol(familyId), messageId));
+}
+
+/** Max messages kept per conversation (pair of members). Older ones are deleted. */
+export const MAX_MESSAGES_PER_THREAD = 50;
+
+/**
+ * Split messages into kept (last N per pair) and candidates to delete.
+ * Only messages the caller is allowed to delete should be passed to cloudDeleteMessage
+ * (sender or parent per rules).
+ */
+export function partitionMessagesForPrune(
+  messages: Message[],
+  opts: { myMemberId: string; myUid?: string; canDeleteAny?: boolean },
+): { kept: Message[]; toDelete: Message[] } {
+  const pairs = new Map<string, Message[]>();
+  for (const m of messages) {
+    const a = m.fromId < m.toId ? m.fromId : m.toId;
+    const b = m.fromId < m.toId ? m.toId : m.fromId;
+    const key = `${a}|${b}`;
+    const list = pairs.get(key);
+    if (list) list.push(m);
+    else pairs.set(key, [m]);
+  }
+  const kept: Message[] = [];
+  const toDelete: Message[] = [];
+  for (const list of pairs.values()) {
+    list.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+    if (list.length <= MAX_MESSAGES_PER_THREAD) {
+      kept.push(...list);
+      continue;
+    }
+    const drop = list.slice(0, list.length - MAX_MESSAGES_PER_THREAD);
+    kept.push(...list.slice(list.length - MAX_MESSAGES_PER_THREAD));
+    for (const m of drop) {
+      const iSent =
+        m.fromId === opts.myMemberId ||
+        (!!opts.myUid && m.fromUid === opts.myUid);
+      if (opts.canDeleteAny || iSent) toDelete.push(m);
+    }
+  }
+  kept.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+  return { kept, toDelete };
+}
+
+
 export function subscribeMessages(
   familyId: string,
   myUid: string,

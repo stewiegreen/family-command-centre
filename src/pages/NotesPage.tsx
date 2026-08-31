@@ -125,7 +125,7 @@ export function NotesPage() {
                 <div className="flex items-center justify-between pt-1">
                   {author && (
                     <div className="flex items-center gap-1.5">
-                      <Avatar {...author} size="sm" className="!w-5 !h-5 !text-[10px]" />
+                      <Avatar {...author} size="sm" className="!w-6 !h-6 !text-sm" />
                       <span className="text-[10px] text-muted">{author.name}</span>
                     </div>
                   )}

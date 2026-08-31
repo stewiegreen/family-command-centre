@@ -265,7 +265,7 @@ export function ChoresPage() {
                   m.id === myId ? 'border-accent/40 bg-accent-tint' : 'border-border bg-surface/50',
                 )}
               >
-                <Avatar {...look} size="sm" className="!w-6 !h-6" />
+                <Avatar {...look} size="sm" className="!w-7 !h-7 !text-base" />
                 <span className="text-sm text-fg-secondary">{m.name}</span>
                 <span className="text-sm font-bold tabular-nums text-accent">{mins}m</span>
               </div>
@@ -372,7 +372,7 @@ export function ChoresPage() {
                   const who = getMember(c.approvedForId || c.submittedById || '');
                   return (
                     <div key={c.id} className="flex items-center gap-2.5 text-sm">
-                      {who && <Avatar {...who} size="sm" className="!w-6 !h-6" />}
+                      {who && <Avatar {...who} size="sm" className="!w-7 !h-7 !text-base" />}
                       <span className="text-fg-secondary truncate flex-1 min-w-0">{c.title}</span>
                       <span className="text-accent font-medium text-xs shrink-0">+{c.rewardMinutes || 0}m</span>
                     </div>

@@ -251,7 +251,7 @@ export function Dashboard() {
                     className="flex items-center gap-2 px-2.5 py-1.5 rounded-2xl bg-inset border border-border"
                     title={p?.updatedAt ? `Updated ${new Date(p.updatedAt).toLocaleString()}` : undefined}
                   >
-                    <Avatar {...look} size="sm" className="!w-7 !h-7" />
+                    <Avatar {...look} size="sm" className="!w-8 !h-8 !text-base" />
                     <span className="text-sm font-medium text-fg">{m.name}</span>
                     <span className="text-sm">{opt ? `${opt.emoji} ${opt.label}` : '—'}</span>
                   </div>

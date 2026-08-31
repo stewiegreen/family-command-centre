@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Smile } from 'lucide-react';
 import { cn } from '../lib/cn';
 
-const EMOJI_GROUPS: { label: string; emojis: string[] }[] = [
+export const EMOJI_GROUPS: { label: string; emojis: string[] }[] = [
   {
     label: 'Smileys',
     emojis: [
@@ -117,14 +117,68 @@ const EMOJI_GROUPS: { label: string; emojis: string[] }[] = [
   },
 ];
 
+type PanelProps = {
+  onPick: (emoji: string) => void;
+  selected?: string;
+  className?: string;
+  /** Taller panel for modal use */
+  tall?: boolean;
+};
+
+/** Full emoji grid with category tabs — use inside modals or as a panel. */
+export function EmojiPickerPanel({ onPick, selected, className, tall }: PanelProps) {
+  const [tab, setTab] = useState(0);
+
+  return (
+    <div className={cn('rounded-2xl border border-border bg-surface overflow-hidden', className)}>
+      <div className="flex gap-0.5 p-1.5 border-b border-border overflow-x-auto">
+        {EMOJI_GROUPS.map((g, i) => (
+          <button
+            key={g.label}
+            type="button"
+            onClick={() => setTab(i)}
+            className={cn(
+              'px-2.5 py-1.5 rounded-lg text-[11px] font-medium shrink-0 transition-colors',
+              tab === i ? 'bg-accent/15 text-accent' : 'text-muted hover:bg-nav-hover',
+            )}
+          >
+            {g.label}
+          </button>
+        ))}
+      </div>
+      <div
+        className={cn(
+          'p-2 overflow-y-auto grid grid-cols-8 gap-1',
+          tall ? 'max-h-64 sm:max-h-72' : 'max-h-52',
+        )}
+      >
+        {EMOJI_GROUPS[tab]?.emojis.map((emoji) => (
+          <button
+            key={emoji + tab}
+            type="button"
+            onClick={() => onPick(emoji)}
+            className={cn(
+              'w-10 h-10 flex items-center justify-center text-2xl rounded-xl hover:bg-nav-hover active:scale-95 transition-transform leading-none',
+              selected === emoji && 'bg-accent/20 ring-2 ring-accent',
+            )}
+            title={emoji}
+          >
+            {emoji}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 type Props = {
   onPick: (emoji: string) => void;
   className?: string;
 };
 
+/** Compact button that opens a floating emoji panel (used in messages, etc.). */
 export function EmojiPicker({ onPick, className }: Props) {
   const [open, setOpen] = useState(false);
-  const [tab, setTab] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -164,37 +218,14 @@ export function EmojiPicker({ onPick, className }: Props) {
       </button>
 
       {open && (
-        <div className="absolute bottom-full left-0 mb-2 z-50 w-[min(100vw-2rem,20rem)] sm:w-80 rounded-2xl border border-border bg-surface shadow-xl shadow-black/20 overflow-hidden">
-          <div className="flex gap-0.5 p-1.5 border-b border-border overflow-x-auto">
-            {EMOJI_GROUPS.map((g, i) => (
-              <button
-                key={g.label}
-                type="button"
-                onClick={() => setTab(i)}
-                className={cn(
-                  'px-2.5 py-1 rounded-lg text-[11px] font-medium shrink-0 transition-colors',
-                  tab === i ? 'bg-accent/15 text-accent' : 'text-muted hover:bg-nav-hover',
-                )}
-              >
-                {g.label}
-              </button>
-            ))}
-          </div>
-          <div className="p-2 max-h-52 overflow-y-auto grid grid-cols-8 gap-0.5">
-            {EMOJI_GROUPS[tab]?.emojis.map((emoji) => (
-              <button
-                key={emoji + tab}
-                type="button"
-                onClick={() => {
-                  onPick(emoji);
-                }}
-                className="w-9 h-9 flex items-center justify-center text-xl rounded-lg hover:bg-nav-hover active:scale-95 transition-transform"
-                title={emoji}
-              >
-                {emoji}
-              </button>
-            ))}
-          </div>
+        <div className="absolute bottom-full left-0 mb-2 z-50 w-[min(100vw-2rem,20rem)] sm:w-80 shadow-xl shadow-black/20">
+          <EmojiPickerPanel
+            onPick={(emoji) => {
+              onPick(emoji);
+              // keep open so kids can try a few, or close — close feels better for messages
+              setOpen(false);
+            }}
+          />
         </div>
       )}
     </div>

@@ -19,6 +19,7 @@ import {
 } from '../lib/storage';
 import {
   cloudCreateInvite,
+  cloudDeleteMessage,
   cloudJoinWithInvite,
   cloudListInvites,
   cloudMarkMessageRead,
@@ -32,6 +33,7 @@ import {
   getDb,
   initFirebase,
   onAuthStateChanged,
+  partitionMessagesForPrune,
   resetFirebase,
   signInWithEmailAndPassword,
   fbSignOut,
@@ -155,6 +157,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
         fid,
         uid,
         (messages) => {
+          const me = dataRef.current.members.find(
+            (m) => m.id === dataRef.current.settings.currentUserId,
+          );
+          const isParentRole = me?.role === 'parent';
+          const { toDelete } = partitionMessagesForPrune(messages, {
+            myMemberId: me?.id || '',
+            myUid: uid,
+            canDeleteAny: isParentRole,
+          });
+          if (toDelete.length) {
+            void Promise.all(
+              toDelete.map((m) => cloudDeleteMessage(fid, m.id).catch(() => {})),
+            );
+          }
+          // Keep full server list in state; UI shows last 50 per thread.
+          // Deletes above will shrink the snapshot on the next event.
           setData((prev) => ({ ...prev, messages }));
         },
         (err) => console.error('messages sync', err),
@@ -370,7 +388,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
         });
         setData((prev) => {
           if (prev.messages.some((m) => m.id === msg.id)) return prev;
-          return { ...prev, messages: [...prev.messages, msg] };
+          const next = [...prev.messages, msg];
+          const { kept, toDelete } = partitionMessagesForPrune(next, {
+            myMemberId: me.id,
+            myUid: auth.currentUser!.uid,
+            canDeleteAny: me.role === 'parent',
+          });
+          if (toDelete.length) {
+            void Promise.all(
+              toDelete.map((m) => cloudDeleteMessage(fid, m.id).catch(() => {})),
+            );
+          }
+          return { ...prev, messages: kept };
         });
       } else {
         const local: Message = {
@@ -381,7 +410,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
           timestamp: new Date().toISOString(),
           read: false,
         };
-        update((d) => ({ ...d, messages: [...d.messages, local] }));
+        update((d) => {
+          const next = [...d.messages, local];
+          const { kept } = partitionMessagesForPrune(next, {
+            myMemberId: me.id,
+            canDeleteAny: me.role === 'parent',
+          });
+          return { ...d, messages: kept };
+        });
       }
     },
     [update],

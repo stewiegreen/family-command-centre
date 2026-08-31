@@ -10,10 +10,11 @@ interface AvatarProps {
 }
 
 export function Avatar({ name, color = '#6366f1', emoji, initials, size = 'md', className }: AvatarProps) {
-  const s = { sm: 'w-7 h-7 text-xs', md: 'w-9 h-9 text-sm', lg: 'w-11 h-11 text-base' }[size];
+  // Slightly larger emoji text so faces/icons are easier to see at a glance
+  const s = { sm: 'w-8 h-8 text-base', md: 'w-10 h-10 text-lg', lg: 'w-12 h-12 text-2xl' }[size];
   return (
     <div
-      className={cn('rounded-full flex items-center justify-center font-semibold text-white shrink-0', s, className)}
+      className={cn('rounded-full flex items-center justify-center font-semibold text-white shrink-0 leading-none', s, className)}
       style={{ backgroundColor: color }}
       title={name}
     >

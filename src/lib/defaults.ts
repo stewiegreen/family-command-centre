@@ -37,6 +37,9 @@ export const DEFAULT_DATA: FamilyData = {
 export const MEMBER_COLORS = [
   '#6366f1', '#ec4899', '#10b981', '#f59e0b', '#8b5cf6', '#06b6d4', '#f43f5e', '#84cc16',
   '#14b8a6', '#f97316', '#a855f7', '#3b82f6', '#e11d48', '#65a30d', '#0ea5e9', '#d946ef',
+  // Extra options for kids
+  '#22c55e', '#eab308', '#ef4444', '#0d9488', '#7c3aed', '#db2777', '#0891b2', '#4f46e5',
+  '#b45309', '#15803d', '#be185d', '#1d4ed8', '#9333ea', '#c026d3', '#ea580c', '#059669',
 ];
 export const MEMBER_EMOJIS = [
   '😀', '😎', '🤩', '🥳', '😇', '🤗', '🦊', '🐱', '🐶', '🐼', '🦄', '🐸', '🦁', '🐯',

@@ -113,7 +113,7 @@ export function TodosPage() {
                   : 'border-border-strong text-muted hover:bg-nav-hover',
               )}
             >
-              <Avatar {...m} size="sm" className="!w-7 !h-7" />
+              <Avatar {...m} size="sm" className="!w-8 !h-8 !text-base" />
               {m.name}
               <span className="text-xs opacity-70">
                 {data.todos.filter((t) => t.memberId === m.id && !t.completed).length}
