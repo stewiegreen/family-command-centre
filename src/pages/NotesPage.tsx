@@ -10,7 +10,7 @@ import { EmptyState } from '../components/ui/EmptyState';
 import { uid } from '../lib/uid';
 
 export function NotesPage() {
-  const { data, update } = useApp();
+  const { data, update, getMember } = useApp();
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -114,7 +114,7 @@ export function NotesPage() {
       ) : (
         <div className="grid sm:grid-cols-2 gap-3">
           {filtered.map((n) => {
-            const author = data.members.find((m) => m.id === n.authorId);
+            const author = getMember(n.authorId);
             return (
               <Card key={n.id} className="!p-4 space-y-2" onClick={() => openEdit(n.id)}>
                 <div className="flex items-start justify-between gap-2">

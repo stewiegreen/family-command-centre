@@ -20,7 +20,7 @@ import { upcomingExpanded } from '../lib/recurrence';
  * Suppresses noise on first enable by seeding a baseline of current IDs.
  */
 export function NotificationWatcher() {
-  const { data, currentUser, setView } = useApp();
+  const { data, currentUser, getMember, setView } = useApp();
   const [enabled, setEnabled] = useState(isNotificationsEnabled);
   const me = currentUser?.id || data.settings.currentUserId;
   const seeded = useRef(false);
@@ -89,9 +89,9 @@ export function NotificationWatcher() {
     for (const m of data.messages) {
       if (m.toId !== me || m.read) continue;
       if (wasMessageNotified(m.id)) continue;
-      const from = data.members.find((x) => x.id === m.fromId);
+      const from = getMember(m.fromId);
       void showLocalNotification('New message', {
-        body: `${from?.name || 'Someone'}: ${m.text.slice(0, 120)}`,
+        body: `${from?.emoji ? from.emoji + ' ' : ''}${from?.name || 'Someone'}: ${m.text.slice(0, 120)}`,
         tag: `msg-${m.id}`,
         data: { view: 'messages' },
       });
@@ -112,7 +112,7 @@ export function NotificationWatcher() {
       }
       markAnnouncementNotified(ann);
     }
-  }, [enabled, me, data.messages, data.members, data.settings.pinnedAnnouncement]);
+  }, [enabled, me, data.messages, data.members, data.appearance, data.settings.pinnedAnnouncement, getMember]);
 
   // Todos due soon / high priority + calendar soon — poll every minute
   useEffect(() => {

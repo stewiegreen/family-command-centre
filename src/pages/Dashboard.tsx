@@ -375,10 +375,18 @@ export function Dashboard() {
           upcoming.map((ev) => {
             const m = getMember(ev.memberId);
             return (
-              <div key={ev.id} className="flex items-start gap-3 p-3 rounded-xl bg-inset border border-border mb-2">
-                <div className="w-1 self-stretch rounded-full" style={{ backgroundColor: m?.color || '#6366f1' }} />
+              <div
+                key={ev.id}
+                className="flex items-start gap-3 p-3 rounded-xl border border-border mb-2"
+                style={{
+                  backgroundColor: (m?.color || '#6366f1') + '18',
+                  borderLeftWidth: 4,
+                  borderLeftColor: m?.color || '#6366f1',
+                }}
+              >
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-sm truncate text-fg">
+                    {m?.emoji ? `${m.emoji} ` : ''}
                     {ev.title}
                     {ev.recurrence && ev.recurrence !== 'none' ? (
                       <span className="text-muted font-normal"> · repeats</span>

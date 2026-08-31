@@ -177,6 +177,7 @@ export function CalendarPage() {
                 <div className="mt-0.5 space-y-0.5">
                   {list.slice(0, 2).map((ev) => {
                     const m = getMember(ev.memberId);
+                    const col = m?.color || '#6366f1';
                     return (
                       <div
                         key={ev.id}
@@ -184,12 +185,23 @@ export function CalendarPage() {
                           e.stopPropagation();
                           edit(ev);
                         }}
-                        className="text-[9px] sm:text-[10px] truncate px-1 rounded"
-                        style={{ backgroundColor: (m?.color || '#6366f1') + '33', color: m?.color || '#a5b4fc' }}
-                        title={ev.recurrence && ev.recurrence !== 'none' ? `Repeats ${ev.recurrence}` : undefined}
+                        className="text-[9px] sm:text-[10px] truncate px-1 rounded flex items-center gap-0.5"
+                        style={{
+                          backgroundColor: col + '40',
+                          color: col,
+                          borderLeft: `3px solid ${col}`,
+                        }}
+                        title={
+                          (m ? `${m.emoji || ''} ${m.name}: ` : '') +
+                          ev.title +
+                          (ev.recurrence && ev.recurrence !== 'none' ? ` (repeats ${ev.recurrence})` : '')
+                        }
                       >
-                        {ev.title}
-                        {ev.recurrence && ev.recurrence !== 'none' ? ' ↻' : ''}
+                        {m?.emoji && <span className="shrink-0 text-[11px] sm:text-xs leading-none">{m.emoji}</span>}
+                        <span className="truncate">
+                          {ev.title}
+                          {ev.recurrence && ev.recurrence !== 'none' ? ' ↻' : ''}
+                        </span>
                       </div>
                     );
                   })}
@@ -244,11 +256,15 @@ export function CalendarPage() {
           >
             {data.members
               .filter((m) => m.role !== 'media')
-              .map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name}
-                </option>
-              ))}
+              .map((m) => {
+                const look = getMember(m.id) || m;
+                return (
+                  <option key={m.id} value={m.id}>
+                    {look.emoji ? `${look.emoji} ` : ''}
+                    {look.name}
+                  </option>
+                );
+              })}
           </select>
           <div>
             <label className="text-xs text-muted mb-1 block">Repeat</label>

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Plus, Trash2, ShoppingCart } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { Avatar } from '../components/ui/Avatar';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
@@ -8,7 +9,7 @@ import { EmptyState } from '../components/ui/EmptyState';
 import { uid } from '../lib/uid';
 
 export function ShoppingPage() {
-  const { data, update, currentUser, isParent } = useApp();
+  const { data, update, currentUser, getMember, isParent } = useApp();
   const myId = currentUser?.id || data.settings.currentUserId;
   const [shopText, setShopText] = useState('');
   const [shopStore, setShopStore] = useState('');
@@ -123,10 +124,22 @@ export function ShoppingPage() {
               </h2>
               <div className="space-y-2">
                 {openShop.map((s) => {
-                  const claimer = s.claimedById ? data.members.find((m) => m.id === s.claimedById) : null;
+                  const claimer = s.claimedById ? getMember(s.claimedById) : null;
                   const canClaim = !s.claimedById || s.claimedById === myId;
+                  const claimColor = claimer?.color;
                   return (
-                    <Card key={s.id} className="!p-4 flex items-center gap-4">
+                    <Card
+                      key={s.id}
+                      className="!p-4 flex items-center gap-4 border-l-4"
+                      style={
+                        claimColor
+                          ? {
+                              borderLeftColor: claimColor,
+                              backgroundColor: claimColor + '22',
+                            }
+                          : { borderLeftColor: 'transparent' }
+                      }
+                    >
                       <button
                         type="button"
                         onClick={() => toggleBought(s.id)}
@@ -135,10 +148,11 @@ export function ShoppingPage() {
                       />
                       <div className="flex-1 min-w-0">
                         <p className="text-base font-medium text-fg">{s.text}</p>
-                        <div className="flex flex-wrap gap-2 mt-1 text-xs text-muted">
+                        <div className="flex flex-wrap gap-2 mt-1 text-xs text-muted items-center">
                           {s.store && <span className="px-2 py-0.5 rounded-md bg-surface-2">{s.store}</span>}
                           {claimer && (
-                            <span className="text-accent">
+                            <span className="inline-flex items-center gap-1.5" style={{ color: claimColor }}>
+                              <Avatar {...claimer} size="sm" className="!w-6 !h-6 !text-sm" />
                               {claimer.id === myId ? 'You claimed this' : `${claimer.name} claimed this`}
                             </span>
                           )}

@@ -35,6 +35,7 @@ export function SettingsPage() {
     parentPinUnlocked,
     unlockParentPin,
     lockParentPin,
+    getMember,
   } = useApp();
   const [s, setS] = useState(data.settings);
   const [members, setMembers] = useState(data.members);
@@ -440,7 +441,7 @@ export function SettingsPage() {
           {members.map((m, i) => (
             <div key={m.id} className="flex flex-col gap-2 p-2 rounded-xl bg-inset border border-border">
               <div className="flex items-center gap-2 flex-wrap">
-                <Avatar {...m} size="sm" />
+                <Avatar {...(getMember(m.id) || m)} size="sm" />
                 <Input
                   value={m.name}
                   onChange={(e) => {

@@ -22,7 +22,9 @@ export function ChoresPage() {
   const [spendMins, setSpendMins] = useState(30);
   const [spendNote, setSpendNote] = useState('');
 
-  const members = data.members.filter((m) => m.role !== 'media');
+  const members = data.members
+    .filter((m) => m.role !== 'media')
+    .map((m) => getMember(m.id) || m);
   const kids = members.filter((m) => m.role === 'kid');
   const chores = data.chores || [];
 
@@ -435,7 +437,8 @@ export function ChoresPage() {
                             >
                               {members.map((m) => (
                                 <option key={m.id} value={m.id}>
-                                  Award to {m.name}
+                                  Award to {m.emoji ? `${m.emoji} ` : ''}
+                                  {m.name}
                                 </option>
                               ))}
                             </select>
