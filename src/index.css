@@ -1,44 +1,48 @@
 @import "tailwindcss";
 
-/* Semantic tokens — dark is default (matches current look) */
+/* Semantic tokens — dark is default */
 :root,
 .dark {
-  --app-page: #131412;
-  --app-surface: #1b1c19;
-  --app-surface-2: #232420;
-  --app-surface-3: #2b2c27;
-  --app-inset: rgba(19, 20, 18, 0.6);
-  --app-elevated: rgba(35, 36, 32, 0.75);
-  --app-border: rgba(43, 44, 39, 0.9);
-  --app-border-strong: #38392f;
-  --app-fg: #ededE7;
-  --app-fg-secondary: #a3a297;
-  --app-muted: #a3a297;
-  --app-faint: #6c6b62;
-  --app-header: rgba(19, 20, 18, 0.85);
-  --app-sidebar: rgba(27, 28, 25, 0.9);
-  --app-nav-hover: rgba(35, 36, 32, 0.9);
-  --app-input: rgba(27, 28, 25, 0.9);
-  --app-scrollbar: #38392f;
-  --app-hero-from: rgba(111, 190, 139, 0.16);
-  --app-hero-via: rgba(111, 190, 139, 0.06);
-  --app-hero-to: #1b1c19;
-  --app-hero-border: rgba(111, 190, 139, 0.25);
-  --app-hero-title: #ededE7;
-  --app-hero-sub: #86cc9f;
-  --app-hero-body: #a3a297;
-  --app-ring-offset: #1b1c19;
-  --app-accent: #6fbe8b;
-  --app-accent-hover: #86cc9f;
-  --app-accent-tint: #1d2a20;
-  --app-accent-tint-strong: #26392b;
-  --app-accent-ink: #10231a;
-  --app-warn: #d9a54d;
-  --app-warn-tint: #33291a;
-  --app-danger: #e08571;
-  --app-danger-tint: #362320;
+  /* Deep charcoal with a whisper of forest — not muddy olive */
+  --app-page: #0e1110;
+  --app-surface: #161a18;
+  --app-surface-2: #1e2421;
+  --app-surface-3: #282f2b;
+  --app-inset: rgba(14, 17, 16, 0.72);
+  --app-elevated: rgba(30, 36, 33, 0.92);
+  --app-border: #2a322e;
+  --app-border-strong: #3a443f;
+  --app-fg: #eef2ef;
+  --app-fg-secondary: #a8b2ac;
+  --app-muted: #8b968f;
+  --app-faint: #5c665f;
+  --app-header: rgba(14, 17, 16, 0.88);
+  --app-sidebar: #121614;
+  --app-nav-hover: #1e2421;
+  --app-input: #1a1f1d;
+  --app-scrollbar: #3a443f;
+  /* Hero / accent washes */
+  --app-hero-from: rgba(109, 190, 139, 0.14);
+  --app-hero-via: rgba(109, 190, 139, 0.05);
+  --app-hero-to: #161a18;
+  --app-hero-border: rgba(109, 190, 139, 0.28);
+  --app-hero-title: #eef2ef;
+  --app-hero-sub: #8fd4a8;
+  --app-hero-body: #a8b2ac;
+  --app-ring-offset: #0e1110;
+  /* Accent — bright enough to pop on dark surfaces */
+  --app-accent: #6dbe8b;
+  --app-accent-hover: #82c99a;
+  --app-accent-tint: #15231c;
+  --app-accent-tint-strong: #1c3226;
+  --app-accent-ink: #0b1710;
+  --app-warn: #e0b25c;
+  --app-warn-tint: #2a2214;
+  --app-danger: #e8927e;
+  --app-danger-tint: #2c1a17;
 }
 
+/* Day mode — unchanged */
 .light {
   --app-page: #fafaf8;
   --app-surface: #ffffff;
