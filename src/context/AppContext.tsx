@@ -134,7 +134,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
           else if (!remote.members.some((m) => m.id === currentUserId)) {
             currentUserId = remote.members[0]?.id || currentUserId;
           }
-          const migrated = migratePayload(remote);
+          let migrated = remote;
+          try {
+            migrated = migratePayload(remote);
+          } catch (err) {
+            console.error('migratePayload failed', err);
+          }
           return {
             ...migrated,
             // Messages come from the subcollection listener — keep them.

@@ -182,8 +182,8 @@ export function CalendarPage() {
     }));
   };
 
-  const handleExport = () => {
-    const result = exportEventsToIcs(data.events, data.settings.familyName || 'GreenHQ');
+  const handleExport = async () => {
+    const result = await exportEventsToIcs(data.events, data.settings.familyName || 'GreenHQ');
     if (result.ok === false) {
       alert(result.error);
       return;
@@ -194,7 +194,7 @@ export function CalendarPage() {
   const handleImportFile = async (file: File | null) => {
     if (!file) return;
     const text = await file.text();
-    const result = importEventsFromIcs(text, data.settings.currentUserId);
+    const result = await importEventsFromIcs(text, data.settings.currentUserId);
     if (result.imported > 0) {
       update((d) => ({ ...d, events: [...d.events, ...result.events] }));
     }
@@ -688,7 +688,7 @@ export function CalendarPage() {
             </div>
           </div>
           <div>
-            <label className="text-xs text-muted mb-1.5 block">Who&apos;s involved</label>
+            <label className="text-xs text-muted mb-1.5 block">Who's involved</label>
             <div className="flex flex-wrap gap-2">
               {data.members
                 .filter((m) => m.role !== 'media')
@@ -982,7 +982,7 @@ function MonthWeekRow({
                   const names = ids
                     .map((id) => getMember(id))
                     .filter(Boolean)
-                    .map((m) => `${m!.emoji || ''} ${m!.name}`.trim())
+                    .map((m) => (m ? `${m.emoji || ''} ${m.name}`.trim() : ''))
                     .join(', ');
                   const emojis = ids
                     .map((id) => getMember(id)?.emoji)
@@ -1045,7 +1045,7 @@ function MonthWeekRow({
         const names = ids
           .map((id) => getMember(id))
           .filter(Boolean)
-          .map((m) => `${m!.emoji || ''} ${m!.name}`.trim())
+          .map((m) => (m ? `${m.emoji || ''} ${m.name}`.trim() : ''))
           .join(', ');
         const emojis = ids
           .map((id) => getMember(id)?.emoji)

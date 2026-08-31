@@ -1,11 +1,14 @@
 /**
  * Client-side iCal (.ics) export/import for GreenHQ calendar events.
- * Export: `ics` package. Import: `ical.js`.
+ * Uses dynamic imports so a missing package never blanks the rest of the app.
  */
-import { createEvents, type EventAttributes, type DateArray } from 'ics';
-import ICAL from 'ical.js';
 import type { CalendarEvent } from '../types';
 import { uid } from './uid';
+
+type DateArray =
+  | [number, number, number, number, number]
+  | [number, number, number, number]
+  | [number, number, number];
 
 function toDateArray(iso: string, allDay: boolean): DateArray {
   const d = new Date(iso);
@@ -21,7 +24,6 @@ function toDateArray(iso: string, allDay: boolean): DateArray {
   ];
 }
 
-/** Exclusive all-day end ISO → ICS exclusive DATE end (day after last inclusive). */
 function allDayExclusiveEnd(endIso: string): DateArray {
   const d = new Date(endIso);
   return [d.getFullYear(), d.getMonth() + 1, d.getDate()];
@@ -46,51 +48,64 @@ function recurrenceToRRule(ev: CalendarEvent): string | undefined {
   return rule;
 }
 
+export type ExportResult = { ok: true; ics: string } | { ok: false; error: string };
+
 /**
  * Build a .ics file body from master CalendarEvents (not expanded instances).
- * Simple daily/weekly/monthly RRULEs only.
  */
-export function exportEventsToIcs(
+export async function exportEventsToIcs(
   events: CalendarEvent[],
   calName = 'GreenHQ',
-): { ok: true; ics: string } | { ok: false; error: string } {
-  const attrs: EventAttributes[] = events.map((ev) => {
-    const start = toDateArray(ev.start, ev.allDay);
-    const endArr = ev.allDay
-      ? allDayExclusiveEnd(ev.end || ev.start)
-      : toDateArray(ev.end || ev.start, false);
+): Promise<ExportResult> {
+  try {
+    const { createEvents } = await import('ics');
+    const attrs = events.map((ev) => {
+      const start = toDateArray(ev.start, ev.allDay);
+      const endArr = ev.allDay
+        ? allDayExclusiveEnd(ev.end || ev.start)
+        : toDateArray(ev.end || ev.start, false);
 
-    const base: EventAttributes = {
-      start,
-      end: endArr,
-      title: ev.title,
-      description: ev.notes,
-      location: ev.location,
-      uid: ev.id,
-      calName,
-      productId: 'GreenHQ/family-command-centre',
-      startInputType: 'local',
-      endInputType: 'local',
-    };
+      const base: Record<string, unknown> = {
+        start,
+        end: endArr,
+        title: ev.title,
+        description: ev.notes,
+        location: ev.location,
+        uid: ev.id,
+        calName,
+        productId: 'GreenHQ/family-command-centre',
+        startInputType: 'local',
+        endInputType: 'local',
+      };
 
-    const rrule = recurrenceToRRule(ev);
-    if (rrule) base.recurrenceRule = rrule;
+      const rrule = recurrenceToRRule(ev);
+      if (rrule) base.recurrenceRule = rrule;
 
-    if (ev.exceptionDates?.length) {
-      base.exclusionDates = ev.exceptionDates.map((ds) => {
-        const [y, m, d] = ds.split('-').map(Number);
-        return [y, m, d] as DateArray;
-      });
+      if (ev.exceptionDates?.length) {
+        base.exclusionDates = ev.exceptionDates.map((ds) => {
+          const [y, m, d] = ds.split('-').map(Number);
+          return [y, m, d] as DateArray;
+        });
+      }
+
+      return base;
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error, value } = createEvents(attrs as any);
+    if (error || !value) {
+      return { ok: false, error: error?.message || 'Failed to generate ICS' };
     }
-
-    return base;
-  });
-
-  const { error, value } = createEvents(attrs);
-  if (error || !value) {
-    return { ok: false, error: error?.message || 'Failed to generate ICS' };
+    return { ok: true, ics: value };
+  } catch (e) {
+    return {
+      ok: false,
+      error:
+        e instanceof Error
+          ? e.message
+          : 'ICS export failed. Run: npm install ics ical.js',
+    };
   }
-  return { ok: true, ics: value };
 }
 
 /** Trigger a browser download of a .ics file. */
@@ -113,17 +128,35 @@ export type ImportResult = {
 
 /**
  * Parse an .ics file string into CalendarEvents.
- * Complex RRULEs (intervals > 1, multiple BYDAY, etc.) are skipped with reasons.
  */
-export function importEventsFromIcs(
+export async function importEventsFromIcs(
   icsText: string,
   defaultMemberId: string,
-): ImportResult {
+): Promise<ImportResult> {
+  try {
+    const ICAL = (await import('ical.js')).default;
+    return parseWithIcal(ICAL, icsText, defaultMemberId);
+  } catch (e) {
+    return {
+      events: [],
+      imported: 0,
+      skipped: 0,
+      skipReasons: [
+        e instanceof Error
+          ? e.message
+          : 'ICS import failed. Run: npm install ics ical.js',
+      ],
+    };
+  }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function parseWithIcal(ICAL: any, icsText: string, defaultMemberId: string): ImportResult {
   const events: CalendarEvent[] = [];
   const skipReasons: string[] = [];
   let skipped = 0;
 
-  let jcal: ReturnType<typeof ICAL.parse>;
+  let jcal: unknown;
   try {
     jcal = ICAL.parse(icsText);
   } catch (e) {
@@ -238,7 +271,6 @@ function mapRRuleProperty(
     let freq = (val?.freq || '').toUpperCase();
     let interval = val?.interval ?? 1;
 
-    // Fallback: some builds expose parts
     if (!freq && val?.parts?.FREQ?.[0]) {
       freq = String(val.parts.FREQ[0]).toUpperCase();
     }
