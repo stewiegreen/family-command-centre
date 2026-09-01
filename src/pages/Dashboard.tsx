@@ -23,7 +23,7 @@ import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Modal } from '../components/ui/Modal';
 import { ProfileLookCard } from '../components/ProfileLookEditor';
-import type { CalendarEvent, PresenceStatus, Quest, ViewId } from '../types';
+import type { CalendarEvent, ExpandedEvent, PresenceStatus, Quest, ViewId } from '../types';
 import { FAMILY_LIST_ID, PRESENCE_OPTIONS } from '../types';
 import { upcomingExpanded } from '../lib/recurrence';
 import {
@@ -102,6 +102,13 @@ export function Dashboard() {
       return true;
     }
   });
+
+  const [shopDraft, setShopDraft] = useState('');
+  const [todoDraft, setTodoDraft] = useState('');
+  const [editEvent, setEditEvent] = useState<CalendarEvent | null>(null);
+  const [evTitle, setEvTitle] = useState('');
+  const [evLocation, setEvLocation] = useState('');
+  const [evNotes, setEvNotes] = useState('');
 
   // Re-open hero when announcement text changes
   useEffect(() => {
@@ -191,13 +198,6 @@ export function Dashboard() {
   const myStatus = presence[myId]?.status;
 
   /* ── Inline home actions ─────────────────────────────── */
-  const [shopDraft, setShopDraft] = useState('');
-  const [todoDraft, setTodoDraft] = useState('');
-  const [editEvent, setEditEvent] = useState<CalendarEvent | null>(null);
-  const [evTitle, setEvTitle] = useState('');
-  const [evLocation, setEvLocation] = useState('');
-  const [evNotes, setEvNotes] = useState('');
-
   const openShopItems = useMemo(
     () => (shopping || []).filter((s) => !s.bought),
     [shopping],
@@ -221,7 +221,7 @@ export function Dashboard() {
         {
           id: crypto.randomUUID(),
           text,
-          claimedById: null,
+          claimedById: undefined,
           bought: false,
           createdById: myId,
           createdAt: new Date().toISOString(),
@@ -271,11 +271,10 @@ export function Dashboard() {
     setTodoDraft('');
   };
 
-  const openEventEdit = (ev: CalendarEvent & { masterId?: string; instanceStart?: string }) => {
+  const openEventEdit = (ev: ExpandedEvent | CalendarEvent) => {
     // Prefer master event from data so edits persist on the series
-    const master =
-      data.events.find((e) => e.id === (ev.masterId || ev.id)) ||
-      ev;
+    const masterId = 'masterId' in ev && ev.masterId ? ev.masterId : ev.id;
+    const master = data.events.find((e) => e.id === masterId) || ev;
     setEditEvent(master);
     setEvTitle(master.title);
     setEvLocation(master.location || '');
@@ -531,16 +530,22 @@ export function Dashboard() {
             ) : (
               <ul className="space-y-1.5">
                 {weekEvents.slice(0, 5).map((ev) => (
-                  <li key={ev.id} className="text-fg">
-                    <span className="text-muted">
-                      {new Date(ev.instanceStart).toLocaleDateString(undefined, {
-                        weekday: 'short',
-                        month: 'short',
-                        day: 'numeric',
-                      })}
-                    </span>{' '}
-                    {ev.title}
-                    {ev.recurrence && ev.recurrence !== 'none' ? ' ↻' : ''}
+                  <li key={`${ev.masterId}-${ev.instanceStart}`}>
+                    <button
+                      type="button"
+                      onClick={() => openEventEdit(ev)}
+                      className="text-left w-full hover:text-accent transition-colors"
+                    >
+                      <span className="text-muted">
+                        {new Date(ev.instanceStart).toLocaleDateString(undefined, {
+                          weekday: 'short',
+                          month: 'short',
+                          day: 'numeric',
+                        })}
+                      </span>{' '}
+                      <span className="text-fg underline-offset-2 hover:underline">{ev.title}</span>
+                      {ev.recurrence && ev.recurrence !== 'none' ? ' ↻' : ''}
+                    </button>
                   </li>
                 ))}
               </ul>
@@ -552,9 +557,16 @@ export function Dashboard() {
               <p className="text-muted">None — nice</p>
             ) : (
               <ul className="space-y-1.5">
-                {overdueTodos.slice(0, 5).map((t) => (
-                  <li key={t.id} className="text-fg">
-                    {t.text}
+                {overdueTodos.slice(0, 5).map((td) => (
+                  <li key={td.id}>
+                    <button
+                      type="button"
+                      onClick={() => toggleTodo(td.id)}
+                      className="text-left w-full text-fg hover:text-accent"
+                      title="Mark done"
+                    >
+                      {td.text}
+                    </button>
                   </li>
                 ))}
               </ul>
@@ -567,12 +579,25 @@ export function Dashboard() {
             {myChores.length === 0 ? (
               <p className="text-muted">{isParent ? 'None waiting' : 'None open'}</p>
             ) : (
-              <ul className="space-y-1.5">
-                {myChores.map((c) => (
+              <ul className="space-y-2">
+                {myChores.slice(0, 4).map((c) => (
                   <li key={c.id} className="text-fg">
-                    {c.title}
-                    {c.status === 'pending' ? ' · pending' : ''}
-                    {(c.rewardMinutes || 0) > 0 ? ` · +${c.rewardMinutes}m` : ''}
+                    <p className="text-sm">{c.title}{c.status === 'pending' ? ' · pending' : ''}</p>
+                    {isParent && c.status === 'pending' && (
+                      <div className="flex gap-1.5 mt-1">
+                        <Button size="sm" className="!px-2 !py-1 text-xs" onClick={() => approveQuestHome(c)}>
+                          Approve
+                        </Button>
+                        <Button size="sm" variant="ghost" className="!px-2 !py-1 text-xs" onClick={() => rejectQuestHome(c)}>
+                          Reject
+                        </Button>
+                      </div>
+                    )}
+                    {!isParent && (c.status === 'open' || !c.status) && (
+                      <Button size="sm" variant="secondary" className="!px-2 !py-1 text-xs mt-1" onClick={() => submitQuestHome(c)}>
+                        Done
+                      </Button>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -582,10 +607,14 @@ export function Dashboard() {
             <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">Also</p>
             <ul className="space-y-1.5 text-fg">
               <li>
-                {unread} unread message{unread === 1 ? '' : 's'}
+                <button type="button" className="hover:text-accent" onClick={() => setView('messages')}>
+                  {unread} unread message{unread === 1 ? '' : 's'}
+                </button>
               </li>
               <li>
-                {shopOpen} shopping item{shopOpen === 1 ? '' : 's'}
+                <button type="button" className="hover:text-accent" onClick={() => setView('shopping')}>
+                  {shopOpen} shopping item{shopOpen === 1 ? '' : 's'}
+                </button>
               </li>
               {announcement && <li className="text-muted line-clamp-2">📌 {announcement}</li>}
             </ul>
@@ -607,10 +636,10 @@ export function Dashboard() {
           <div className="max-h-72 overflow-y-auto space-y-2 pr-0.5">
             {upcoming.map((ev) => {
               const m = getMember(ev.memberId);
-              const when = new Date((ev as { instanceStart?: string }).instanceStart || ev.start);
+              const when = new Date(ev.instanceStart || ev.start);
               return (
                 <button
-                  key={`${ev.id}-${ev.instanceStart || ev.start}`}
+                  key={`${ev.masterId || ev.id}-${ev.instanceStart || ev.start}`}
                   type="button"
                   onClick={() => openEventEdit(ev)}
                   className="w-full text-left flex items-start gap-3 p-3 rounded-xl border border-border hover:border-accent/40 hover:bg-nav-hover/40 transition-colors"
