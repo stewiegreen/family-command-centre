@@ -27,12 +27,9 @@ const COLOR_ICON: Record<string, string> = {
   pink: 'bg-pink-500/15 text-pink-500',
 };
 
-const LAYOUT_KEY = 'fcc_home_layout_v1';
 const DISMISS_ANN_KEY = 'fcc_dismissed_announcement';
 
 type SectionId = 'stats' | 'presence' | 'digest' | 'events' | 'todos' | 'choresShop' | 'look';
-
-const DEFAULT_ORDER: SectionId[] = ['stats', 'presence', 'digest', 'events', 'todos', 'choresShop', 'look'];
 
 function startOfWeekMonday(d: Date) {
   const x = new Date(d);
@@ -43,23 +40,17 @@ function startOfWeekMonday(d: Date) {
   return x;
 }
 
-function loadOrder(): SectionId[] {
-  try {
-    const raw = localStorage.getItem(LAYOUT_KEY);
-    if (!raw) return [...DEFAULT_ORDER];
-    const parsed = JSON.parse(raw) as SectionId[];
-    const valid = parsed.filter((id) => DEFAULT_ORDER.includes(id));
-    for (const id of DEFAULT_ORDER) {
-      if (!valid.includes(id)) valid.push(id);
-    }
-    return valid;
-  } catch {
-    return [...DEFAULT_ORDER];
-  }
-}
-
 export function Dashboard() {
-  const { data, update, setView, getMember, currentUser, isParent } = useApp();
+  const {
+    data,
+    update,
+    setView,
+    getMember,
+    currentUser,
+    isParent,
+    myHomescreenOrder,
+    setMyHomescreenOrder,
+  } = useApp();
   const { events, todos, notes, messages, members, settings } = data;
   const chores = data.chores || [];
   const shopping = data.shopping || [];
@@ -67,7 +58,9 @@ export function Dashboard() {
   const now = new Date();
   const myId = currentUser?.id || settings.currentUserId;
 
-  const [order, setOrder] = useState<SectionId[]>(loadOrder);
+  // Per-user order from context (synced under appearance[memberId].homescreenOrder)
+  const order = myHomescreenOrder as SectionId[];
+
   const announcement = (settings.pinnedAnnouncement || '').trim();
   const [heroOpen, setHeroOpen] = useState(() => {
     if (!announcement) return true;
@@ -91,8 +84,7 @@ export function Dashboard() {
   }, [announcement]);
 
   const persistOrder = (next: SectionId[]) => {
-    setOrder(next);
-    localStorage.setItem(LAYOUT_KEY, JSON.stringify(next));
+    setMyHomescreenOrder(next);
   };
 
   const moveSection = (id: SectionId, dir: -1 | 1) => {
@@ -110,7 +102,12 @@ export function Dashboard() {
     const withoutPair = order.filter((x): x is SectionId => x !== 'events' && x !== 'todos');
     const pairIndex = Math.min(order.indexOf('events'), order.indexOf('todos'));
     const insertAt = Math.max(0, Math.min(withoutPair.length, pairIndex + dir));
-    const next: SectionId[] = [...withoutPair.slice(0, insertAt), 'events', 'todos', ...withoutPair.slice(insertAt)];
+    const next: SectionId[] = [
+      ...withoutPair.slice(0, insertAt),
+      'events',
+      'todos',
+      ...withoutPair.slice(insertAt),
+    ];
     persistOrder(next);
   };
 
@@ -137,7 +134,9 @@ export function Dashboard() {
   );
   const pendingForParents = isParent ? chores.filter((c) => c.status === 'pending') : [];
   const myPending = chores.filter((c) => c.status === 'pending' && c.submittedById === myId);
-  const myChores = isParent ? pendingForParents : [...myPending, ...chores.filter((c) => c.status === 'open' || !c.status)].slice(0, 5);
+  const myChores = isParent
+    ? pendingForParents
+    : [...myPending, ...chores.filter((c) => c.status === 'open' || !c.status)].slice(0, 5);
   const shopOpen = shopping.filter((s) => !s.bought).length;
   const hour = now.getHours();
   const greeting = hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening';
@@ -450,7 +449,7 @@ export function Dashboard() {
         <Card>
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold text-fg flex items-center gap-2">
-              <RefreshCw className="w-4 h-4 text-accent" /> {isParent ? "Chores to approve" : "Chores"}
+              <RefreshCw className="w-4 h-4 text-accent" /> {isParent ? 'Chores to approve' : 'Chores'}
             </h2>
             <button type="button" onClick={() => setView('chores')} className="text-xs text-accent">
               All chores →

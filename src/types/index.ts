@@ -179,8 +179,17 @@ export interface FamilyData {
   settings: Settings;
   /** memberId → presence (writable by all members; not on the members array). */
   presence?: Record<string, PresenceEntry>;
-  /** memberId → emoji/color overrides (self-serve). */
-  appearance?: Record<string, { emoji?: string; color?: string; theme?: ThemeId }>;
+  /** memberId → emoji/color/theme/homescreen overrides (self-serve). */
+  appearance?: Record<
+    string,
+    {
+      emoji?: string;
+      color?: string;
+      theme?: ThemeId;
+      /** Ordered list of dashboard widget ids for this member only. */
+      homescreenOrder?: string[];
+    }
+  >;
   /** memberId → earned screen-time minutes balance. */
   screenTime?: Record<string, number>;
   /** Recent earn/spend history (newest first, trimmed client-side). */

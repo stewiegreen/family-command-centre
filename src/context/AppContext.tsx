@@ -18,6 +18,7 @@ import {
   saveLocalData,
 } from '../lib/storage';
 import { migratePayload } from '../lib/defaults';
+import { resolveHomescreenOrder } from '../lib/homescreen';
 import {
   cloudCreateInvite,
   cloudDeleteMessage,
@@ -75,6 +76,10 @@ interface AppContextValue {
   switchProfile: (memberId: string, pin?: string) => { ok: boolean; error?: string };
   /** Set theme for the current member (kids can change their own). */
   setMyTheme: (theme: import('../types').ThemeId) => void;
+  /** Current member's homescreen widget order (resolved against known widgets). */
+  myHomescreenOrder: string[];
+  /** Persist a new homescreen order for the current member only. */
+  setMyHomescreenOrder: (order: string[]) => void;
   connectCloud: (cfg: FirebaseConfig) => Promise<boolean>;
   createFamily: (displayName: string) => Promise<string>;
   joinFamily: (inviteCode: string, displayName: string) => Promise<string>;
@@ -677,6 +682,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [update],
   );
 
+  const myHomescreenOrder = resolveHomescreenOrder(
+    data.appearance?.[data.settings.currentUserId]?.homescreenOrder,
+  );
+
+  const setMyHomescreenOrder = useCallback(
+    (order: string[]) => {
+      update((d) => {
+        const id = d.settings.currentUserId;
+        if (!id) return d;
+        const prev = d.appearance?.[id] || {};
+        return {
+          ...d,
+          appearance: {
+            ...(d.appearance || {}),
+            [id]: { ...prev, homescreenOrder: order },
+          },
+        };
+      });
+    },
+    [update],
+  );
+
   const value: AppContextValue = {
     data,
     update,
@@ -701,6 +728,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     unlockKidPin,
     switchProfile,
     setMyTheme,
+    myHomescreenOrder,
+    setMyHomescreenOrder,
     connectCloud,
     createFamily,
     joinFamily,
