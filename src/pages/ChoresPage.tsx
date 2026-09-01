@@ -102,12 +102,16 @@ export function ChoresPage() {
   const [shopEditOpen, setShopEditOpen] = useState(false);
   const [chestMsg, setChestMsg] = useState<string | null>(null);
 
-  // Idempotent weekly rollover (safe if app wasn't opened all weekend)
+  // Idempotent weekly rollover (safe if app wasn't opened all weekend).
+  // Only after cloud hydrate — otherwise empty local state would close a week
+  // and push blank progress/settings upstream.
   useEffect(() => {
     if (!me) return;
+    if (syncStatus === 'connecting' || syncStatus === 'auth') return;
+    if (syncStatus !== 'live' && syncStatus !== 'local') return;
     update((d) => ensureWeekRollover(d, me.id));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [me?.id]);
+  }, [me?.id, syncStatus]);
 
   useEffect(() => {
     if (tab === 'rates' && isParent) {

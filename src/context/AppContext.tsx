@@ -124,12 +124,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const unsubMsgRef = useRef<(() => void) | null>(null);
   const unsubAuthRef = useRef<(() => void) | null>(null);
   const writingRef = useRef(false);
+  /** True after the first successful family snapshot this session. Until then, never write to cloud. */
+  const cloudHydratedRef = useRef(false);
   const dataRef = useRef(data);
   dataRef.current = data;
 
   const startFamilyListener = useCallback((fid: string, preferredMemberId?: string | null) => {
     if (unsubRef.current) unsubRef.current();
     if (unsubMsgRef.current) unsubMsgRef.current();
+    cloudHydratedRef.current = false;
     setFamilyId(fid);
     setSyncStatus('connecting');
     unsubRef.current = subscribeFamily(
@@ -155,13 +158,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
           } catch (err) {
             console.error('migratePayload failed', err);
           }
-          return {
+          const next = {
             ...migrated,
             // Messages come from the subcollection listener — keep them.
             messages: prev.messages,
             settings: { ...migrated.settings, currentUserId },
           };
+          // Keep localStorage in sync with cloud so a future cold start never
+          // bootstraps from empty/stale defaults and re-writes them upstream.
+          try {
+            saveLocalData(next);
+          } catch {
+            /* ignore quota */
+          }
+          return next;
         });
+        cloudHydratedRef.current = true;
         setSyncStatus('live');
         setCloudError(null);
         setNeedsFamilySetup(false);
@@ -240,6 +252,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             unsubRef.current();
             unsubRef.current = null;
           }
+          cloudHydratedRef.current = false;
           setFamilyId('');
           setSyncStatus('auth');
           setNeedsFamilySetup(false);
@@ -278,11 +291,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [startFamilyListener]);
 
   const persist = useCallback(async (next: FamilyData) => {
+    // Always mirror to localStorage for offline resilience.
     saveLocalData(next);
     const fid = localStorage.getItem(FAMILY_ID_KEY);
     const cfg = loadCloudConfig();
     const auth = getFirebaseAuth();
-    if (cfg && fid && getDb() && auth?.currentUser) {
+    // CRITICAL: never push state to Firestore until we have applied at least one
+    // live family snapshot. Writing local bootstrap / DEFAULT_DATA / stale cache
+    // before hydrate is what wiped progress and settings on deploys.
+    if (cfg && fid && getDb() && auth?.currentUser && cloudHydratedRef.current) {
       writingRef.current = true;
       try {
         await cloudWrite(fid, next);
@@ -561,14 +578,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         auth.currentUser,
         displayName,
       );
-      setData({
+      const joined = {
         ...remote,
         settings: { ...remote.settings, currentUserId: memberId },
-      });
-      saveLocalData({
-        ...remote,
-        settings: { ...remote.settings, currentUserId: memberId },
-      });
+      };
+      setData(joined);
+      saveLocalData(joined);
+      // Join already returned the family doc — safe to write from this point.
+      cloudHydratedRef.current = true;
       startFamilyListener(fid, memberId);
       return fid;
     },
@@ -601,6 +618,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       unsubMsgRef.current();
       unsubMsgRef.current = null;
     }
+    cloudHydratedRef.current = false;
     localStorage.removeItem(FAMILY_ID_KEY);
     setFamilyId('');
     const auth = getFirebaseAuth();
