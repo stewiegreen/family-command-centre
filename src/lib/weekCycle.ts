@@ -8,7 +8,8 @@ import type {
   MemberProgress,
   WeekState,
 } from '../types';
-import { ensureProgress, isoWeekId, levelFromXp, progressTowardNextLevel } from './quest';
+import { ensureProgress, getChoreQuestConfig, isoWeekId, levelFromXp, progressTowardNextLevel } from './quest';
+import type { ChoreQuestConfig } from '../types';
 
 /** Approved weekday quests needed for the Weekend Chest. */
 export const STREAK_TARGET = 5;
@@ -90,6 +91,7 @@ export function closeWeek(
   byId: string,
   at: string,
 ): FamilyData {
+  const cfg = getChoreQuestConfig(data);
   let memberProgress = data.memberProgress || {};
   let coinBalances = { ...(data.coinBalances || {}) };
   let coinLedger = data.coinLedger || [];
@@ -102,8 +104,8 @@ export function closeWeek(
     // --- Interest ---
     if (!interestPaid[memberId]) {
       const bal = coinBalances[memberId] ?? 0;
-      if (bal >= INTEREST_MIN_BALANCE) {
-        const payout = Math.floor(bal * INTEREST_RATE);
+      if (bal >= cfg.interestMinBalance) {
+        const payout = Math.floor(bal * cfg.interestRate);
         if (payout > 0) {
           const entry: CoinLedgerEntry = {
             id: `interest:${ws.weekId}:${memberId}`,
@@ -127,11 +129,11 @@ export function closeWeek(
 
     // --- Late streak chest ---
     const completions = ws.weekdayCompletions?.[memberId] ?? 0;
-    if (completions >= STREAK_TARGET && !streakClaimed[memberId]) {
+    if (completions >= cfg.streakTarget && !streakClaimed[memberId]) {
       const entry: CoinLedgerEntry = {
         id: `streak:${ws.weekId}:${memberId}`,
         memberId,
-        delta: STREAK_COINS,
+        delta: cfg.streakCoins,
         reason: 'streak_chest',
         label: `Weekend Chest (${ws.weekId})`,
         byId,
@@ -140,8 +142,8 @@ export function closeWeek(
       };
       coinLedger = appendLedger(coinLedger, entry);
       if (coinLedger[0]?.id === entry.id) {
-        coinBalances = addCoins(coinBalances, memberId, STREAK_COINS);
-        memberProgress = addXp(memberProgress, memberId, STREAK_XP);
+        coinBalances = addCoins(coinBalances, memberId, cfg.streakCoins);
+        memberProgress = addXp(memberProgress, memberId, cfg.streakXp);
       }
       streakClaimed[memberId] = true;
     }
@@ -151,7 +153,7 @@ export function closeWeek(
       const entry: CoinLedgerEntry = {
         id: `inspect:${ws.weekId}:${memberId}`,
         memberId,
-        delta: INSPECTION_COINS,
+        delta: cfg.inspectionCoins,
         reason: 'house_inspection',
         label: `House inspection passed (${ws.weekId})`,
         byId,
@@ -160,8 +162,8 @@ export function closeWeek(
       };
       coinLedger = appendLedger(coinLedger, entry);
       if (coinLedger[0]?.id === entry.id) {
-        coinBalances = addCoins(coinBalances, memberId, INSPECTION_COINS);
-        memberProgress = addXp(memberProgress, memberId, INSPECTION_XP);
+        coinBalances = addCoins(coinBalances, memberId, cfg.inspectionCoins);
+        memberProgress = addXp(memberProgress, memberId, cfg.inspectionXp);
       }
       inspectionPaid[memberId] = true;
     }
@@ -267,9 +269,10 @@ export function claimStreakChest(
   if (!ws || ws.weekId !== current) {
     return { data, ok: false, error: 'Week not ready' };
   }
+  const cfg = getChoreQuestConfig(data);
   const completions = ws.weekdayCompletions?.[memberId] ?? 0;
-  if (completions < STREAK_TARGET) {
-    return { data, ok: false, error: `Need ${STREAK_TARGET} weekday quests` };
+  if (completions < cfg.streakTarget) {
+    return { data, ok: false, error: `Need ${cfg.streakTarget} weekday quests` };
   }
   if (ws.streakClaimed?.[memberId]) {
     return { data, ok: false, error: 'Already claimed' };
@@ -279,7 +282,7 @@ export function claimStreakChest(
   const entry: CoinLedgerEntry = {
     id: `streak:${ws.weekId}:${memberId}`,
     memberId,
-    delta: STREAK_COINS,
+    delta: cfg.streakCoins,
     reason: 'streak_chest',
     label: `Weekend Chest (${ws.weekId})`,
     byId,
@@ -291,8 +294,8 @@ export function claimStreakChest(
   let coinBalances = data.coinBalances || {};
   let memberProgress = data.memberProgress || {};
   if (coinLedger[0]?.id === entry.id) {
-    coinBalances = addCoins(coinBalances, memberId, STREAK_COINS);
-    memberProgress = addXp(memberProgress, memberId, STREAK_XP);
+    coinBalances = addCoins(coinBalances, memberId, cfg.streakCoins);
+    memberProgress = addXp(memberProgress, memberId, cfg.streakXp);
   }
 
   return {
@@ -335,6 +338,7 @@ export function markHouseInspection(
   };
 
   // Pay immediately so kids see the bonus without waiting for week close.
+  const cfg = getChoreQuestConfig(next);
   const kids = kidIds(next);
   let coinBalances = { ...(next.coinBalances || {}) };
   let coinLedger = next.coinLedger || [];
@@ -346,7 +350,7 @@ export function markHouseInspection(
     const entry: CoinLedgerEntry = {
       id: `inspect:${current}:${memberId}`,
       memberId,
-      delta: INSPECTION_COINS,
+      delta: cfg.inspectionCoins,
       reason: 'house_inspection',
       label: `House inspection passed (${current})`,
       byId,
@@ -355,8 +359,8 @@ export function markHouseInspection(
     };
     coinLedger = appendLedger(coinLedger, entry);
     if (coinLedger[0]?.id === entry.id) {
-      coinBalances = addCoins(coinBalances, memberId, INSPECTION_COINS);
-      memberProgress = addXp(memberProgress, memberId, INSPECTION_XP);
+      coinBalances = addCoins(coinBalances, memberId, cfg.inspectionCoins);
+      memberProgress = addXp(memberProgress, memberId, cfg.inspectionXp);
     }
     inspectionPaid[memberId] = true;
   }
@@ -374,9 +378,17 @@ export function markHouseInspection(
 }
 
 /** Projected interest if balance is held until week close. */
-export function projectedInterest(balance: number): number {
-  if (balance < INTEREST_MIN_BALANCE) return 0;
-  return Math.floor(balance * INTEREST_RATE);
+export function projectedInterest(
+  balance: number,
+  cfg?: ChoreQuestConfig | null,
+): number {
+  const c = cfg || DEFAULT_CONFIG_FALLBACK();
+  if (balance < c.interestMinBalance) return 0;
+  return Math.floor(balance * c.interestRate);
+}
+
+function DEFAULT_CONFIG_FALLBACK(): ChoreQuestConfig {
+  return getChoreQuestConfig(null);
 }
 
 /** Days until next Monday 00:00 local (interest / new week). */
@@ -391,18 +403,20 @@ export function daysUntilWeekEnd(now = new Date()): number {
 export function streakStatus(
   ws: WeekState | undefined,
   memberId: string,
+  cfg?: ChoreQuestConfig | null,
 ): {
   completions: number;
   target: number;
   ready: boolean;
   claimed: boolean;
 } {
+  const target = (cfg || DEFAULT_CONFIG_FALLBACK()).streakTarget;
   const completions = ws?.weekdayCompletions?.[memberId] ?? 0;
   const claimed = !!ws?.streakClaimed?.[memberId];
   return {
     completions,
-    target: STREAK_TARGET,
-    ready: completions >= STREAK_TARGET && !claimed,
+    target,
+    ready: completions >= target && !claimed,
     claimed,
   };
 }

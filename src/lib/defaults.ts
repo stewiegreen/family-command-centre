@@ -134,5 +134,6 @@ export function migratePayload(p: Partial<FamilyData>): FamilyData {
     rewardCatalog: ensureRewardCatalog(p.rewardCatalog),
     redemptions: p.redemptions || [],
     weekState: p.weekState,
+    choreQuest: p.choreQuest,
   };
 }

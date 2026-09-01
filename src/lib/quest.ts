@@ -1,4 +1,4 @@
-import type { Quest, QuestDifficulty, MemberProgress, RewardItem } from '../types';
+import type { Quest, QuestDifficulty, MemberProgress, RewardItem, ChoreQuestConfig, FamilyData } from '../types';
 
 /** Default XP / coins by difficulty. rewardMinutes kept at 0 — screen time comes from the shop. */
 export const DIFFICULTY_REWARDS: Record<
@@ -87,15 +87,18 @@ export function buildQuest(opts: {
   difficulty: QuestDifficulty;
   createdById: string;
   id?: string;
+  xp?: number;
+  coins?: number;
+  config?: ChoreQuestConfig | null;
 }): Quest {
-  const r = DIFFICULTY_REWARDS[opts.difficulty];
+  const r = rewardsForDifficultyWithConfig(opts.difficulty, opts.config);
   return {
     id: opts.id || crypto.randomUUID(),
     title: opts.title.trim(),
     difficulty: opts.difficulty,
-    xp: r.xp,
-    coins: r.coins,
-    rewardMinutes: r.rewardMinutes,
+    xp: opts.xp != null ? Math.max(0, Math.floor(opts.xp)) : r.xp,
+    coins: opts.coins != null ? Math.max(0, Math.floor(opts.coins)) : r.coins,
+    rewardMinutes: 0,
     status: 'open',
     createdById: opts.createdById,
     createdAt: new Date().toISOString(),
@@ -233,4 +236,58 @@ export const DEFAULT_REWARD_CATALOG: RewardItem[] = [
 export function ensureRewardCatalog(existing?: RewardItem[] | null): RewardItem[] {
   if (existing && existing.length > 0) return existing;
   return DEFAULT_REWARD_CATALOG.map((r) => ({ ...r }));
+}
+
+
+export const DEFAULT_CHOREQUEST_CONFIG: ChoreQuestConfig = {
+  streakTarget: 5,
+  streakCoins: 40,
+  streakXp: 30,
+  interestRate: 0.1,
+  interestMinBalance: 10,
+  inspectionCoins: 25,
+  inspectionXp: 15,
+};
+
+export function getChoreQuestConfig(data?: Pick<FamilyData, 'choreQuest'> | null): ChoreQuestConfig {
+  const c = data?.choreQuest;
+  return {
+    ...DEFAULT_CHOREQUEST_CONFIG,
+    ...(c || {}),
+    streakTarget: Math.max(1, Math.floor(c?.streakTarget ?? DEFAULT_CHOREQUEST_CONFIG.streakTarget)),
+    streakCoins: Math.max(0, Math.floor(c?.streakCoins ?? DEFAULT_CHOREQUEST_CONFIG.streakCoins)),
+    streakXp: Math.max(0, Math.floor(c?.streakXp ?? DEFAULT_CHOREQUEST_CONFIG.streakXp)),
+    interestRate: Math.min(1, Math.max(0, c?.interestRate ?? DEFAULT_CHOREQUEST_CONFIG.interestRate)),
+    interestMinBalance: Math.max(0, Math.floor(c?.interestMinBalance ?? DEFAULT_CHOREQUEST_CONFIG.interestMinBalance)),
+    inspectionCoins: Math.max(0, Math.floor(c?.inspectionCoins ?? DEFAULT_CHOREQUEST_CONFIG.inspectionCoins)),
+    inspectionXp: Math.max(0, Math.floor(c?.inspectionXp ?? DEFAULT_CHOREQUEST_CONFIG.inspectionXp)),
+  };
+}
+
+/** Difficulty rewards with optional parent overrides from config. */
+export function rewardsForDifficultyWithConfig(
+  d: QuestDifficulty,
+  cfg?: ChoreQuestConfig | null,
+) {
+  const base = DIFFICULTY_REWARDS[d];
+  if (!cfg) return base;
+  if (d === 'easy') {
+    return {
+      ...base,
+      xp: cfg.easyXp ?? base.xp,
+      coins: cfg.easyCoins ?? base.coins,
+    };
+  }
+  if (d === 'epic') {
+    return {
+      ...base,
+      xp: cfg.epicXp ?? base.xp,
+      coins: cfg.epicCoins ?? base.coins,
+    };
+  }
+  return {
+    ...base,
+    xp: cfg.mediumXp ?? base.xp,
+    coins: cfg.mediumCoins ?? base.coins,
+  };
 }

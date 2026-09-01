@@ -32,15 +32,12 @@ import {
   buildQuest,
   ensureProgress,
   ensureRewardCatalog,
+  getChoreQuestConfig,
   isoWeekId,
   progressTowardNextLevel,
+  rewardsForDifficultyWithConfig,
 } from '../lib/quest';
 import {
-  STREAK_COINS,
-  STREAK_XP,
-  INSPECTION_COINS,
-  INSPECTION_XP,
-  INTEREST_RATE,
   claimStreakChest,
   daysUntilWeekEnd,
   ensureWeekRollover,
@@ -49,13 +46,14 @@ import {
   recordWeekdayCompletion,
   streakStatus,
 } from '../lib/weekCycle';
+import type { ChoreQuestConfig } from '../types';
 import { cn } from '../lib/cn';
 
 function newId() {
   return crypto.randomUUID();
 }
 
-type TabId = 'quests' | 'shop' | 'vault' | 'board';
+type TabId = 'quests' | 'shop' | 'vault' | 'board' | 'rates';
 
 const KIND_LABEL: Record<RewardKind, string> = {
   screen_time: 'Screen time',
@@ -92,7 +90,11 @@ export function ChoresPage() {
   const [editQuest, setEditQuest] = useState<Quest | null>(null);
   const [title, setTitle] = useState('');
   const [difficulty, setDifficulty] = useState<QuestDifficulty>('medium');
+  const [customRewards, setCustomRewards] = useState(false);
+  const [customXp, setCustomXp] = useState(25);
+  const [customCoins, setCustomCoins] = useState(12);
   const [levelUp, setLevelUp] = useState<{ name: string; level: number } | null>(null);
+  const [ratesDraft, setRatesDraft] = useState<ChoreQuestConfig | null>(null);
   const [shopEditOpen, setShopEditOpen] = useState(false);
   const [chestMsg, setChestMsg] = useState<string | null>(null);
 
@@ -102,6 +104,13 @@ export function ChoresPage() {
     update((d) => ensureWeekRollover(d, me.id));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [me?.id]);
+
+  useEffect(() => {
+    if (tab === 'rates' && isParent) {
+      setRatesDraft(getChoreQuestConfig(data));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
 
   const [shopForm, setShopForm] = useState<{
     id?: string;
@@ -142,9 +151,10 @@ export function ChoresPage() {
   const myCoins = coinBalances[myId] ?? 0;
   const screenTimeMap = data.screenTime || {};
   const myScreen = screenTimeMap[myId] ?? 0;
+  const cq = getChoreQuestConfig(data);
   const weekState = data.weekState;
-  const myStreak = streakStatus(weekState, myId);
-  const interestPreview = projectedInterest(myCoins);
+  const myStreak = streakStatus(weekState, myId, cq);
+  const interestPreview = projectedInterest(myCoins, cq);
   const daysLeft = daysUntilWeekEnd();
   const inspectionPassed = !!weekState?.houseInspectionPassed;
 
@@ -158,7 +168,7 @@ export function ChoresPage() {
       .map((k) => {
         const prog = ensureProgress(progressMap[k.id]);
         const bar = progressTowardNextLevel(prog.xp);
-        const streak = streakStatus(weekState, k.id);
+        const streak = streakStatus(weekState, k.id, cq);
         return {
           member: k,
           xp: prog.xp,
@@ -206,6 +216,10 @@ export function ChoresPage() {
     setEditQuest(null);
     setTitle('');
     setDifficulty('medium');
+    setCustomRewards(false);
+    const r = rewardsForDifficultyWithConfig('medium', cq);
+    setCustomXp(r.xp);
+    setCustomCoins(r.coins);
     setCreateOpen(true);
   };
 
@@ -213,13 +227,20 @@ export function ChoresPage() {
     setEditQuest(q);
     setTitle(q.title);
     setDifficulty(q.difficulty || 'medium');
+    const base = rewardsForDifficultyWithConfig(q.difficulty || 'medium', cq);
+    const isCustom = (q.xp ?? base.xp) !== base.xp || (q.coins ?? base.coins) !== base.coins;
+    setCustomRewards(isCustom);
+    setCustomXp(q.xp ?? base.xp);
+    setCustomCoins(q.coins ?? base.coins);
     setCreateOpen(true);
   };
 
   const saveQuest = () => {
     if (!title.trim() || !me) return;
+    const meta = rewardsForDifficultyWithConfig(difficulty, cq);
+    const xp = customRewards ? customXp : meta.xp;
+    const coins = customRewards ? customCoins : meta.coins;
     if (editQuest) {
-      const meta = DIFFICULTY_REWARDS[difficulty];
       update((d) => ({
         ...d,
         chores: (d.chores || []).map((c) =>
@@ -228,15 +249,22 @@ export function ChoresPage() {
                 ...c,
                 title: title.trim(),
                 difficulty,
-                xp: meta.xp,
-                coins: meta.coins,
+                xp: Math.max(0, Math.floor(xp)),
+                coins: Math.max(0, Math.floor(coins)),
                 rewardMinutes: 0,
               }
             : c,
         ),
       }));
     } else {
-      const q = buildQuest({ title, difficulty, createdById: me.id });
+      const q = buildQuest({
+        title,
+        difficulty,
+        createdById: me.id,
+        xp: customRewards ? xp : undefined,
+        coins: customRewards ? coins : undefined,
+        config: cq,
+      });
       update((d) => ({
         ...d,
         chores: [q, ...(d.chores || [])],
@@ -244,6 +272,7 @@ export function ChoresPage() {
     }
     setTitle('');
     setDifficulty('medium');
+    setCustomRewards(false);
     setEditQuest(null);
     setCreateOpen(false);
   };
@@ -648,7 +677,7 @@ export function ChoresPage() {
         return d;
       }
       queueMicrotask(() =>
-        setChestMsg(`Weekend Chest opened! +${STREAK_COINS} coins · +${STREAK_XP} XP`),
+        setChestMsg(`Weekend Chest opened! +${cq.streakCoins} coins · +${cq.streakXp} XP`),
       );
       return res.data;
     });
@@ -804,6 +833,7 @@ export function ChoresPage() {
       count: isParent ? pendingRedemptions.length : myPendingRedemptions.length,
     },
     { id: 'board', label: 'Board' },
+    ...(isParent ? [{ id: 'rates' as const, label: 'Rates' }] : []),
   ];
 
   return (
@@ -944,7 +974,7 @@ export function ChoresPage() {
                 <span className="text-xs text-emerald-600 font-medium">Weekend Chest claimed ✓</span>
               ) : myStreak.ready ? (
                 <Button size="sm" onClick={claimChest}>
-                  Open Weekend Chest · +{STREAK_COINS} coins · +{STREAK_XP} XP
+                  Open Weekend Chest · +{cq.streakCoins} coins · +{cq.streakXp} XP
                 </Button>
               ) : (
                 <span className="text-xs text-muted">
@@ -964,11 +994,11 @@ export function ChoresPage() {
                   <>
                     +{interestPreview} coins{' '}
                     <span className="text-muted font-normal">
-                      ({Math.round(INTEREST_RATE * 100)}% if you hold {myCoins})
+                      ({Math.round(cq.interestRate * 100)}% if you hold {myCoins})
                     </span>
                   </>
                 ) : (
-                  <span className="text-muted font-normal">Hold ≥10 coins to earn interest</span>
+                  <span className="text-muted font-normal">Hold ≥{cq.interestMinBalance} coins to earn interest</span>
                 )}
               </p>
             </div>
@@ -978,7 +1008,7 @@ export function ChoresPage() {
                 <p className="text-sm font-semibold text-emerald-600">Passed · bonuses paid</p>
               ) : isParent ? (
                 <Button size="sm" variant="secondary" onClick={onHouseInspection}>
-                  Mark house clean · +{INSPECTION_COINS}c / +{INSPECTION_XP} XP each
+                  Mark house clean · +{cq.inspectionCoins}c / +{cq.inspectionXp} XP each
                 </Button>
               ) : (
                 <p className="text-sm text-muted">Waiting on a parent</p>
@@ -1365,6 +1395,99 @@ export function ChoresPage() {
         </section>
       )}
 
+
+      {/* ── RATES TAB (parents) ─────────────────────────────── */}
+      {tab === 'rates' && isParent && (
+        <section className="space-y-4">
+          <div>
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted mb-1">
+              ChoreQuest rates
+            </h2>
+            <p className="text-xs text-muted mb-3">
+              Tune the economy for your family. Changes apply to new streaks, interest, and inspection
+              bonuses right away.
+            </p>
+          </div>
+          {(() => {
+            const draft = ratesDraft || cq;
+            const set = (patch: Partial<ChoreQuestConfig>) =>
+              setRatesDraft({ ...draft, ...patch });
+            const field = (
+              label: string,
+              key: keyof ChoreQuestConfig,
+              opts?: { step?: number; min?: number; max?: number; hint?: string },
+            ) => (
+              <div key={key}>
+                <label className="text-xs text-muted mb-1 block">{label}</label>
+                <input
+                  type="number"
+                  step={opts?.step ?? 1}
+                  min={opts?.min ?? 0}
+                  max={opts?.max}
+                  className="w-full rounded-xl border border-border bg-inset px-3 py-2 text-fg text-sm outline-none focus:border-accent"
+                  value={draft[key] as number}
+                  onChange={(e) => set({ [key]: Number(e.target.value) } as Partial<ChoreQuestConfig>)}
+                />
+                {opts?.hint ? <p className="text-[11px] text-muted mt-0.5">{opts.hint}</p> : null}
+              </div>
+            );
+            return (
+              <Card className="!p-4 space-y-4">
+                <div className="grid sm:grid-cols-2 gap-3">
+                  {field('Weekday quests for chest', 'streakTarget', { min: 1, hint: 'Default 5' })}
+                  {field('Chest coins', 'streakCoins', { hint: 'Default 40' })}
+                  {field('Chest XP', 'streakXp', { hint: 'Default 30' })}
+                  {field('Interest rate (0–1)', 'interestRate', {
+                    step: 0.01,
+                    min: 0,
+                    max: 1,
+                    hint: '0.1 = 10%',
+                  })}
+                  {field('Min balance for interest', 'interestMinBalance', { hint: 'Default 10' })}
+                  {field('Inspection coins (each kid)', 'inspectionCoins', { hint: 'Default 25' })}
+                  {field('Inspection XP (each kid)', 'inspectionXp', { hint: 'Default 15' })}
+                </div>
+                <p className="text-xs font-semibold text-muted uppercase tracking-wide pt-2">
+                  Difficulty defaults (new quests)
+                </p>
+                <div className="grid sm:grid-cols-3 gap-3">
+                  {field('Easy XP', 'easyXp', { hint: `Base ${DIFFICULTY_REWARDS.easy.xp}` })}
+                  {field('Easy coins', 'easyCoins', { hint: `Base ${DIFFICULTY_REWARDS.easy.coins}` })}
+                  {field('Medium XP', 'mediumXp', { hint: `Base ${DIFFICULTY_REWARDS.medium.xp}` })}
+                  {field('Medium coins', 'mediumCoins', { hint: `Base ${DIFFICULTY_REWARDS.medium.coins}` })}
+                  {field('Epic XP', 'epicXp', { hint: `Base ${DIFFICULTY_REWARDS.epic.xp}` })}
+                  {field('Epic coins', 'epicCoins', { hint: `Base ${DIFFICULTY_REWARDS.epic.coins}` })}
+                </div>
+                <div className="flex flex-wrap gap-2 pt-2">
+                  <Button
+                    onClick={() => {
+                      update((d) => ({
+                        ...d,
+                        choreQuest: {
+                          ...getChoreQuestConfig(d),
+                          ...draft,
+                        },
+                      }));
+                      setRatesDraft(null);
+                    }}
+                  >
+                    Save rates
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      setRatesDraft({ ...getChoreQuestConfig(null) });
+                    }}
+                  >
+                    Reset to defaults
+                  </Button>
+                </div>
+              </Card>
+            );
+          })()}
+        </section>
+      )}
+
       {/* Create / edit quest modal */}
       <Modal
         open={createOpen}
@@ -1392,13 +1515,20 @@ export function ChoresPage() {
             <label className="text-xs text-muted mb-2 block">Difficulty</label>
             <div className="grid grid-cols-3 gap-2">
               {DIFFICULTY_ORDER.map((d) => {
-                const meta = DIFFICULTY_REWARDS[d];
+                const meta = rewardsForDifficultyWithConfig(d, cq);
                 const selected = difficulty === d;
                 return (
                   <button
                     key={d}
                     type="button"
-                    onClick={() => setDifficulty(d)}
+                    onClick={() => {
+                      setDifficulty(d);
+                      if (!customRewards) {
+                        const r = rewardsForDifficultyWithConfig(d, cq);
+                        setCustomXp(r.xp);
+                        setCustomCoins(r.coins);
+                      }
+                    }}
                     className={cn(
                       'rounded-xl border p-3 text-left transition-colors',
                       selected ? 'border-accent bg-accent/10' : 'border-border hover:bg-nav-hover',
@@ -1415,6 +1545,46 @@ export function ChoresPage() {
               })}
             </div>
           </div>
+          <label className="flex items-center gap-2 text-sm text-fg">
+            <input
+              type="checkbox"
+              checked={customRewards}
+              onChange={(e) => {
+                const on = e.target.checked;
+                setCustomRewards(on);
+                if (!on) {
+                  const r = rewardsForDifficultyWithConfig(difficulty, cq);
+                  setCustomXp(r.xp);
+                  setCustomCoins(r.coins);
+                }
+              }}
+            />
+            Custom XP / coins (advanced)
+          </label>
+          {customRewards && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-muted mb-1 block">XP</label>
+                <input
+                  type="number"
+                  min={0}
+                  className="w-full rounded-xl border border-border bg-inset px-3 py-2 text-fg text-sm outline-none focus:border-accent"
+                  value={customXp}
+                  onChange={(e) => setCustomXp(Number(e.target.value) || 0)}
+                />
+              </div>
+              <div>
+                <label className="text-xs text-muted mb-1 block">Coins</label>
+                <input
+                  type="number"
+                  min={0}
+                  className="w-full rounded-xl border border-border bg-inset px-3 py-2 text-fg text-sm outline-none focus:border-accent"
+                  value={customCoins}
+                  onChange={(e) => setCustomCoins(Number(e.target.value) || 0)}
+                />
+              </div>
+            </div>
+          )}
           <div className="flex justify-end gap-2 pt-2">
             <Button
               variant="ghost"

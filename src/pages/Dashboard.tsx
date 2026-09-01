@@ -22,10 +22,8 @@ import { ProfileLookCard } from '../components/ProfileLookEditor';
 import type { PresenceStatus, ViewId } from '../types';
 import { FAMILY_LIST_ID, PRESENCE_OPTIONS } from '../types';
 import { upcomingExpanded } from '../lib/recurrence';
-import { ensureProgress, progressTowardNextLevel } from '../lib/quest';
+import { ensureProgress, getChoreQuestConfig, progressTowardNextLevel } from '../lib/quest';
 import {
-  STREAK_COINS,
-  STREAK_XP,
   streakStatus,
   daysUntilWeekEnd,
 } from '../lib/weekCycle';
@@ -75,11 +73,12 @@ export function Dashboard() {
   const progressMap = data.memberProgress || {};
   const coinBalances = data.coinBalances || {};
   const screenTimeMap = data.screenTime || {};
+  const cq = getChoreQuestConfig(data);
   const myProgress = ensureProgress(progressMap[myId]);
   const myBar = progressTowardNextLevel(myProgress.xp);
   const myCoins = coinBalances[myId] ?? 0;
   const myScreen = screenTimeMap[myId] ?? 0;
-  const myStreak = streakStatus(data.weekState, myId);
+  const myStreak = streakStatus(data.weekState, myId, cq);
   const daysLeft = daysUntilWeekEnd();
   const openCount = chores.filter((c) => c.status === 'open' || !c.status).length;
   const kids = members.filter((m) => m.role === 'kid');
@@ -543,7 +542,7 @@ export function Dashboard() {
               {myStreak.claimed
                 ? 'Weekend Chest claimed ✓'
                 : myStreak.ready
-                  ? `Chest ready · +${STREAK_COINS}c · +${STREAK_XP} XP — open Chores to claim`
+                  ? `Chest ready · +${cq.streakCoins}c · +${cq.streakXp} XP — open Chores to claim`
                   : daysLeft === 0
                     ? 'Week ends today'
                     : `${daysLeft} day${daysLeft === 1 ? '' : 's'} left this week`}
@@ -592,7 +591,7 @@ export function Dashboard() {
                 const look = getMember(k.id) || k;
                 const prog = ensureProgress(progressMap[k.id]);
                 const bar = progressTowardNextLevel(prog.xp);
-                const streak = streakStatus(data.weekState, k.id);
+                const streak = streakStatus(data.weekState, k.id, cq);
                 return (
                   <div
                     key={k.id}

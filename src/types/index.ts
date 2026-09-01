@@ -233,6 +233,25 @@ export interface Message {
   read: boolean;
 }
 
+
+/** Parent-tunable ChoreQuest economy (Phase 5). */
+export interface ChoreQuestConfig {
+  streakTarget: number;
+  streakCoins: number;
+  streakXp: number;
+  /** Fraction, e.g. 0.1 = 10%. */
+  interestRate: number;
+  interestMinBalance: number;
+  inspectionCoins: number;
+  inspectionXp: number;
+  easyXp?: number;
+  easyCoins?: number;
+  mediumXp?: number;
+  mediumCoins?: number;
+  epicXp?: number;
+  epicCoins?: number;
+}
+
 export interface Settings {
   familyName: string;
   embyUrl: string;
@@ -292,6 +311,8 @@ export interface FamilyData {
   redemptions?: RedemptionRecord[];
   /** Current week cycle state (Phase 3). */
   weekState?: WeekState;
+  /** Parent-tunable quest economy (Phase 5). */
+  choreQuest?: ChoreQuestConfig;
   memberUids?: string[];
   /** Auth uids of members with role === 'parent'. Enforced by security rules. */
   parentUids?: string[];
