@@ -2,33 +2,27 @@
  * Per-member homescreen widget order.
  * Dashboard should render cards in the order returned by resolveHomescreenOrder().
  * When the user rearranges, call setMyHomescreenOrder with the new string[].
+ *
+ * IMPORTANT: these ids must exactly match the SectionId keys used in
+ * DashboardPage's `sections` record (src/pages/Dashboard.tsx). If you add a
+ * new dashboard section, add its id here too, or it will silently fail to
+ * render for anyone whose saved order predates it.
  */
 
-/** Stable ids used by the dashboard. Keep in sync with DashboardPage cards. */
-export const HOMESCREEN_WIDGETS = [
-  'announcement',
-  'presence',
-  'today',
-  'todos',
-  'chores',
-  'screenTime',
-  'shopping',
-  'messages',
-  'notes',
-] as const;
+/** Stable ids used by the dashboard. Keep in sync with DashboardPage's `sections` object. */
+export const HOMESCREEN_WIDGETS = ['stats', 'presence', 'digest', 'events', 'todos', 'choresShop', 'look'] as const;
 
 export type HomescreenWidgetId = (typeof HOMESCREEN_WIDGETS)[number];
 
 /** Default order for anyone who has never rearranged. */
 export const DEFAULT_HOMESCREEN_ORDER: string[] = [
-  'announcement',
+  'stats',
   'presence',
-  'today',
+  'digest',
+  'events',
   'todos',
-  'chores',
-  'screenTime',
-  'shopping',
-  'messages',
+  'choresShop',
+  'look',
 ];
 
 /**
