@@ -606,10 +606,40 @@ export function ChoresPage() {
     const forMember = quest.approvedForId ? getMember(quest.approvedForId) : submitter;
 
     return (
-      <Card className="!p-4 flex flex-col gap-3">
-        <div className="flex items-start justify-between gap-3">
+      <Card className="!p-4 flex flex-col gap-3 h-full">
+        <div className="flex items-start gap-3">
+          <div className="text-2xl w-10 h-10 rounded-xl bg-inset flex items-center justify-center shrink-0">
+            {meta.emoji}
+          </div>
           <div className="min-w-0 flex-1">
-            <p className="font-semibold text-fg truncate">{quest.title}</p>
+            <div className="flex items-start justify-between gap-2">
+              <p className="font-semibold text-fg leading-tight">{quest.title}</p>
+              <div className="flex items-center gap-0.5 shrink-0">
+                {forMember && mode !== 'open' && <Avatar {...forMember} size="sm" />}
+                {isParent && (
+                  <>
+                    {mode !== 'done' && (
+                      <button
+                        type="button"
+                        onClick={() => openEdit(quest)}
+                        className="p-1.5 rounded-lg text-muted hover:text-fg hover:bg-nav-hover"
+                        title="Edit quest"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => deleteQuest(quest)}
+                      className="p-1.5 rounded-lg text-muted hover:text-red-500 hover:bg-nav-hover"
+                      title="Delete quest"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
             <div className="mt-1.5 flex flex-wrap items-center gap-2">
               {difficultyBadge(diff)}
               <span className="text-xs text-muted flex items-center gap-1">
@@ -622,72 +652,41 @@ export function ChoresPage() {
               </span>
             </div>
           </div>
-          <div className="flex items-center gap-1 shrink-0">
-            {forMember && mode !== 'open' && <Avatar {...forMember} size="sm" />}
-            {isParent && mode !== 'done' && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => openEdit(quest)}
-                  className="p-1.5 rounded-lg text-muted hover:text-fg hover:bg-nav-hover"
-                  title="Edit quest"
-                >
-                  <Pencil className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => deleteQuest(quest)}
-                  className="p-1.5 rounded-lg text-muted hover:text-red-500 hover:bg-nav-hover"
-                  title="Delete quest"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </>
-            )}
-            {isParent && mode === 'done' && (
-              <button
-                type="button"
-                onClick={() => deleteQuest(quest)}
-                className="p-1.5 rounded-lg text-muted hover:text-red-500 hover:bg-nav-hover"
-                title="Delete"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
         </div>
 
         {mode === 'open' && me && me.role !== 'media' && (
-          <Button size="sm" variant="secondary" className="self-start" onClick={() => submitQuest(quest)}>
+          <Button size="sm" variant="secondary" className="mt-auto self-stretch" onClick={() => submitQuest(quest)}>
             I finished this
           </Button>
         )}
 
         {mode === 'pending' && isParent && (
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="text-xs text-muted flex-1">
+          <div className="mt-auto space-y-2">
+            <p className="text-xs text-muted">
               {submitter ? `${submitter.name} is waiting` : 'Waiting for approval'}
               <span className="text-fg font-medium">
                 {' '}
                 · +{quest.xp ?? meta.xp} XP · +{quest.coins ?? meta.coins} coins
               </span>
             </p>
-            <Button size="sm" onClick={() => approveQuest(quest)}>
-              <Check className="w-3.5 h-3.5 mr-1" />
-              Approve
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => rejectQuest(quest)}>
-              <X className="w-3.5 h-3.5" />
-            </Button>
+            <div className="flex gap-2">
+              <Button size="sm" className="flex-1" onClick={() => approveQuest(quest)}>
+                <Check className="w-3.5 h-3.5 mr-1" />
+                Approve
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => rejectQuest(quest)}>
+                <X className="w-3.5 h-3.5" />
+              </Button>
+            </div>
           </div>
         )}
 
         {mode === 'pending' && !isParent && quest.submittedById === myId && (
-          <p className="text-xs text-amber-600">Waiting for a parent to approve…</p>
+          <p className="text-xs text-amber-600 mt-auto">Waiting for a parent to approve…</p>
         )}
 
         {mode === 'done' && (
-          <p className="text-xs text-muted">
+          <p className="text-xs text-muted mt-auto">
             Approved
             {forMember ? ` for ${forMember.name}` : ''}
             {quest.approvedAt
@@ -915,9 +914,11 @@ export function ChoresPage() {
               <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
                 {isParent ? 'Awaiting approval' : 'Pending'}
               </h2>
-              {pendingQuests.map((q) => (
-                <QuestCard key={q.id} quest={q} mode="pending" />
-              ))}
+              <div className="grid sm:grid-cols-2 gap-3">
+                {pendingQuests.map((q) => (
+                  <QuestCard key={q.id} quest={q} mode="pending" />
+                ))}
+              </div>
             </section>
           )}
 
@@ -938,7 +939,11 @@ export function ChoresPage() {
                 )}
               </Card>
             ) : (
-              openQuests.map((q) => <QuestCard key={q.id} quest={q} mode="open" />)
+              <div className="grid sm:grid-cols-2 gap-3">
+                {openQuests.map((q) => (
+                  <QuestCard key={q.id} quest={q} mode="open" />
+                ))}
+              </div>
             )}
           </section>
 
@@ -947,9 +952,11 @@ export function ChoresPage() {
               <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
                 Recently completed
               </h2>
-              {doneQuests.map((q) => (
-                <QuestCard key={q.id} quest={q} mode="done" />
-              ))}
+              <div className="grid sm:grid-cols-2 gap-3">
+                {doneQuests.map((q) => (
+                  <QuestCard key={q.id} quest={q} mode="done" />
+                ))}
+              </div>
             </section>
           )}
         </>
