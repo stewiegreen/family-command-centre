@@ -1,0 +1,160 @@
+import type { Quest, QuestDifficulty, MemberProgress } from '../types';
+
+/** Default XP / coins / legacy screen minutes by difficulty. */
+export const DIFFICULTY_REWARDS: Record<
+  QuestDifficulty,
+  { xp: number; coins: number; rewardMinutes: number; label: string; emoji: string }
+> = {
+  easy: { xp: 10, coins: 5, rewardMinutes: 5, label: 'Easy', emoji: '🌱' },
+  medium: { xp: 25, coins: 12, rewardMinutes: 15, label: 'Medium', emoji: '⚔️' },
+  epic: { xp: 50, coins: 25, rewardMinutes: 30, label: 'Epic', emoji: '🐉' },
+};
+
+export const DIFFICULTY_ORDER: QuestDifficulty[] = ['easy', 'medium', 'epic'];
+
+/** Cumulative XP required to *reach* level n (level 1 starts at 0). */
+export function xpToReachLevel(level: number): number {
+  if (level <= 1) return 0;
+  // 100 * n^1.5 cumulative-ish: sum approach via closed form approximation
+  // xpForLevel(n) = XP needed to go from n to n+1 = 100 * n^1.5
+  let total = 0;
+  for (let n = 1; n < level; n++) {
+    total += Math.round(100 * Math.pow(n, 1.5));
+  }
+  return total;
+}
+
+/** XP needed to go from `level` → `level + 1`. */
+export function xpForNextLevel(level: number): number {
+  const safe = Math.max(1, level);
+  return Math.round(100 * Math.pow(safe, 1.5));
+}
+
+export function levelFromXp(xp: number): number {
+  let level = 1;
+  let remaining = Math.max(0, xp);
+  while (remaining >= xpForNextLevel(level)) {
+    remaining -= xpForNextLevel(level);
+    level += 1;
+    if (level > 99) break;
+  }
+  return level;
+}
+
+export function progressTowardNextLevel(xp: number): {
+  level: number;
+  intoLevel: number;
+  needed: number;
+  pct: number;
+} {
+  const level = levelFromXp(xp);
+  const floor = xpToReachLevel(level);
+  const needed = xpForNextLevel(level);
+  const intoLevel = Math.max(0, xp - floor);
+  const pct = needed <= 0 ? 100 : Math.min(100, Math.round((intoLevel / needed) * 100));
+  return { level, intoLevel, needed, pct };
+}
+
+export function ensureProgress(p?: MemberProgress | null): MemberProgress {
+  const xp = Math.max(0, p?.xp ?? 0);
+  return { xp, level: levelFromXp(xp) };
+}
+
+/** ISO week id in local timezone, e.g. "2026-W36". */
+export function isoWeekId(d = new Date()): string {
+  // ISO week: Thursday-based year
+  const date = new Date(d.getTime());
+  date.setHours(0, 0, 0, 0);
+  // Thursday in current week decides the year
+  date.setDate(date.getDate() + 3 - ((date.getDay() + 6) % 7));
+  const week1 = new Date(date.getFullYear(), 0, 4);
+  const weekNo =
+    1 +
+    Math.round(
+      ((date.getTime() - week1.getTime()) / 86400000 - 3 + ((week1.getDay() + 6) % 7)) / 7,
+    );
+  const year = date.getFullYear();
+  return `${year}-W${String(weekNo).padStart(2, '0')}`;
+}
+
+export function rewardsForDifficulty(d: QuestDifficulty) {
+  return DIFFICULTY_REWARDS[d];
+}
+
+/** Build a new open quest from title + difficulty. */
+export function buildQuest(opts: {
+  title: string;
+  difficulty: QuestDifficulty;
+  createdById: string;
+  id?: string;
+}): Quest {
+  const r = DIFFICULTY_REWARDS[opts.difficulty];
+  return {
+    id: opts.id || crypto.randomUUID(),
+    title: opts.title.trim(),
+    difficulty: opts.difficulty,
+    xp: r.xp,
+    coins: r.coins,
+    rewardMinutes: r.rewardMinutes,
+    status: 'open',
+    createdById: opts.createdById,
+    createdAt: new Date().toISOString(),
+  };
+}
+
+/** Migrate a legacy chore-shaped object into a Quest. */
+export function migrateChoreToQuest(c: {
+  id: string;
+  title: string;
+  rewardMinutes?: number;
+  status?: string;
+  submittedById?: string;
+  submittedAt?: string;
+  approvedForId?: string;
+  approvedById?: string;
+  approvedAt?: string;
+  createdById?: string;
+  createdAt?: string;
+  difficulty?: QuestDifficulty;
+  xp?: number;
+  coins?: number;
+  lastCompletedById?: string;
+  lastCompletedAt?: string;
+  rotation?: string[];
+  turnIndex?: number;
+  cadence?: string;
+}): Quest {
+  const minutes = Math.max(0, c.rewardMinutes ?? 0);
+  // Infer difficulty from legacy minutes if not set
+  let difficulty: QuestDifficulty = c.difficulty || 'medium';
+  if (!c.difficulty) {
+    if (minutes <= 8) difficulty = 'easy';
+    else if (minutes >= 25) difficulty = 'epic';
+    else difficulty = 'medium';
+  }
+  const defaults = DIFFICULTY_REWARDS[difficulty];
+  const status: Quest['status'] =
+    c.status === 'pending' || c.status === 'done' || c.status === 'open' ? c.status : 'open';
+
+  return {
+    id: c.id,
+    title: c.title,
+    difficulty,
+    xp: c.xp ?? defaults.xp,
+    coins: c.coins ?? defaults.coins,
+    rewardMinutes: minutes || defaults.rewardMinutes,
+    status,
+    submittedById: c.submittedById,
+    submittedAt: c.submittedAt,
+    approvedForId: c.approvedForId || c.lastCompletedById,
+    approvedById: c.approvedById,
+    approvedAt: c.approvedAt || c.lastCompletedAt,
+    createdById: c.createdById || '',
+    createdAt: c.createdAt || new Date().toISOString(),
+    rotation: c.rotation,
+    turnIndex: c.turnIndex,
+    cadence: c.cadence as Quest['cadence'],
+    lastCompletedAt: c.lastCompletedAt,
+    lastCompletedById: c.lastCompletedById,
+  };
+}

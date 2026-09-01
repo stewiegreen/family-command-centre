@@ -4,6 +4,23 @@ export type ViewId = 'dashboard' | 'calendar' | 'todos' | 'chores' | 'shopping' 
 export type SyncStatus = 'local' | 'connecting' | 'live' | 'error' | 'auth';
 export type ChoreCadence = 'daily' | 'weekly' | 'once'; // legacy
 export type ChoreStatus = 'open' | 'pending' | 'done';
+export type QuestDifficulty = 'easy' | 'medium' | 'epic';
+export type QuestStatus = 'open' | 'pending' | 'done';
+export type CoinReason =
+  | 'quest'
+  | 'streak_chest'
+  | 'interest'
+  | 'house_inspection'
+  | 'redeem'
+  | 'adjust';
+export type RewardKind =
+  | 'screen_time'
+  | 'treat'
+  | 'choice'
+  | 'late_bed'
+  | 'allowance'
+  | 'custom';
+export type RedemptionStatus = 'pending' | 'fulfilled' | 'cancelled';
 /** Simple presence — no GPS. */
 export type PresenceStatus = 'home' | 'school' | 'work' | 'out' | 'away';
 export type ThemeId = 'dark' | 'light' | 'neon';
@@ -77,30 +94,98 @@ export interface Todo {
 }
 
 /**
- * Parent-created chore board item.
- * Kids pick a job → mark finished → parent approves screen-time minutes.
+ * ChoreQuest quest (replaces legacy Chore).
+ * Parent posts → kid marks finished → parent approves → XP + coins.
+ * Field name in FamilyData remains `chores` for back-compat with Dashboard digests.
  */
-export interface Chore {
+export interface Quest {
   id: string;
   title: string;
-  /** Screen-time minutes awarded when a parent approves. */
+  difficulty: QuestDifficulty;
+  /** XP awarded on approval (from difficulty table, overridable). */
+  xp: number;
+  /** Coins (Treasure) awarded on approval. */
+  coins: number;
+  /**
+   * Legacy screen-time minutes. Still applied on approval so old expectations work;
+   * new flow prefers coins → shop → screen-time redeem.
+   */
   rewardMinutes: number;
-  status: ChoreStatus;
-  /** Kid who tapped “I finished this”. */
+  status: QuestStatus;
   submittedById?: string;
   submittedAt?: string;
-  /** Member who received the minutes on approval. */
   approvedForId?: string;
   approvedById?: string;
   approvedAt?: string;
   createdById: string;
   createdAt: string;
-  /** @deprecated rotation model — migrated to open jobs */
+  /** @deprecated rotation model */
   rotation?: string[];
   turnIndex?: number;
   cadence?: ChoreCadence;
   lastCompletedAt?: string;
   lastCompletedById?: string;
+}
+
+/** @deprecated Use Quest */
+export type Chore = Quest;
+
+/** Per-kid XP / level (not spendable). */
+export interface MemberProgress {
+  xp: number;
+  level: number;
+}
+
+/** Coin (Treasure) ledger — source of truth for balances. */
+export interface CoinLedgerEntry {
+  id: string;
+  memberId: string;
+  delta: number;
+  reason: CoinReason;
+  label: string;
+  refId?: string;
+  byId: string;
+  at: string;
+  weekId: string;
+}
+
+/** Shop catalog item (Phase 2). Stubs present so types compile. */
+export interface RewardItem {
+  id: string;
+  label: string;
+  icon: string;
+  kind: RewardKind;
+  coinCost: number;
+  screenMinutes?: number;
+  featured?: boolean;
+  active: boolean;
+  sort: number;
+}
+
+export interface RedemptionRecord {
+  id: string;
+  memberId: string;
+  rewardItemId: string;
+  label: string;
+  kind: RewardKind;
+  coinCost: number;
+  screenMinutes?: number;
+  status: RedemptionStatus;
+  requestedAt: string;
+  fulfilledAt?: string;
+  fulfilledById?: string;
+}
+
+/** Current ISO-week state (Phase 3). Stub shape for forward compat. */
+export interface WeekState {
+  weekId: string;
+  weekdayCompletions: Record<string, number>;
+  streakClaimed?: Record<string, boolean>;
+  houseInspectionPassed?: boolean;
+  houseInspectionAt?: string;
+  houseInspectionById?: string;
+  interestPaid?: Record<string, boolean>;
+  inspectionPaid?: Record<string, boolean>;
 }
 
 /** Ledger entry for screen-time earn/spend. */
@@ -172,7 +257,8 @@ export interface FamilyData {
   members: Member[];
   events: CalendarEvent[];
   todos: Todo[];
-  chores: Chore[];
+  /** Quest board (legacy field name `chores`). */
+  chores: Quest[];
   shopping: ShoppingItem[];
   notes: Note[];
   messages: Message[];
@@ -194,6 +280,18 @@ export interface FamilyData {
   screenTime?: Record<string, number>;
   /** Recent earn/spend history (newest first, trimmed client-side). */
   screenTimeLog?: ScreenTimeLogEntry[];
+  /** memberId → XP / level. */
+  memberProgress?: Record<string, MemberProgress>;
+  /** memberId → coin balance (cache; ledger is source of truth). */
+  coinBalances?: Record<string, number>;
+  /** Coin ledger, newest first (trim client-side). */
+  coinLedger?: CoinLedgerEntry[];
+  /** Reward shop catalog (Phase 2). */
+  rewardCatalog?: RewardItem[];
+  /** Redemptions (Phase 2). */
+  redemptions?: RedemptionRecord[];
+  /** Current week cycle state (Phase 3). */
+  weekState?: WeekState;
   memberUids?: string[];
   /** Auth uids of members with role === 'parent'. Enforced by security rules. */
   parentUids?: string[];

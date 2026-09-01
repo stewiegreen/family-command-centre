@@ -1,4 +1,5 @@
 import type { FamilyData, Member, Settings } from '../types';
+import { migrateChoreToQuest, ensureProgress } from './quest';
 
 export const DEFAULT_MEMBERS: Member[] = [
   { id: '1', name: 'Alex', color: '#6366f1', emoji: '👨', initials: 'A', role: 'parent' },
@@ -31,6 +32,11 @@ export const DEFAULT_DATA: FamilyData = {
   appearance: {},
   screenTime: {},
   screenTimeLog: [],
+  memberProgress: {},
+  coinBalances: {},
+  coinLedger: [],
+  rewardCatalog: [],
+  redemptions: [],
   settings: DEFAULT_SETTINGS,
 };
 
@@ -64,35 +70,7 @@ export function migratePayload(p: Partial<FamilyData>): FamilyData {
     settings: { ...DEFAULT_SETTINGS, ...(p.settings || {}) },
     members,
     todos,
-    chores: (p.chores || []).map((c: {
-      id: string;
-      title: string;
-      rewardMinutes?: number;
-      status?: string;
-      submittedById?: string;
-      submittedAt?: string;
-      approvedForId?: string;
-      approvedById?: string;
-      approvedAt?: string;
-      createdById?: string;
-      createdAt?: string;
-      lastCompletedById?: string;
-      lastCompletedAt?: string;
-    }) => ({
-      id: c.id,
-      title: c.title,
-      rewardMinutes: Math.max(0, c.rewardMinutes ?? 0),
-      status: (c.status === 'pending' || c.status === 'done' || c.status === 'open'
-        ? c.status
-        : 'open') as 'open' | 'pending' | 'done',
-      submittedById: c.submittedById,
-      submittedAt: c.submittedAt,
-      approvedForId: c.approvedForId || c.lastCompletedById,
-      approvedById: c.approvedById,
-      approvedAt: c.approvedAt || c.lastCompletedAt,
-      createdById: c.createdById || '',
-      createdAt: c.createdAt || new Date().toISOString(),
-    })),
+    chores: (p.chores || []).map((c) => migrateChoreToQuest(c as Parameters<typeof migrateChoreToQuest>[0])),
     shopping: p.shopping || [],
     events: (p.events || []).map((e: {
       id: string;
@@ -148,5 +126,13 @@ export function migratePayload(p: Partial<FamilyData>): FamilyData {
     appearance: p.appearance || {},
     screenTime: p.screenTime || {},
     screenTimeLog: p.screenTimeLog || [],
+    memberProgress: Object.fromEntries(
+      Object.entries(p.memberProgress || {}).map(([id, prog]) => [id, ensureProgress(prog)]),
+    ),
+    coinBalances: p.coinBalances || {},
+    coinLedger: p.coinLedger || [],
+    rewardCatalog: p.rewardCatalog || [],
+    redemptions: p.redemptions || [],
+    weekState: p.weekState,
   };
 }
