@@ -17,6 +17,7 @@ import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Modal } from '../components/ui/Modal';
 import type {
+  FamilyData,
   Quest,
   QuestDifficulty,
   RedemptionRecord,
@@ -297,7 +298,7 @@ export function ChoresPage() {
         queueMicrotask(() => setLevelUp({ name: kid?.name || 'Hero', level: newLevel }));
       }
 
-      let result = {
+      let result: FamilyData = {
         ...d,
         chores: (d.chores || []).map((c) =>
           c.id === quest.id
