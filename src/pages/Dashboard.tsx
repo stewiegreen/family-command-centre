@@ -4,11 +4,15 @@ import {
   CheckSquare,
   StickyNote,
   MessageCircle,
-  RefreshCw,
+  Coins,
+  MonitorPlay,
   ShoppingCart,
   Newspaper,
   ChevronUp,
   ChevronDown,
+  Sparkles,
+  Sword,
+  Trophy,
   X,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
@@ -18,6 +22,13 @@ import { ProfileLookCard } from '../components/ProfileLookEditor';
 import type { PresenceStatus, ViewId } from '../types';
 import { FAMILY_LIST_ID, PRESENCE_OPTIONS } from '../types';
 import { upcomingExpanded } from '../lib/recurrence';
+import { ensureProgress, progressTowardNextLevel } from '../lib/quest';
+import {
+  STREAK_COINS,
+  STREAK_XP,
+  streakStatus,
+  daysUntilWeekEnd,
+} from '../lib/weekCycle';
 import { cn } from '../lib/cn';
 
 const COLOR_ICON: Record<string, string> = {
@@ -29,7 +40,7 @@ const COLOR_ICON: Record<string, string> = {
 
 const DISMISS_ANN_KEY = 'fcc_dismissed_announcement';
 
-type SectionId = 'stats' | 'presence' | 'digest' | 'events' | 'todos' | 'choresShop' | 'look';
+type SectionId = 'stats' | 'chorequest' | 'presence' | 'digest' | 'events' | 'todos' | 'choresShop' | 'look';
 
 function startOfWeekMonday(d: Date) {
   const x = new Date(d);
@@ -60,6 +71,18 @@ export function Dashboard() {
 
   // Per-user order from context (synced under appearance[memberId].homescreenOrder)
   const order = myHomescreenOrder as SectionId[];
+
+  const progressMap = data.memberProgress || {};
+  const coinBalances = data.coinBalances || {};
+  const screenTimeMap = data.screenTime || {};
+  const myProgress = ensureProgress(progressMap[myId]);
+  const myBar = progressTowardNextLevel(myProgress.xp);
+  const myCoins = coinBalances[myId] ?? 0;
+  const myScreen = screenTimeMap[myId] ?? 0;
+  const myStreak = streakStatus(data.weekState, myId);
+  const daysLeft = daysUntilWeekEnd();
+  const openCount = chores.filter((c) => c.status === 'open' || !c.status).length;
+  const kids = members.filter((m) => m.role === 'kid');
 
   const announcement = (settings.pinnedAnnouncement || '').trim();
   const [heroOpen, setHeroOpen] = useState(() => {
@@ -444,12 +467,183 @@ export function Dashboard() {
         })}
       </Card>
     ),
+    chorequest: (
+      <Card className="!p-4 lg:!p-5">
+        <div className="flex items-center justify-between gap-3 mb-4">
+          <h2 className="font-semibold text-fg flex items-center gap-2">
+            <Sword className="w-4 h-4 text-accent" />
+            ChoreQuest
+            {currentUser?.role === 'kid' ? (
+              <span className="text-xs font-normal text-muted">· for you</span>
+            ) : null}
+          </h2>
+          <button type="button" onClick={() => setView('chores')} className="text-xs text-accent">
+            Open board →
+          </button>
+        </div>
+
+        {/* Personalized strip for the active profile */}
+        {currentUser && currentUser.role !== 'media' && (
+          <div className="flex items-center gap-3 mb-4">
+            <div className="relative shrink-0">
+              <Avatar {...(getMember(myId) || currentUser)} size="md" />
+              <span className="absolute -bottom-1 -right-1 min-w-[1.25rem] h-5 px-1 rounded-full bg-accent text-white text-[10px] font-bold flex items-center justify-center border-2 border-surface">
+                {myBar.level}
+              </span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-fg truncate">
+                {currentUser.name}
+                <span className="text-muted font-normal"> · Level {myBar.level}</span>
+              </p>
+              <div className="h-2 mt-1 rounded-full bg-surface-3 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-accent transition-all"
+                  style={{ width: `${myBar.pct}%` }}
+                />
+              </div>
+              <p className="text-[11px] text-muted mt-0.5">
+                {myBar.intoLevel}/{myBar.needed} XP to next level
+              </p>
+            </div>
+            <div className="flex flex-col items-end gap-1 shrink-0">
+              <span className="text-sm font-semibold text-amber-600 flex items-center gap-1">
+                <Coins className="w-3.5 h-3.5" />
+                {myCoins}
+              </span>
+              <span className="text-sm font-semibold text-sky-600 flex items-center gap-1">
+                <MonitorPlay className="w-3.5 h-3.5" />
+                {myScreen}m
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* This-week streak for kids (and parents viewing as themselves) */}
+        {currentUser?.role !== 'media' && (
+          <div className="rounded-xl bg-inset border border-border px-3 py-2.5 mb-4">
+            <div className="flex items-center justify-between text-sm mb-1">
+              <span className="text-muted flex items-center gap-1">
+                <Sparkles className="w-3.5 h-3.5 text-accent" />
+                Weekday quests
+              </span>
+              <span className="font-medium text-fg">
+                {Math.min(myStreak.completions, myStreak.target)}/{myStreak.target}
+              </span>
+            </div>
+            <div className="h-1.5 rounded-full bg-surface-3 overflow-hidden">
+              <div
+                className="h-full rounded-full bg-accent"
+                style={{
+                  width: `${Math.min(100, Math.round((myStreak.completions / myStreak.target) * 100))}%`,
+                }}
+              />
+            </div>
+            <p className="text-[11px] text-muted mt-1.5">
+              {myStreak.claimed
+                ? 'Weekend Chest claimed ✓'
+                : myStreak.ready
+                  ? `Chest ready · +${STREAK_COINS}c · +${STREAK_XP} XP — open Chores to claim`
+                  : daysLeft === 0
+                    ? 'Week ends today'
+                    : `${daysLeft} day${daysLeft === 1 ? '' : 's'} left this week`}
+            </p>
+          </div>
+        )}
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+          <button
+            type="button"
+            onClick={() => setView('chores')}
+            className="rounded-xl bg-inset border border-border px-3 py-2 text-left hover:border-accent/40 transition-colors"
+          >
+            <p className="text-lg font-bold text-fg">{openCount}</p>
+            <p className="text-[11px] text-muted">Open quests</p>
+          </button>
+          <button
+            type="button"
+            onClick={() => setView('chores')}
+            className="rounded-xl bg-inset border border-border px-3 py-2 text-left hover:border-accent/40 transition-colors"
+          >
+            <p className="text-lg font-bold text-fg">
+              {isParent ? pendingForParents.length : myPending.length}
+            </p>
+            <p className="text-[11px] text-muted">{isParent ? 'To approve' : 'My pending'}</p>
+          </button>
+          <div className="rounded-xl bg-inset border border-border px-3 py-2">
+            <p className="text-lg font-bold text-amber-600">{myCoins}</p>
+            <p className="text-[11px] text-muted">Your coins</p>
+          </div>
+          <div className="rounded-xl bg-inset border border-border px-3 py-2">
+            <p className="text-lg font-bold text-sky-600">{myScreen}m</p>
+            <p className="text-[11px] text-muted">Screen bank</p>
+          </div>
+        </div>
+
+        {/* Parent: party snapshot */}
+        {isParent && kids.length > 0 && (
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2 flex items-center gap-1">
+              <Trophy className="w-3.5 h-3.5" />
+              Party
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {kids.map((k) => {
+                const look = getMember(k.id) || k;
+                const prog = ensureProgress(progressMap[k.id]);
+                const bar = progressTowardNextLevel(prog.xp);
+                const streak = streakStatus(data.weekState, k.id);
+                return (
+                  <div
+                    key={k.id}
+                    className="flex items-center gap-2 px-2.5 py-1.5 rounded-2xl bg-inset border border-border"
+                  >
+                    <Avatar {...look} size="sm" />
+                    <div>
+                      <p className="text-sm font-medium text-fg leading-tight">{k.name}</p>
+                      <p className="text-[11px] text-muted">
+                        Lv {bar.level} · {coinBalances[k.id] ?? 0}c · {screenTimeMap[k.id] ?? 0}m
+                        {streak.ready ? ' · chest!' : ''}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Kid: next open quests for them */}
+        {!isParent && currentUser?.role === 'kid' && (
+          <div>
+            {chores.filter((c) => c.status === 'open' || !c.status).slice(0, 3).length === 0 ? (
+              <p className="text-sm text-muted">No open quests right now.</p>
+            ) : (
+              <ul className="space-y-1.5">
+                {chores
+                  .filter((c) => c.status === 'open' || !c.status)
+                  .slice(0, 3)
+                  .map((c) => (
+                    <li key={c.id} className="text-sm text-fg flex items-center justify-between gap-2">
+                      <span className="truncate">{c.title}</span>
+                      <span className="text-xs text-muted shrink-0">
+                        +{c.xp ?? 0} XP · +{c.coins ?? 0}c
+                      </span>
+                    </li>
+                  ))}
+              </ul>
+            )}
+          </div>
+        )}
+      </Card>
+    ),
     choresShop: (
+
       <div className="grid lg:grid-cols-2 gap-4">
         <Card>
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold text-fg flex items-center gap-2">
-              <RefreshCw className="w-4 h-4 text-accent" /> {isParent ? 'Chores to approve' : 'Chores'}
+              <Sword className="w-4 h-4 text-accent" /> {isParent ? 'Chores to approve' : 'Chores'}
             </h2>
             <button type="button" onClick={() => setView('chores')} className="text-xs text-accent">
               All chores →
@@ -469,7 +663,9 @@ export function Dashboard() {
                   <p className="font-medium text-sm text-fg">{c.title}</p>
                   <p className="text-xs text-muted">
                     {c.status === 'pending' ? 'Waiting for approval' : 'Open'}
-                    {(c.rewardMinutes || 0) > 0 ? ` · +${c.rewardMinutes} min` : ''}
+                    {(c.xp || c.coins)
+                      ? ` · +${c.xp ?? 0} XP · +${c.coins ?? 0}c`
+                      : ''}
                   </p>
                 </div>
               </div>
