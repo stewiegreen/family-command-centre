@@ -65,7 +65,7 @@ const KIND_LABEL: Record<RewardKind, string> = {
 };
 
 export function ChoresPage() {
-  const { data, update, currentUser, isParent, getMember } = useApp();
+  const { data, update, currentUser, isParent, getMember, syncStatus } = useApp();
   const me = currentUser;
   const myId = me?.id || data.settings.currentUserId;
   const chores = data.chores || [];
@@ -74,16 +74,20 @@ export function ChoresPage() {
   const catalog = ensureRewardCatalog(data.rewardCatalog);
   const redemptions = data.redemptions || [];
 
-  // Seed catalog into family data once if empty
+  // Seed catalog only after we have real family data (never while still connecting).
+  // Writing too early with empty local defaults can overwrite cloud XP/coins.
   useEffect(() => {
-    if (!data.rewardCatalog || data.rewardCatalog.length === 0) {
-      update((d) => {
-        if (d.rewardCatalog && d.rewardCatalog.length > 0) return d;
-        return { ...d, rewardCatalog: ensureRewardCatalog(d.rewardCatalog) };
-      });
-    }
+    if (syncStatus === 'connecting' || syncStatus === 'auth') return;
+    if (data.rewardCatalog && data.rewardCatalog.length > 0) return;
+    // No members yet → not a real family document; skip
+    if (!data.members?.length) return;
+    update((d) => {
+      if (d.rewardCatalog && d.rewardCatalog.length > 0) return d;
+      // Only touch rewardCatalog — spread full d so progress fields stay intact
+      return { ...d, rewardCatalog: ensureRewardCatalog(d.rewardCatalog) };
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [syncStatus, data.members?.length, data.rewardCatalog?.length]);
 
   const [tab, setTab] = useState<TabId>('quests');
   const [createOpen, setCreateOpen] = useState(false);
@@ -1461,11 +1465,15 @@ export function ChoresPage() {
                 <div className="flex flex-wrap gap-2 pt-2">
                   <Button
                     onClick={() => {
+                      const clean: Record<string, number> = {};
+                      for (const [k, v] of Object.entries(draft)) {
+                        if (typeof v === 'number' && !Number.isNaN(v)) clean[k] = v;
+                      }
                       update((d) => ({
                         ...d,
                         choreQuest: {
                           ...getChoreQuestConfig(d),
-                          ...draft,
+                          ...clean,
                         },
                       }));
                       setRatesDraft(null);

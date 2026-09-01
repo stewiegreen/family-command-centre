@@ -139,12 +139,17 @@ export function migrateChoreToQuest(c: {
   const status: Quest['status'] =
     c.status === 'pending' || c.status === 'done' || c.status === 'open' ? c.status : 'open';
 
+  // Once xp/coins are stored on a quest they are frozen — deploys / rate changes
+  // must not rewrite them. Only fill defaults when fields are missing.
+  const xp = typeof c.xp === 'number' && !Number.isNaN(c.xp) ? c.xp : defaults.xp;
+  const coins = typeof c.coins === 'number' && !Number.isNaN(c.coins) ? c.coins : defaults.coins;
+
   return {
     id: c.id,
     title: c.title,
     difficulty,
-    xp: c.xp ?? defaults.xp,
-    coins: c.coins ?? defaults.coins,
+    xp,
+    coins,
     // Screen time is shop-only; do not grant minutes on quest approval
     rewardMinutes: 0,
     status,
