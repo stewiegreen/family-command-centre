@@ -76,8 +76,8 @@ service cloud.firestore {
         && request.resource.data.parentUids.size() == 1;
 
       // Parent: full update.
-      // Kid/media: may only touch content fields — never members, settings,
-      // memberUids, parentUids, adminUid. Messages are a subcollection.
+      // Kid/media: may only touch content + ChoreQuest economy fields — never members,
+      // settings, memberUids, parentUids, adminUid. Messages are a subcollection.
       // Invite join: add self only (+1), narrow keys, invite verified via getAfter.
       allow update: if signedIn() && (
         (
@@ -88,7 +88,15 @@ service cloud.firestore {
           isMemberOnResource()
           && !isParentOnResource()
           && request.resource.data.diff(resource.data).affectedKeys()
-               .hasOnly(['events', 'todos', 'notes', 'chores', 'shopping', 'presence', 'appearance', 'screenTime', 'screenTimeLog', 'updatedAt'])
+               .hasOnly([
+                 'events', 'todos', 'notes', 'chores', 'shopping',
+                 'presence', 'appearance',
+                 'screenTime', 'screenTimeLog',
+                 // ChoreQuest economy (kids redeem / claim / complete)
+                 'memberProgress', 'coinBalances', 'coinLedger',
+                 'rewardCatalog', 'redemptions', 'weekState', 'choreQuest',
+                 'updatedAt'
+               ])
           && request.resource.data.memberUids == resource.data.memberUids
           && request.resource.data.adminUid == resource.data.adminUid
         )
