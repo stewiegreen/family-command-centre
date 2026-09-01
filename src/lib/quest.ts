@@ -1,4 +1,4 @@
-import type { Quest, QuestDifficulty, MemberProgress } from '../types';
+import type { Quest, QuestDifficulty, MemberProgress, RewardItem } from '../types';
 
 /** Default XP / coins / legacy screen minutes by difficulty. */
 export const DIFFICULTY_REWARDS: Record<
@@ -157,4 +157,79 @@ export function migrateChoreToQuest(c: {
     lastCompletedAt: c.lastCompletedAt,
     lastCompletedById: c.lastCompletedById,
   };
+}
+
+/** Default shop catalog — seeded once when empty. */
+export const DEFAULT_REWARD_CATALOG: RewardItem[] = [
+  {
+    id: 'weekend-pass',
+    label: 'Weekend Pass',
+    icon: '🎟️',
+    kind: 'custom',
+    coinCost: 80,
+    featured: true,
+    active: true,
+    sort: 0,
+  },
+  {
+    id: 'screen-15',
+    label: 'Screen time · 15 min',
+    icon: '📱',
+    kind: 'screen_time',
+    coinCost: 12,
+    screenMinutes: 15,
+    active: true,
+    sort: 10,
+  },
+  {
+    id: 'screen-30',
+    label: 'Screen time · 30 min',
+    icon: '📱',
+    kind: 'screen_time',
+    coinCost: 22,
+    screenMinutes: 30,
+    active: true,
+    sort: 11,
+  },
+  {
+    id: 'treat',
+    label: 'Dessert / treat',
+    icon: '🍪',
+    kind: 'treat',
+    coinCost: 15,
+    active: true,
+    sort: 20,
+  },
+  {
+    id: 'choice',
+    label: 'Choose movie or dinner',
+    icon: '🎬',
+    kind: 'choice',
+    coinCost: 20,
+    active: true,
+    sort: 21,
+  },
+  {
+    id: 'late-bed',
+    label: 'Stay up 30 min late',
+    icon: '🌙',
+    kind: 'late_bed',
+    coinCost: 25,
+    active: true,
+    sort: 22,
+  },
+  {
+    id: 'allowance-5',
+    label: 'Allowance $5',
+    icon: '💵',
+    kind: 'allowance',
+    coinCost: 50,
+    active: true,
+    sort: 30,
+  },
+];
+
+export function ensureRewardCatalog(existing?: RewardItem[] | null): RewardItem[] {
+  if (existing && existing.length > 0) return existing;
+  return DEFAULT_REWARD_CATALOG.map((r) => ({ ...r }));
 }

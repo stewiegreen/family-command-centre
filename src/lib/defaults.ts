@@ -1,5 +1,5 @@
 import type { FamilyData, Member, Settings } from '../types';
-import { migrateChoreToQuest, ensureProgress } from './quest';
+import { migrateChoreToQuest, ensureProgress, ensureRewardCatalog } from './quest';
 
 export const DEFAULT_MEMBERS: Member[] = [
   { id: '1', name: 'Alex', color: '#6366f1', emoji: '👨', initials: 'A', role: 'parent' },
@@ -131,7 +131,7 @@ export function migratePayload(p: Partial<FamilyData>): FamilyData {
     ),
     coinBalances: p.coinBalances || {},
     coinLedger: p.coinLedger || [],
-    rewardCatalog: p.rewardCatalog || [],
+    rewardCatalog: ensureRewardCatalog(p.rewardCatalog),
     redemptions: p.redemptions || [],
     weekState: p.weekState,
   };
