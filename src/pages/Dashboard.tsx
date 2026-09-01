@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Calendar,
+  Check,
   CheckSquare,
   StickyNote,
   MessageCircle,
   Coins,
   MonitorPlay,
+  Plus,
   ShoppingCart,
   Newspaper,
   ChevronUp,
@@ -17,15 +19,23 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Avatar } from '../components/ui/Avatar';
+import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
+import { Modal } from '../components/ui/Modal';
 import { ProfileLookCard } from '../components/ProfileLookEditor';
-import type { PresenceStatus, ViewId } from '../types';
+import type { CalendarEvent, PresenceStatus, Quest, ViewId } from '../types';
 import { FAMILY_LIST_ID, PRESENCE_OPTIONS } from '../types';
 import { upcomingExpanded } from '../lib/recurrence';
-import { ensureProgress, getChoreQuestConfig, progressTowardNextLevel } from '../lib/quest';
 import {
-  streakStatus,
+  ensureProgress,
+  getChoreQuestConfig,
+  isoWeekId,
+  progressTowardNextLevel,
+} from '../lib/quest';
+import {
   daysUntilWeekEnd,
+  recordWeekdayCompletion,
+  streakStatus,
 } from '../lib/weekCycle';
 import { cn } from '../lib/cn';
 
@@ -177,7 +187,208 @@ export function Dashboard() {
     }));
   };
 
+
   const myStatus = presence[myId]?.status;
+
+  /* ── Inline home actions ─────────────────────────────── */
+  const [shopDraft, setShopDraft] = useState('');
+  const [todoDraft, setTodoDraft] = useState('');
+  const [editEvent, setEditEvent] = useState<CalendarEvent | null>(null);
+  const [evTitle, setEvTitle] = useState('');
+  const [evLocation, setEvLocation] = useState('');
+  const [evNotes, setEvNotes] = useState('');
+
+  const openShopItems = useMemo(
+    () => (shopping || []).filter((s) => !s.bought),
+    [shopping],
+  );
+
+  /** To-dos for the active profile (+ shared family list). */
+  const myOpenTodos = useMemo(() => {
+    return todos.filter(
+      (td) =>
+        !td.completed &&
+        (td.memberId === myId || td.memberId === FAMILY_LIST_ID),
+    );
+  }, [todos, myId]);
+
+  const addShopItem = () => {
+    const text = shopDraft.trim();
+    if (!text) return;
+    update((d) => ({
+      ...d,
+      shopping: [
+        {
+          id: crypto.randomUUID(),
+          text,
+          claimedById: null,
+          bought: false,
+          createdById: myId,
+          createdAt: new Date().toISOString(),
+        },
+        ...(d.shopping || []),
+      ],
+    }));
+    setShopDraft('');
+  };
+
+  const toggleBought = (id: string) => {
+    update((d) => ({
+      ...d,
+      shopping: (d.shopping || []).map((s) =>
+        s.id === id ? { ...s, bought: !s.bought } : s,
+      ),
+    }));
+  };
+
+  const toggleTodo = (id: string) => {
+    update((d) => ({
+      ...d,
+      todos: d.todos.map((td) =>
+        td.id === id ? { ...td, completed: !td.completed } : td,
+      ),
+    }));
+  };
+
+  const addMyTodo = () => {
+    const text = todoDraft.trim();
+    if (!text) return;
+    update((d) => ({
+      ...d,
+      todos: [
+        {
+          id: crypto.randomUUID(),
+          text,
+          memberId: myId,
+          createdById: myId,
+          completed: false,
+          priority: 'medium' as const,
+          createdAt: new Date().toISOString(),
+        },
+        ...d.todos,
+      ],
+    }));
+    setTodoDraft('');
+  };
+
+  const openEventEdit = (ev: CalendarEvent & { masterId?: string; instanceStart?: string }) => {
+    // Prefer master event from data so edits persist on the series
+    const master =
+      data.events.find((e) => e.id === (ev.masterId || ev.id)) ||
+      ev;
+    setEditEvent(master);
+    setEvTitle(master.title);
+    setEvLocation(master.location || '');
+    setEvNotes(master.notes || '');
+  };
+
+  const saveEventEdit = () => {
+    if (!editEvent || !evTitle.trim()) return;
+    update((d) => ({
+      ...d,
+      events: d.events.map((e) =>
+        e.id === editEvent.id
+          ? {
+              ...e,
+              title: evTitle.trim(),
+              location: evLocation.trim() || undefined,
+              notes: evNotes.trim() || undefined,
+            }
+          : e,
+      ),
+    }));
+    setEditEvent(null);
+  };
+
+  const submitQuestHome = (quest: Quest) => {
+    if (!currentUser || currentUser.role === 'media') return;
+    update((d) => ({
+      ...d,
+      chores: (d.chores || []).map((c) =>
+        c.id === quest.id
+          ? {
+              ...c,
+              status: 'pending' as const,
+              submittedById: currentUser.id,
+              submittedAt: new Date().toISOString(),
+            }
+          : c,
+      ),
+    }));
+  };
+
+  const approveQuestHome = (quest: Quest) => {
+    if (!isParent || !currentUser) return;
+    const forId = quest.submittedById || quest.approvedForId;
+    if (!forId) return;
+    const xpGain = quest.xp ?? 0;
+    const coinGain = quest.coins ?? 0;
+    const at = new Date().toISOString();
+    const weekId = isoWeekId();
+    update((d) => {
+      const prevProg = ensureProgress(d.memberProgress?.[forId]);
+      const newXp = prevProg.xp + xpGain;
+      const newLevel = progressTowardNextLevel(newXp).level;
+      const nextProgress = {
+        ...(d.memberProgress || {}),
+        [forId]: { xp: newXp, level: newLevel },
+      };
+      const prevCoins = d.coinBalances?.[forId] ?? 0;
+      const nextBalances = {
+        ...(d.coinBalances || {}),
+        [forId]: prevCoins + coinGain,
+      };
+      const ledgerEntry = {
+        id: `quest:${quest.id}:${forId}:${at}`,
+        memberId: forId,
+        delta: coinGain,
+        reason: 'quest' as const,
+        label: quest.title,
+        refId: quest.id,
+        byId: currentUser.id,
+        at,
+        weekId,
+      };
+      let result = {
+        ...d,
+        chores: (d.chores || []).map((c) =>
+          c.id === quest.id
+            ? {
+                ...c,
+                status: 'done' as const,
+                approvedForId: forId,
+                approvedById: currentUser.id,
+                approvedAt: at,
+                rewardMinutes: 0,
+              }
+            : c,
+        ),
+        memberProgress: nextProgress,
+        coinBalances: nextBalances,
+        coinLedger: [ledgerEntry, ...(d.coinLedger || [])].slice(0, 200),
+      };
+      result = recordWeekdayCompletion(result, forId, new Date(at));
+      return result;
+    });
+  };
+
+  const rejectQuestHome = (quest: Quest) => {
+    if (!isParent) return;
+    update((d) => ({
+      ...d,
+      chores: (d.chores || []).map((c) =>
+        c.id === quest.id
+          ? {
+              ...c,
+              status: 'open' as const,
+              submittedById: undefined,
+              submittedAt: undefined,
+            }
+          : c,
+      ),
+    }));
+  };
+
 
   const cards: { icon: typeof Calendar; label: string; value: number; color: string; view: ViewId }[] = [
     { icon: Calendar, label: 'Upcoming', value: upcoming.length, color: 'indigo', view: 'calendar' },
@@ -387,85 +598,104 @@ export function Dashboard() {
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold text-fg">Upcoming Events</h2>
           <button type="button" onClick={() => setView('calendar')} className="text-xs text-accent">
-            See all →
+            Calendar →
           </button>
         </div>
         {upcoming.length === 0 ? (
           <p className="text-sm text-muted py-6 text-center">No upcoming events. Enjoy the calm! ☀️</p>
         ) : (
-          upcoming.map((ev) => {
-            const m = getMember(ev.memberId);
-            return (
-              <div
-                key={ev.id}
-                className="flex items-start gap-3 p-3 rounded-xl border border-border mb-2"
-                style={{
-                  backgroundColor: (m?.color || '#6366f1') + '18',
-                  borderLeftWidth: 4,
-                  borderLeftColor: m?.color || '#6366f1',
-                }}
-              >
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-sm truncate text-fg">
-                    {m?.emoji ? `${m.emoji} ` : ''}
-                    {ev.title}
-                    {ev.recurrence && ev.recurrence !== 'none' ? (
-                      <span className="text-muted font-normal"> · repeats</span>
-                    ) : null}
-                  </p>
-                  <p className="text-xs text-muted mt-0.5">
-                    {new Date(ev.instanceStart).toLocaleDateString(undefined, {
-                      weekday: 'short',
-                      month: 'short',
-                      day: 'numeric',
-                    })}
-                    {!ev.allDay &&
-                      ` · ${new Date(ev.instanceStart).toLocaleTimeString([], {
-                        hour: 'numeric',
-                        minute: '2-digit',
-                      })}`}
-                  </p>
-                </div>
-                {m && <Avatar {...m} size="sm" />}
-              </div>
-            );
-          })
+          <div className="max-h-72 overflow-y-auto space-y-2 pr-0.5">
+            {upcoming.map((ev) => {
+              const m = getMember(ev.memberId);
+              const when = new Date((ev as { instanceStart?: string }).instanceStart || ev.start);
+              return (
+                <button
+                  key={`${ev.id}-${ev.instanceStart || ev.start}`}
+                  type="button"
+                  onClick={() => openEventEdit(ev)}
+                  className="w-full text-left flex items-start gap-3 p-3 rounded-xl border border-border hover:border-accent/40 hover:bg-nav-hover/40 transition-colors"
+                  style={{
+                    backgroundColor: (m?.color || '#6366f1') + '14',
+                    borderLeftWidth: 4,
+                    borderLeftColor: m?.color || '#6366f1',
+                  }}
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium text-sm text-fg truncate">{ev.title}</p>
+                    <p className="text-xs text-muted mt-0.5">
+                      {when.toLocaleString(undefined, {
+                        weekday: 'short',
+                        month: 'short',
+                        day: 'numeric',
+                        hour: ev.allDay ? undefined : 'numeric',
+                        minute: ev.allDay ? undefined : '2-digit',
+                      })}
+                      {m ? ` · ${m.name}` : ''}
+                      {ev.location ? ` · ${ev.location}` : ''}
+                    </p>
+                  </div>
+                  <span className="text-[11px] text-accent shrink-0 mt-0.5">Edit</span>
+                </button>
+              );
+            })}
+          </div>
         )}
       </Card>
     ),
+
     todos: (
       <Card>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="font-semibold text-fg">To-Dos by Person</h2>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-semibold text-fg flex items-center gap-2">
+            <CheckSquare className="w-4 h-4 text-accent" />
+            My to-dos
+          </h2>
           <button type="button" onClick={() => setView('todos')} className="text-xs text-accent">
-            Open lists →
+            All lists →
           </button>
         </div>
-        {progressMembers.map((m) => {
-          const look = getMember(m.id) || m;
-          const open = todos.filter((t) => t.memberId === m.id && !t.completed).length;
-          const total = todos.filter((t) => t.memberId === m.id).length;
-          const pct = total ? Math.round(((total - open) / total) * 100) : 0;
-          return (
-            <div key={m.id} className="flex items-center gap-3 mb-3">
-              <Avatar {...look} size="sm" />
-              <div className="flex-1">
-                <div className="flex justify-between text-sm mb-1">
-                  <span className="text-fg-secondary">{m.name}</span>
-                  <span className="text-muted text-xs">{open} open</span>
-                </div>
-                <div className="h-1.5 bg-surface-3 rounded-full overflow-hidden">
-                  <div
-                    className="h-full rounded-full transition-all"
-                    style={{ width: pct + '%', backgroundColor: look.color }}
-                  />
-                </div>
-              </div>
-            </div>
-          );
-        })}
+        <p className="text-xs text-muted mb-3">
+          Your tasks and the family list — tap to complete.
+        </p>
+        {myOpenTodos.length === 0 ? (
+          <p className="text-sm text-muted py-4 text-center">Nothing on your list. Nice work.</p>
+        ) : (
+          <div className="max-h-64 overflow-y-auto space-y-1.5 mb-3">
+            {myOpenTodos.slice(0, 12).map((td) => (
+              <button
+                key={td.id}
+                type="button"
+                onClick={() => toggleTodo(td.id)}
+                className="w-full flex items-center gap-3 p-2.5 rounded-xl border border-border hover:bg-nav-hover/50 text-left transition-colors"
+              >
+                <span className="w-5 h-5 rounded-md border border-border-strong flex items-center justify-center shrink-0">
+                  {/* open circle */}
+                </span>
+                <span className="text-sm text-fg flex-1 min-w-0 truncate">{td.text}</span>
+                {td.memberId === FAMILY_LIST_ID && (
+                  <span className="text-[10px] uppercase tracking-wide text-muted shrink-0">Family</span>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="flex gap-2">
+          <input
+            className="flex-1 rounded-xl border border-border bg-inset px-3 py-2 text-sm text-fg outline-none focus:border-accent"
+            placeholder="Add a to-do for me…"
+            value={todoDraft}
+            onChange={(e) => setTodoDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') addMyTodo();
+            }}
+          />
+          <Button size="sm" onClick={addMyTodo} disabled={!todoDraft.trim()}>
+            <Plus className="w-4 h-4" />
+          </Button>
+        </div>
       </Card>
     ),
+
     chorequest: (
       <Card className="!p-4 lg:!p-5">
         <div className="flex items-center justify-between gap-3 mb-4">
@@ -637,53 +867,116 @@ export function Dashboard() {
       </Card>
     ),
     choresShop: (
-
       <div className="grid lg:grid-cols-2 gap-4">
         <Card>
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold text-fg flex items-center gap-2">
-              <Sword className="w-4 h-4 text-accent" /> {isParent ? 'Chores to approve' : 'Chores'}
+              <Sword className="w-4 h-4 text-accent" />
+              {isParent ? 'Chores to approve' : 'My quests'}
             </h2>
             <button type="button" onClick={() => setView('chores')} className="text-xs text-accent">
-              All chores →
+              Board →
             </button>
           </div>
           {myChores.length === 0 ? (
             <p className="text-sm text-muted py-4 text-center">
-              {isParent ? 'No chores waiting for approval.' : 'No open chores — check back soon.'}
+              {isParent ? 'No quests waiting for approval.' : 'No open quests — check back soon.'}
             </p>
           ) : (
-            myChores.map((c) => (
-              <div
-                key={c.id}
-                className="flex items-center gap-3 p-3 rounded-xl bg-accent/10 border border-accent/20 mb-2"
-              >
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-sm text-fg">{c.title}</p>
-                  <p className="text-xs text-muted">
-                    {c.status === 'pending' ? 'Waiting for approval' : 'Open'}
-                    {(c.xp || c.coins)
-                      ? ` · +${c.xp ?? 0} XP · +${c.coins ?? 0}c`
-                      : ''}
-                  </p>
-                </div>
-              </div>
-            ))
+            <div className="max-h-72 overflow-y-auto space-y-2">
+              {myChores.map((c) => {
+                const submitter = c.submittedById ? getMember(c.submittedById) : undefined;
+                return (
+                  <div
+                    key={c.id}
+                    className="p-3 rounded-xl border border-border bg-inset/50 space-y-2"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="font-medium text-sm text-fg">{c.title}</p>
+                        <p className="text-xs text-muted mt-0.5">
+                          {c.status === 'pending'
+                            ? submitter
+                              ? `${submitter.name} finished this`
+                              : 'Pending approval'
+                            : 'Open'}
+                          {(c.xp || c.coins) ? ` · +${c.xp ?? 0} XP · +${c.coins ?? 0}c` : ''}
+                        </p>
+                      </div>
+                      {submitter && c.status === 'pending' && <Avatar {...submitter} size="sm" />}
+                    </div>
+                    {isParent && c.status === 'pending' && (
+                      <div className="flex gap-2">
+                        <Button size="sm" className="flex-1" onClick={() => approveQuestHome(c)}>
+                          <Check className="w-3.5 h-3.5 mr-1" />
+                          Approve
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => rejectQuestHome(c)}>
+                          <X className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    )}
+                    {!isParent && c.status === 'open' && (
+                      <Button size="sm" variant="secondary" className="w-full" onClick={() => submitQuestHome(c)}>
+                        I finished this
+                      </Button>
+                    )}
+                    {!isParent && c.status === 'pending' && c.submittedById === myId && (
+                      <p className="text-xs text-amber-600">Waiting for a parent…</p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           )}
         </Card>
-        <Card onClick={() => setView('shopping')}>
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-sky-500/15 flex items-center justify-center text-sky-500">
-              <ShoppingCart className="w-5 h-5" />
+
+        <Card>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-semibold text-fg flex items-center gap-2">
+              <ShoppingCart className="w-4 h-4 text-sky-500" />
+              Shopping
+            </h2>
+            <button type="button" onClick={() => setView('shopping')} className="text-xs text-accent">
+              Full list →
+            </button>
+          </div>
+          {openShopItems.length === 0 ? (
+            <p className="text-sm text-muted py-4 text-center">List is empty.</p>
+          ) : (
+            <div className="max-h-56 overflow-y-auto space-y-1.5 mb-3">
+              {openShopItems.slice(0, 20).map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => toggleBought(s.id)}
+                  className="w-full flex items-center gap-3 p-2.5 rounded-xl border border-border hover:bg-nav-hover/50 text-left transition-colors"
+                >
+                  <span className="w-5 h-5 rounded-md border border-border-strong shrink-0" />
+                  <span className="text-sm text-fg flex-1 min-w-0 truncate">{s.text}</span>
+                  {s.store ? <span className="text-[11px] text-muted shrink-0">{s.store}</span> : null}
+                </button>
+              ))}
             </div>
-            <div>
-              <p className="text-2xl font-bold text-fg">{shopOpen}</p>
-              <p className="text-xs text-muted">Shopping items needed</p>
-            </div>
+          )}
+          <div className="flex gap-2">
+            <input
+              className="flex-1 rounded-xl border border-border bg-inset px-3 py-2 text-sm text-fg outline-none focus:border-accent"
+              placeholder="Add to shopping list…"
+              value={shopDraft}
+              onChange={(e) => setShopDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') addShopItem();
+              }}
+            />
+            <Button size="sm" onClick={addShopItem} disabled={!shopDraft.trim()}>
+              <Plus className="w-4 h-4" />
+            </Button>
           </div>
         </Card>
       </div>
     ),
+
     look: <ProfileLookCard />,
   };
 
@@ -751,6 +1044,60 @@ export function Dashboard() {
           );
         });
       })()}
+      {/* Quick event edit from home */}
+      <Modal
+        open={!!editEvent}
+        onClose={() => setEditEvent(null)}
+        title="Edit event"
+      >
+        {editEvent && (
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs text-muted mb-1 block">Title</label>
+              <input
+                className="w-full rounded-xl border border-border bg-inset px-3 py-2 text-sm text-fg outline-none focus:border-accent"
+                value={evTitle}
+                onChange={(e) => setEvTitle(e.target.value)}
+                autoFocus
+              />
+            </div>
+            <div>
+              <label className="text-xs text-muted mb-1 block">Location</label>
+              <input
+                className="w-full rounded-xl border border-border bg-inset px-3 py-2 text-sm text-fg outline-none focus:border-accent"
+                value={evLocation}
+                onChange={(e) => setEvLocation(e.target.value)}
+                placeholder="Optional"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-muted mb-1 block">Notes</label>
+              <textarea
+                className="w-full rounded-xl border border-border bg-inset px-3 py-2 text-sm text-fg outline-none focus:border-accent min-h-[80px]"
+                value={evNotes}
+                onChange={(e) => setEvNotes(e.target.value)}
+                placeholder="Optional"
+              />
+            </div>
+            <p className="text-xs text-muted">
+              For time, recurrence, or who&apos;s assigned, use{' '}
+              <button type="button" className="text-accent" onClick={() => { setEditEvent(null); setView('calendar'); }}>
+                Calendar
+              </button>
+              .
+            </p>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="ghost" onClick={() => setEditEvent(null)}>
+                Cancel
+              </Button>
+              <Button onClick={saveEventEdit} disabled={!evTitle.trim()}>
+                Save
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
     </div>
   );
 }
