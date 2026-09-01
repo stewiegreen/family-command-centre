@@ -299,21 +299,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // CRITICAL: never push state to Firestore until we have applied at least one
     // live family snapshot. Writing local bootstrap / DEFAULT_DATA / stale cache
     // before hydrate is what wiped progress and settings on deploys.
-    if (cfg && fid && getDb() && auth?.currentUser && cloudHydratedRef.current) {
-      writingRef.current = true;
-      try {
-        await cloudWrite(fid, next);
-        setSyncStatus('live');
-        setCloudError(null);
-      } catch (e) {
-        console.error(e);
-        setCloudError(e instanceof Error ? e.message : 'Write failed');
-        setSyncStatus('error');
-      } finally {
-        setTimeout(() => {
-          writingRef.current = false;
-        }, 400);
-      }
+    const canCloud =
+      !!cfg && !!fid && !!getDb() && !!auth?.currentUser && cloudHydratedRef.current;
+    if (!canCloud) {
+      console.info('[persist] skip cloud write', {
+        hasCfg: !!cfg,
+        fid: fid || null,
+        hasDb: !!getDb(),
+        hasUser: !!auth?.currentUser,
+        hydrated: cloudHydratedRef.current,
+      });
+      return;
+    }
+    writingRef.current = true;
+    try {
+      await cloudWrite(fid!, next);
+      setSyncStatus('live');
+      setCloudError(null);
+    } catch (e) {
+      console.error('[persist] write failed', e);
+      setCloudError(e instanceof Error ? e.message : 'Write failed');
+      setSyncStatus('error');
+    } finally {
+      setTimeout(() => {
+        writingRef.current = false;
+      }, 400);
     }
   }, []);
 

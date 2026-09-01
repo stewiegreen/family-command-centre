@@ -293,41 +293,37 @@ export async function cloudWrite(familyId: string, data: FamilyData): Promise<vo
     .map((m) => m.uid!) as string[];
   const { currentUserId: _, ...settingsRest } = data.settings;
 
-  // Who is writing? Parents may update identity/settings; members may only
-  // touch content + ChoreQuest fields (matches firestore.rules hasOnly list).
   const authUid = getFirebaseAuth()?.currentUser?.uid || '';
   const writerIsParent =
     !!authUid &&
     (parentUids.includes(authUid) ||
       (data as { adminUid?: string }).adminUid === authUid ||
-      // Fall back: member record marked parent with this uid
       (data.members || []).some((m) => m.uid === authUid && m.role === 'parent'));
 
-  // Content fields — safe for every member (must match rules allowlist).
+  // ONLY fields on the member rules allowlist (+ updatedAt).
+  // Never send members/settings/memberUids/parentUids on the content path —
+  // those keys outside hasOnly cause the whole write to be denied.
   const content: Record<string, unknown> = {
-    events: data.events,
-    todos: data.todos,
+    events: data.events || [],
+    todos: data.todos || [],
     chores: data.chores || [],
     shopping: data.shopping || [],
     presence: data.presence || {},
     appearance: data.appearance || {},
     screenTime: data.screenTime || {},
     screenTimeLog: (data.screenTimeLog || []).slice(0, 80),
-    notes: data.notes,
-    // ChoreQuest economy
+    notes: data.notes || [],
     memberProgress: data.memberProgress || {},
     coinBalances: data.coinBalances || {},
     coinLedger: (data.coinLedger || []).slice(0, 200),
     rewardCatalog: data.rewardCatalog || [],
     redemptions: (data.redemptions || []).slice(0, 100),
-    weekState: data.weekState,
-    choreQuest: data.choreQuest,
+    weekState: data.weekState ?? null,
+    choreQuest: data.choreQuest ?? null,
     updatedAt: new Date().toISOString(),
   };
 
-  // Parents also write identity + settings. Including these on a member write
-  // causes permission-denied when any of them differ even slightly from the
-  // stored doc (they are outside the rules hasOnly list).
+  // Parents may also update identity + settings (full parent rule path).
   const payload = stripUndefined(
     writerIsParent
       ? {
@@ -340,8 +336,26 @@ export async function cloudWrite(familyId: string, data: FamilyData): Promise<vo
       : content,
   );
 
-  await fsMod.setDoc(familyRef(familyId), payload, { merge: true });
+  // Temporary diagnostics — remove once confirmed working
+  console.info('[cloudWrite]', {
+    familyId,
+    writerIsParent,
+    authUid: authUid ? authUid.slice(0, 8) + '…' : '(none)',
+    keys: Object.keys(payload),
+    hasChoreQuest: payload.choreQuest != null,
+    hasProgress: payload.memberProgress != null,
+    hasCoins: payload.coinBalances != null,
+  });
+
+  try {
+    await fsMod.setDoc(familyRef(familyId), payload, { merge: true });
+    console.info('[cloudWrite] ok');
+  } catch (err) {
+    console.error('[cloudWrite] FAILED', err);
+    throw err;
+  }
 }
+
 
 
 function messagesCol(familyId: string) {
