@@ -1,13 +1,13 @@
 import type { Quest, QuestDifficulty, MemberProgress, RewardItem } from '../types';
 
-/** Default XP / coins / legacy screen minutes by difficulty. */
+/** Default XP / coins by difficulty. rewardMinutes kept at 0 — screen time comes from the shop. */
 export const DIFFICULTY_REWARDS: Record<
   QuestDifficulty,
   { xp: number; coins: number; rewardMinutes: number; label: string; emoji: string }
 > = {
-  easy: { xp: 10, coins: 5, rewardMinutes: 5, label: 'Easy', emoji: '🌱' },
-  medium: { xp: 25, coins: 12, rewardMinutes: 15, label: 'Medium', emoji: '⚔️' },
-  epic: { xp: 50, coins: 25, rewardMinutes: 30, label: 'Epic', emoji: '🐉' },
+  easy: { xp: 10, coins: 5, rewardMinutes: 0, label: 'Easy', emoji: '🌱' },
+  medium: { xp: 25, coins: 12, rewardMinutes: 0, label: 'Medium', emoji: '⚔️' },
+  epic: { xp: 50, coins: 25, rewardMinutes: 0, label: 'Epic', emoji: '🐉' },
 };
 
 export const DIFFICULTY_ORDER: QuestDifficulty[] = ['easy', 'medium', 'epic'];
@@ -142,7 +142,8 @@ export function migrateChoreToQuest(c: {
     difficulty,
     xp: c.xp ?? defaults.xp,
     coins: c.coins ?? defaults.coins,
-    rewardMinutes: minutes || defaults.rewardMinutes,
+    // Screen time is shop-only; do not grant minutes on quest approval
+    rewardMinutes: 0,
     status,
     submittedById: c.submittedById,
     submittedAt: c.submittedAt,

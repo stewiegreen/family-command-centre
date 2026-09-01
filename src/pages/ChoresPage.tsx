@@ -179,7 +179,7 @@ export function ChoresPage() {
                 difficulty,
                 xp: meta.xp,
                 coins: meta.coins,
-                rewardMinutes: meta.rewardMinutes,
+                rewardMinutes: 0,
               }
             : c,
         ),
@@ -230,7 +230,6 @@ export function ChoresPage() {
 
     const xpGain = quest.xp ?? DIFFICULTY_REWARDS[quest.difficulty || 'medium'].xp;
     const coinGain = quest.coins ?? DIFFICULTY_REWARDS[quest.difficulty || 'medium'].coins;
-    const minutes = quest.rewardMinutes ?? 0;
     const at = new Date().toISOString();
     const weekId = isoWeekId();
 
@@ -265,26 +264,6 @@ export function ChoresPage() {
 
       const nextLedger = [ledgerEntry, ...(d.coinLedger || [])].slice(0, 200);
 
-      let nextScreen = d.screenTime || {};
-      let nextLog = d.screenTimeLog || [];
-      if (minutes > 0) {
-        nextScreen = {
-          ...nextScreen,
-          [forId]: (nextScreen[forId] || 0) + minutes,
-        };
-        nextLog = [
-          {
-            id: newId(),
-            memberId: forId,
-            delta: minutes,
-            reason: `Quest: ${quest.title}`,
-            byId: me.id,
-            at,
-          },
-          ...nextLog,
-        ].slice(0, 100);
-      }
-
       if (leveledUp) {
         const kid = d.members.find((m) => m.id === forId);
         queueMicrotask(() => setLevelUp({ name: kid?.name || 'Hero', level: newLevel }));
@@ -300,14 +279,13 @@ export function ChoresPage() {
                 approvedForId: forId,
                 approvedById: me.id,
                 approvedAt: at,
+                rewardMinutes: 0,
               }
             : c,
         ),
         memberProgress: nextProgress,
         coinBalances: nextBalances,
         coinLedger: nextLedger,
-        screenTime: nextScreen,
-        screenTimeLog: nextLog,
       };
     });
   };
@@ -589,9 +567,6 @@ export function ChoresPage() {
                 <Coins className="w-3 h-3 text-amber-500" />
                 +{quest.coins ?? meta.coins}
               </span>
-              {(quest.rewardMinutes || 0) > 0 && (
-                <span className="text-xs text-muted">+{quest.rewardMinutes}m screen</span>
-              )}
             </div>
           </div>
           <div className="flex items-center gap-1 shrink-0">
