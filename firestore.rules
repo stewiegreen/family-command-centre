@@ -15,7 +15,6 @@ service cloud.firestore {
         && request.auth.uid in familyDoc(familyId).memberUids;
     }
 
-    // Prefer parentUids; fall back to adminUid for families created before parentUids existed.
     function isParentOf(familyId) {
       let f = familyDoc(familyId);
       return signedIn() && (
@@ -35,6 +34,12 @@ service cloud.firestore {
       return signedIn() && request.auth.uid in resource.data.memberUids;
     }
 
+    // Keys members must never change (identity / admin / settings)
+    function memberTouchedProtectedKeys() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+        .hasAny(['members', 'memberUids', 'parentUids', 'adminUid', 'settings', 'createdAt']);
+    }
+
     match /users/{userId} {
       allow read, write: if signedIn() && request.auth.uid == userId;
     }
@@ -45,14 +50,12 @@ service cloud.firestore {
         && request.query.limit <= 50
         && isMember(resource.data.familyId);
 
-      // Only parents can create invites.
       allow create: if signedIn()
         && request.resource.data.keys().hasAll(['familyId', 'role', 'createdBy', 'used', 'createdAt'])
         && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.used == false
         && isParentOf(request.resource.data.familyId);
 
-      // Redeem: mark used by self once; cannot change familyId/role.
       allow update: if signedIn()
         && resource.data.used == false
         && request.resource.data.used == true
@@ -60,14 +63,12 @@ service cloud.firestore {
         && request.resource.data.familyId == resource.data.familyId
         && request.resource.data.role == resource.data.role;
 
-      // Only parents can revoke invites.
       allow delete: if signedIn() && isParentOf(resource.data.familyId);
     }
 
     match /families/{familyId} {
       allow read: if isMemberOnResource();
 
-      // Bootstrap create still allowed for recovery tooling; app UI disables it.
       allow create: if signedIn()
         && request.auth.uid in request.resource.data.memberUids
         && request.resource.data.memberUids.size() == 1
@@ -76,9 +77,8 @@ service cloud.firestore {
         && request.resource.data.parentUids.size() == 1;
 
       // Parent: full update.
-      // Kid/media: may only touch content + ChoreQuest economy fields — never members,
-      // settings, memberUids, parentUids, adminUid. Messages are a subcollection.
-      // Invite join: add self only (+1), narrow keys, invite verified via getAfter.
+      // Member: any content fields OK, but cannot touch identity/admin/settings.
+      // Invite join: add self only.
       allow update: if signedIn() && (
         (
           isParentOnResource()
@@ -87,18 +87,9 @@ service cloud.firestore {
         || (
           isMemberOnResource()
           && !isParentOnResource()
-          && request.resource.data.diff(resource.data).affectedKeys()
-               .hasOnly([
-                 'events', 'todos', 'notes', 'chores', 'shopping',
-                 'presence', 'appearance',
-                 'screenTime', 'screenTimeLog',
-                 // ChoreQuest economy (kids redeem / claim / complete)
-                 'memberProgress', 'coinBalances', 'coinLedger',
-                 'rewardCatalog', 'redemptions', 'weekState', 'choreQuest',
-                 'updatedAt'
-               ])
           && request.resource.data.memberUids == resource.data.memberUids
           && request.resource.data.adminUid == resource.data.adminUid
+          && !memberTouchedProtectedKeys()
         )
         || (
           !(request.auth.uid in resource.data.memberUids)
@@ -114,7 +105,6 @@ service cloud.firestore {
 
       allow delete: if signedIn() && resource.data.adminUid == request.auth.uid;
 
-      // Private messages: only the two participants can read/write each doc.
       match /messages/{messageId} {
         allow read: if signedIn()
           && isMember(familyId)
@@ -130,7 +120,6 @@ service cloud.firestore {
           && request.resource.data.text.size() > 0
           && request.resource.data.text.size() <= 2000;
 
-        // Recipient may mark read; sender cannot rewrite history.
         allow update: if signedIn()
           && isMember(familyId)
           && request.auth.uid == resource.data.toUid

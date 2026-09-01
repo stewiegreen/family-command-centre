@@ -292,11 +292,19 @@ export async function cloudWrite(familyId: string, data: FamilyData): Promise<vo
     .filter((m) => m.role === 'parent' && m.uid)
     .map((m) => m.uid!) as string[];
   const { currentUserId: _, ...settingsRest } = data.settings;
-  // Messages live in families/{id}/messages — do not write the legacy array.
-  // CRITICAL: include all ChoreQuest / economy fields or they never reach Firestore
-  // and a refresh loads empty progress from the cloud snapshot.
-  const payload = stripUndefined({
-    members: data.members,
+
+  // Who is writing? Parents may update identity/settings; members may only
+  // touch content + ChoreQuest fields (matches firestore.rules hasOnly list).
+  const authUid = getFirebaseAuth()?.currentUser?.uid || '';
+  const writerIsParent =
+    !!authUid &&
+    (parentUids.includes(authUid) ||
+      (data as { adminUid?: string }).adminUid === authUid ||
+      // Fall back: member record marked parent with this uid
+      (data.members || []).some((m) => m.uid === authUid && m.role === 'parent'));
+
+  // Content fields — safe for every member (must match rules allowlist).
+  const content: Record<string, unknown> = {
     events: data.events,
     todos: data.todos,
     chores: data.chores || [],
@@ -306,8 +314,7 @@ export async function cloudWrite(familyId: string, data: FamilyData): Promise<vo
     screenTime: data.screenTime || {},
     screenTimeLog: (data.screenTimeLog || []).slice(0, 80),
     notes: data.notes,
-    settings: settingsRest,
-    // ChoreQuest economy — must be persisted
+    // ChoreQuest economy
     memberProgress: data.memberProgress || {},
     coinBalances: data.coinBalances || {},
     coinLedger: (data.coinLedger || []).slice(0, 200),
@@ -316,11 +323,26 @@ export async function cloudWrite(familyId: string, data: FamilyData): Promise<vo
     weekState: data.weekState,
     choreQuest: data.choreQuest,
     updatedAt: new Date().toISOString(),
-    memberUids,
-    parentUids,
-  });
+  };
+
+  // Parents also write identity + settings. Including these on a member write
+  // causes permission-denied when any of them differ even slightly from the
+  // stored doc (they are outside the rules hasOnly list).
+  const payload = stripUndefined(
+    writerIsParent
+      ? {
+          ...content,
+          members: data.members,
+          settings: settingsRest,
+          memberUids,
+          parentUids,
+        }
+      : content,
+  );
+
   await fsMod.setDoc(familyRef(familyId), payload, { merge: true });
 }
+
 
 function messagesCol(familyId: string) {
   return fsMod!.collection(db!, 'families', familyId, 'messages');
