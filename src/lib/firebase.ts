@@ -293,6 +293,8 @@ export async function cloudWrite(familyId: string, data: FamilyData): Promise<vo
     .map((m) => m.uid!) as string[];
   const { currentUserId: _, ...settingsRest } = data.settings;
   // Messages live in families/{id}/messages — do not write the legacy array.
+  // CRITICAL: include all ChoreQuest / economy fields or they never reach Firestore
+  // and a refresh loads empty progress from the cloud snapshot.
   const payload = stripUndefined({
     members: data.members,
     events: data.events,
@@ -305,6 +307,14 @@ export async function cloudWrite(familyId: string, data: FamilyData): Promise<vo
     screenTimeLog: (data.screenTimeLog || []).slice(0, 80),
     notes: data.notes,
     settings: settingsRest,
+    // ChoreQuest economy — must be persisted
+    memberProgress: data.memberProgress || {},
+    coinBalances: data.coinBalances || {},
+    coinLedger: (data.coinLedger || []).slice(0, 200),
+    rewardCatalog: data.rewardCatalog || [],
+    redemptions: (data.redemptions || []).slice(0, 100),
+    weekState: data.weekState,
+    choreQuest: data.choreQuest,
     updatedAt: new Date().toISOString(),
     memberUids,
     parentUids,
