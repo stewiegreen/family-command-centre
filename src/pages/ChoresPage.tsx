@@ -32,6 +32,20 @@ import {
   isoWeekId,
   progressTowardNextLevel,
 } from '../lib/quest';
+import {
+  STREAK_COINS,
+  STREAK_XP,
+  INSPECTION_COINS,
+  INSPECTION_XP,
+  INTEREST_RATE,
+  claimStreakChest,
+  daysUntilWeekEnd,
+  ensureWeekRollover,
+  markHouseInspection,
+  projectedInterest,
+  recordWeekdayCompletion,
+  streakStatus,
+} from '../lib/weekCycle';
 import { cn } from '../lib/cn';
 
 function newId() {
@@ -77,6 +91,15 @@ export function ChoresPage() {
   const [difficulty, setDifficulty] = useState<QuestDifficulty>('medium');
   const [levelUp, setLevelUp] = useState<{ name: string; level: number } | null>(null);
   const [shopEditOpen, setShopEditOpen] = useState(false);
+  const [chestMsg, setChestMsg] = useState<string | null>(null);
+
+  // Idempotent weekly rollover (safe if app wasn't opened all weekend)
+  useEffect(() => {
+    if (!me) return;
+    update((d) => ensureWeekRollover(d, me.id));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [me?.id]);
+
   const [shopForm, setShopForm] = useState<{
     id?: string;
     label: string;
@@ -114,6 +137,11 @@ export function ChoresPage() {
   const myProgress = ensureProgress(progressMap[myId]);
   const myBar = progressTowardNextLevel(myProgress.xp);
   const myCoins = coinBalances[myId] ?? 0;
+  const weekState = data.weekState;
+  const myStreak = streakStatus(weekState, myId);
+  const interestPreview = projectedInterest(myCoins);
+  const daysLeft = daysUntilWeekEnd();
+  const inspectionPassed = !!weekState?.houseInspectionPassed;
 
   const kids = useMemo(
     () => data.members.filter((m) => m.role === 'kid'),
@@ -269,7 +297,7 @@ export function ChoresPage() {
         queueMicrotask(() => setLevelUp({ name: kid?.name || 'Hero', level: newLevel }));
       }
 
-      return {
+      let result = {
         ...d,
         chores: (d.chores || []).map((c) =>
           c.id === quest.id
@@ -287,6 +315,9 @@ export function ChoresPage() {
         coinBalances: nextBalances,
         coinLedger: nextLedger,
       };
+      // Count toward weekday streak (Mon–Fri only; no-op on weekends)
+      result = recordWeekdayCompletion(result, forId, new Date(at));
+      return result;
     });
   };
 
@@ -521,6 +552,27 @@ export function ChoresPage() {
     }));
   };
 
+  const claimChest = () => {
+    if (!me) return;
+    update((d) => {
+      const res = claimStreakChest(d, myId, me.id);
+      if (!res.ok) {
+        queueMicrotask(() => setChestMsg(res.error || 'Could not open chest'));
+        return d;
+      }
+      queueMicrotask(() =>
+        setChestMsg(`Weekend Chest opened! +${STREAK_COINS} coins · +${STREAK_XP} XP`),
+      );
+      return res.data;
+    });
+  };
+
+  const onHouseInspection = () => {
+    if (!isParent || !me) return;
+    if (!confirm('Mark the house as passed inspection? Every kid gets a bonus.')) return;
+    update((d) => markHouseInspection(d, me.id));
+  };
+
   /* ─── UI helpers ───────────────────────────────────────── */
 
   const difficultyBadge = (d: QuestDifficulty) => {
@@ -719,6 +771,85 @@ export function ChoresPage() {
               </p>
             </div>
           </div>
+        </Card>
+      )}
+
+      {/* This week progress */}
+      {me && me.role !== 'media' && (
+        <Card className="!p-4 lg:!p-5 space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold text-fg">This week</h2>
+            <span className="text-xs text-muted">
+              {daysLeft === 0 ? 'Week ends today' : `${daysLeft} day${daysLeft === 1 ? '' : 's'} until payout`}
+            </span>
+          </div>
+
+          {/* Streak */}
+          <div>
+            <div className="flex items-center justify-between text-sm mb-1.5">
+              <span className="text-muted">Weekday quests</span>
+              <span className="font-medium text-fg">
+                {Math.min(myStreak.completions, myStreak.target)}/{myStreak.target}
+              </span>
+            </div>
+            <div className="h-2 rounded-full bg-surface-3 overflow-hidden">
+              <div
+                className="h-full rounded-full bg-accent transition-all"
+                style={{
+                  width: `${Math.min(100, Math.round((myStreak.completions / myStreak.target) * 100))}%`,
+                }}
+              />
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              {myStreak.claimed ? (
+                <span className="text-xs text-emerald-600 font-medium">Weekend Chest claimed ✓</span>
+              ) : myStreak.ready ? (
+                <Button size="sm" onClick={claimChest}>
+                  Open Weekend Chest · +{STREAK_COINS} coins · +{STREAK_XP} XP
+                </Button>
+              ) : (
+                <span className="text-xs text-muted">
+                  Finish {Math.max(0, myStreak.target - myStreak.completions)} more weekday quest
+                  {myStreak.target - myStreak.completions === 1 ? '' : 's'} for the chest
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Interest + inspection */}
+          <div className="grid sm:grid-cols-2 gap-3 pt-1">
+            <div className="rounded-xl bg-inset border border-border px-3 py-2.5">
+              <p className="text-xs text-muted mb-0.5">Projected interest</p>
+              <p className="text-sm font-semibold text-fg">
+                {interestPreview > 0 ? (
+                  <>
+                    +{interestPreview} coins{' '}
+                    <span className="text-muted font-normal">
+                      ({Math.round(INTEREST_RATE * 100)}% if you hold {myCoins})
+                    </span>
+                  </>
+                ) : (
+                  <span className="text-muted font-normal">Hold ≥10 coins to earn interest</span>
+                )}
+              </p>
+            </div>
+            <div className="rounded-xl bg-inset border border-border px-3 py-2.5">
+              <p className="text-xs text-muted mb-0.5">House inspection</p>
+              {inspectionPassed ? (
+                <p className="text-sm font-semibold text-emerald-600">Passed · bonuses paid</p>
+              ) : isParent ? (
+                <Button size="sm" variant="secondary" onClick={onHouseInspection}>
+                  Mark house clean · +{INSPECTION_COINS}c / +{INSPECTION_XP} XP each
+                </Button>
+              ) : (
+                <p className="text-sm text-muted">Waiting on a parent</p>
+              )}
+            </div>
+          </div>
+
+          {chestMsg && (
+            <p className="text-sm text-accent font-medium">{chestMsg}</p>
+          )}
         </Card>
       )}
 
