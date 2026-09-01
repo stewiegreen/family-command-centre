@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   Check,
   Coins,
+  MonitorPlay,
   Pencil,
   Plus,
   ShoppingBag,
@@ -139,6 +140,8 @@ export function ChoresPage() {
   const myProgress = ensureProgress(progressMap[myId]);
   const myBar = progressTowardNextLevel(myProgress.xp);
   const myCoins = coinBalances[myId] ?? 0;
+  const screenTimeMap = data.screenTime || {};
+  const myScreen = screenTimeMap[myId] ?? 0;
   const weekState = data.weekState;
   const myStreak = streakStatus(weekState, myId);
   const interestPreview = projectedInterest(myCoins);
@@ -593,6 +596,49 @@ export function ChoresPage() {
     }));
   };
 
+
+  /** Spend accrued screen-time minutes (TV / games). */
+  const spendScreenTime = (memberId: string, minutes: number, label?: string) => {
+    if (!me) return;
+    const mins = Math.floor(minutes);
+    if (mins <= 0) return;
+    const bal = (data.screenTime || {})[memberId] ?? 0;
+    if (bal < mins) {
+      alert(`Only ${bal} minutes available.`);
+      return;
+    }
+    const who = getMember(memberId);
+    const name = who?.name || 'them';
+    if (!confirm(`Use ${mins} min of screen time for ${name}?`)) return;
+    const at = new Date().toISOString();
+    update((d) => {
+      const current = (d.screenTime || {})[memberId] ?? 0;
+      if (current < mins) return d;
+      return {
+        ...d,
+        screenTime: {
+          ...(d.screenTime || {}),
+          [memberId]: current - mins,
+        },
+        screenTimeLog: [
+          {
+            id: newId(),
+            memberId,
+            delta: -mins,
+            reason: label || `Used ${mins} min screen time`,
+            byId: me.id,
+            at,
+          },
+          ...(d.screenTimeLog || []),
+        ].slice(0, 100),
+      };
+    });
+  };
+
+  const [spendOpen, setSpendOpen] = useState(false);
+  const [spendMins, setSpendMins] = useState(30);
+  const [spendMemberId, setSpendMemberId] = useState(myId);
+
   const claimChest = () => {
     if (!me) return;
     update((d) => {
@@ -788,9 +834,9 @@ export function ChoresPage() {
         )}
       </div>
 
-      {/* Progress */}
+      {/* Progress + currencies */}
       {me && me.role !== 'media' && (
-        <Card className="!p-4 lg:!p-5">
+        <Card className="!p-4 lg:!p-5 space-y-3">
           <div className="flex items-center gap-4">
             <div className="relative">
               <Avatar {...me} size="lg" />
@@ -804,10 +850,6 @@ export function ChoresPage() {
                   Level {myBar.level}
                   <span className="text-muted font-normal text-sm"> · {myProgress.xp} XP</span>
                 </p>
-                <p className="text-sm font-semibold text-amber-600 flex items-center gap-1 shrink-0">
-                  <Coins className="w-4 h-4" />
-                  {myCoins}
-                </p>
               </div>
               <div className="h-2.5 rounded-full bg-surface-3 overflow-hidden">
                 <div
@@ -820,6 +862,54 @@ export function ChoresPage() {
               </p>
             </div>
           </div>
+
+          {/* Two currencies: Treasure coins + Screen time bank */}
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-xl bg-inset border border-border px-3 py-2.5">
+              <p className="text-[11px] uppercase tracking-wide text-muted mb-0.5">Treasure</p>
+              <p className="text-lg font-bold text-amber-600 flex items-center gap-1.5">
+                <Coins className="w-4 h-4" />
+                {myCoins}
+              </p>
+              <p className="text-[11px] text-muted mt-0.5">Earn from quests · spend in shop</p>
+            </div>
+            <div className="rounded-xl bg-inset border border-border px-3 py-2.5">
+              <p className="text-[11px] uppercase tracking-wide text-muted mb-0.5">Screen time</p>
+              <p className="text-lg font-bold text-sky-600 flex items-center gap-1.5">
+                <MonitorPlay className="w-4 h-4" />
+                {myScreen}
+                <span className="text-sm font-semibold">min</span>
+              </p>
+              <p className="text-[11px] text-muted mt-0.5">Buy with coins · spend to watch/play</p>
+            </div>
+          </div>
+
+          {(myScreen > 0 || isParent) && (
+            <div className="flex flex-wrap gap-2">
+              {[15, 30, 60].map((m) => (
+                <Button
+                  key={m}
+                  size="sm"
+                  variant="secondary"
+                  disabled={myScreen < m}
+                  onClick={() => spendScreenTime(myId, m)}
+                >
+                  Use {m}m
+                </Button>
+              ))}
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  setSpendMemberId(myId);
+                  setSpendMins(Math.min(30, Math.max(5, myScreen || 30)));
+                  setSpendOpen(true);
+                }}
+              >
+                Custom…
+              </Button>
+            </div>
+          )}
         </Card>
       )}
 
@@ -948,7 +1038,7 @@ export function ChoresPage() {
                       <div>
                         <p className="text-sm font-medium text-fg leading-tight">{k.name}</p>
                         <p className="text-[11px] text-muted">
-                          Lv {bar.level} · {coins} coins
+                          Lv {bar.level} · {coins}c · {(screenTimeMap[k.id] ?? 0)}m
                         </p>
                       </div>
                     </div>
@@ -1108,7 +1198,8 @@ export function ChoresPage() {
           )}
 
           <p className="text-xs text-muted text-center pt-2">
-            Screen-time rewards apply instantly. Everything else waits in the Vault for a parent.
+            Screen-time items add minutes to your bank instantly. Spend them above when you watch or play.
+            Other rewards wait in the Vault for a parent.
           </p>
         </section>
       )}
@@ -1419,6 +1510,60 @@ export function ChoresPage() {
             </Button>
             <Button onClick={saveShopItem} disabled={!shopForm.label.trim()}>
               {shopForm.id ? 'Save' : 'Add to shop'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Spend screen time */}
+      <Modal open={spendOpen} onClose={() => setSpendOpen(false)} title="Use screen time">
+        <div className="space-y-4">
+          <p className="text-sm text-muted">
+            Minutes come from the screen-time bank (bought with Treasure in the shop).
+          </p>
+          {isParent && kids.length > 0 && (
+            <div>
+              <label className="text-xs text-muted mb-1 block">Who</label>
+              <select
+                className="w-full rounded-xl border border-border bg-inset px-3 py-2 text-fg text-sm outline-none focus:border-accent"
+                value={spendMemberId}
+                onChange={(e) => setSpendMemberId(e.target.value)}
+              >
+                <option value={myId}>{me?.name || 'Me'} (you)</option>
+                {kids.map((k) => (
+                  <option key={k.id} value={k.id}>
+                    {k.name} · {(screenTimeMap[k.id] ?? 0)}m left
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          <div>
+            <label className="text-xs text-muted mb-1 block">Minutes to use</label>
+            <input
+              type="number"
+              min={1}
+              className="w-full rounded-xl border border-border bg-inset px-3 py-2 text-fg text-sm outline-none focus:border-accent"
+              value={spendMins}
+              onChange={(e) => setSpendMins(Number(e.target.value) || 0)}
+            />
+            <p className="text-xs text-muted mt-1">
+              Available:{' '}
+              {(screenTimeMap[spendMemberId] ?? 0)} min
+            </p>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setSpendOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                spendScreenTime(spendMemberId, spendMins);
+                setSpendOpen(false);
+              }}
+              disabled={spendMins <= 0 || (screenTimeMap[spendMemberId] ?? 0) < spendMins}
+            >
+              Use {spendMins || 0} min
             </Button>
           </div>
         </div>
