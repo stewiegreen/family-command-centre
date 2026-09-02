@@ -214,7 +214,10 @@ export function ChoresPage() {
       catalog
         .filter((r) => r.active)
         .slice()
-        .sort((a, b) => a.sort - b.sort || a.coinCost - b.coinCost),
+        .sort(
+          (a, b) =>
+            Number(!!b.featured) - Number(!!a.featured) || a.coinCost - b.coinCost,
+        ),
     [catalog],
   );
 
