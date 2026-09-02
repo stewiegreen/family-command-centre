@@ -1,16 +1,17 @@
-import type { CSSProperties, ReactNode } from 'react';
+import type { CSSProperties, HTMLAttributes, ReactNode } from 'react';
 import { cn } from '../../lib/cn';
 
-interface CardProps {
+interface CardProps extends Omit<HTMLAttributes<HTMLDivElement>, 'className' | 'children'> {
   children: ReactNode;
   className?: string;
   onClick?: () => void;
   style?: CSSProperties;
 }
 
-export function Card({ children, className, onClick, style }: CardProps) {
+export function Card({ children, className, onClick, style, ...rest }: CardProps) {
   return (
     <div
+      {...rest}
       onClick={onClick}
       style={style}
       className={cn(
