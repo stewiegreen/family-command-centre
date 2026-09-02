@@ -59,6 +59,74 @@ function startOfWeekMonday(d: Date) {
   return x;
 }
 
+
+/** Stable chrome — MUST live outside Dashboard so React does not remount children on every keystroke. */
+function SectionChrome({
+  id,
+  onMove,
+  children,
+}: {
+  id: SectionId;
+  onMove: (id: SectionId, dir: -1 | 1) => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="relative group/section">
+      <div className="absolute -left-1 top-2 z-10 flex flex-col gap-0.5 opacity-70 sm:opacity-0 sm:group-hover/section:opacity-100 transition-opacity">
+        <button
+          type="button"
+          onClick={() => onMove(id, -1)}
+          className="p-1 rounded-md bg-surface border border-border text-muted hover:text-fg"
+          title="Move up"
+        >
+          <ChevronUp className="w-3.5 h-3.5" />
+        </button>
+        <button
+          type="button"
+          onClick={() => onMove(id, 1)}
+          className="p-1 rounded-md bg-surface border border-border text-muted hover:text-fg"
+          title="Move down"
+        >
+          <ChevronDown className="w-3.5 h-3.5" />
+        </button>
+      </div>
+      <div className="sm:pl-6">{children}</div>
+    </div>
+  );
+}
+
+function SectionChromePair({
+  onMovePair,
+  children,
+}: {
+  onMovePair: (dir: -1 | 1) => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="relative group/section">
+      <div className="absolute -left-1 top-2 z-10 flex flex-col gap-0.5 opacity-70 sm:opacity-0 sm:group-hover/section:opacity-100 transition-opacity">
+        <button
+          type="button"
+          onClick={() => onMovePair(-1)}
+          className="p-1 rounded-md bg-surface border border-border text-muted hover:text-fg"
+          title="Move up"
+        >
+          <ChevronUp className="w-3.5 h-3.5" />
+        </button>
+        <button
+          type="button"
+          onClick={() => onMovePair(1)}
+          className="p-1 rounded-md bg-surface border border-border text-muted hover:text-fg"
+          title="Move down"
+        >
+          <ChevronDown className="w-3.5 h-3.5" />
+        </button>
+      </div>
+      <div className="sm:pl-6 grid grid-cols-1 lg:grid-cols-2 gap-4">{children}</div>
+    </div>
+  );
+}
+
 export function Dashboard() {
   const {
     data,
@@ -396,54 +464,6 @@ export function Dashboard() {
   const weekLabel = `${weekStart.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} – ${new Date(
     weekStart.getTime() + 6 * 86400000,
   ).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`;
-
-  const SectionChrome = ({ id, children }: { id: SectionId; children: React.ReactNode }) => (
-    <div className="relative group/section">
-      <div className="absolute -left-1 top-2 z-10 flex flex-col gap-0.5 opacity-70 sm:opacity-0 sm:group-hover/section:opacity-100 transition-opacity">
-        <button
-          type="button"
-          onClick={() => moveSection(id, -1)}
-          className="p-1 rounded-md bg-surface border border-border text-muted hover:text-fg"
-          title="Move up"
-        >
-          <ChevronUp className="w-3.5 h-3.5" />
-        </button>
-        <button
-          type="button"
-          onClick={() => moveSection(id, 1)}
-          className="p-1 rounded-md bg-surface border border-border text-muted hover:text-fg"
-          title="Move down"
-        >
-          <ChevronDown className="w-3.5 h-3.5" />
-        </button>
-      </div>
-      <div className="sm:pl-6">{children}</div>
-    </div>
-  );
-
-  const SectionChromePair = ({ children }: { children: React.ReactNode }) => (
-    <div className="relative group/section">
-      <div className="absolute -left-1 top-2 z-10 flex flex-col gap-0.5 opacity-70 sm:opacity-0 sm:group-hover/section:opacity-100 transition-opacity">
-        <button
-          type="button"
-          onClick={() => movePairSection(-1)}
-          className="p-1 rounded-md bg-surface border border-border text-muted hover:text-fg"
-          title="Move up"
-        >
-          <ChevronUp className="w-3.5 h-3.5" />
-        </button>
-        <button
-          type="button"
-          onClick={() => movePairSection(1)}
-          className="p-1 rounded-md bg-surface border border-border text-muted hover:text-fg"
-          title="Move down"
-        >
-          <ChevronDown className="w-3.5 h-3.5" />
-        </button>
-      </div>
-      <div className="sm:pl-6 grid grid-cols-1 lg:grid-cols-2 gap-4">{children}</div>
-    </div>
-  );
 
   const sections: Record<SectionId, React.ReactNode> = {
     stats: (
@@ -1057,14 +1077,14 @@ export function Dashboard() {
             if (pairRendered) return null;
             pairRendered = true;
             return (
-              <SectionChromePair key="events-todos-pair">
+              <SectionChromePair key="events-todos-pair" onMovePair={movePairSection}>
                 {sections.events}
                 {sections.todos}
               </SectionChromePair>
             );
           }
           return (
-            <SectionChrome key={id} id={id}>
+            <SectionChrome key={id} id={id} onMove={moveSection}>
               {sections[id]}
             </SectionChrome>
           );
