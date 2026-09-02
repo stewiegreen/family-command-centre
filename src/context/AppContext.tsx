@@ -18,7 +18,10 @@ import {
   saveLocalData,
 } from '../lib/storage';
 import { migratePayload } from '../lib/defaults';
-import { resolveHomescreenOrder } from '../lib/homescreen';
+import {
+  resolveHomescreenLayout,
+  type HomescreenLayoutItem,
+} from '../lib/homescreen';
 import {
   cloudCreateInvite,
   cloudDeleteMessage,
@@ -78,9 +81,13 @@ interface AppContextValue {
   switchProfile: (memberId: string, pin?: string) => { ok: boolean; error?: string };
   /** Set theme for the current member (kids can change their own). */
   setMyTheme: (theme: import('../types').ThemeId) => void;
-  /** Current member's homescreen widget order (resolved against known widgets). */
+  /** Current member's homescreen layout (order + full/half span). */
+  myHomescreenLayout: HomescreenLayoutItem[];
+  /** Persist homescreen layout for the current member only. */
+  setMyHomescreenLayout: (layout: HomescreenLayoutItem[]) => void;
+  /** @deprecated Prefer myHomescreenLayout — still resolved for older callers. */
   myHomescreenOrder: string[];
-  /** Persist a new homescreen order for the current member only. */
+  /** @deprecated Prefer setMyHomescreenLayout. */
   setMyHomescreenOrder: (order: string[]) => void;
   connectCloud: (cfg: FirebaseConfig) => Promise<boolean>;
   createFamily: (displayName: string) => Promise<string>;
@@ -732,12 +739,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [update],
   );
 
-  const myHomescreenOrder = resolveHomescreenOrder(
+  const myHomescreenLayout = resolveHomescreenLayout(
+    data.appearance?.[data.settings.currentUserId]?.homescreenLayout as
+      | HomescreenLayoutItem[]
+      | undefined,
     data.appearance?.[data.settings.currentUserId]?.homescreenOrder,
   );
 
-  const setMyHomescreenOrder = useCallback(
-    (order: string[]) => {
+  const myHomescreenOrder = myHomescreenLayout.map((x) => x.id);
+
+  const setMyHomescreenLayout = useCallback(
+    (layout: HomescreenLayoutItem[]) => {
       update((d) => {
         const id = d.settings.currentUserId;
         if (!id) return d;
@@ -746,12 +758,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
           ...d,
           appearance: {
             ...(d.appearance || {}),
-            [id]: { ...prev, homescreenOrder: order },
+            [id]: {
+              ...prev,
+              homescreenLayout: layout,
+              homescreenOrder: layout.map((x) => x.id),
+            },
           },
         };
       });
     },
     [update],
+  );
+
+  const setMyHomescreenOrder = useCallback(
+    (order: string[]) => {
+      setMyHomescreenLayout(
+        resolveHomescreenLayout(
+          order.map((id) => ({
+            id,
+            span:
+              myHomescreenLayout.find((x) => x.id === id)?.span ??
+              (id === 'events' || id === 'todos' ? 'half' : 'full'),
+          })) as HomescreenLayoutItem[],
+          order,
+        ),
+      );
+    },
+    [setMyHomescreenLayout, myHomescreenLayout],
   );
 
   const value: AppContextValue = {
@@ -779,6 +812,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     unlockKidPin,
     switchProfile,
     setMyTheme,
+    myHomescreenLayout,
+    setMyHomescreenLayout,
     myHomescreenOrder,
     setMyHomescreenOrder,
     connectCloud,

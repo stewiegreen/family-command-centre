@@ -304,8 +304,13 @@ export interface FamilyData {
       emoji?: string;
       color?: string;
       theme?: ThemeId;
-      /** Ordered list of dashboard widget ids for this member only. */
+      /** Ordered list of dashboard widget ids for this member only (legacy). */
       homescreenOrder?: string[];
+      /**
+       * Preferred layout: order + full/half width per widget.
+       * Takes precedence over homescreenOrder when present.
+       */
+      homescreenLayout?: { id: string; span: 'full' | 'half' }[];
     }
   >;
   /** memberId → earned screen-time minutes balance. */

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type DragEvent } from 'react';
 import {
   Calendar,
   Check,
@@ -10,9 +10,10 @@ import {
   Plus,
   ShoppingCart,
   Newspaper,
-  ChevronUp,
-  ChevronDown,
   Sparkles,
+  GripVertical,
+  Columns2,
+  RectangleHorizontal,
   Sword,
   Trophy,
   X,
@@ -60,69 +61,74 @@ function startOfWeekMonday(d: Date) {
 }
 
 
-/** Stable chrome — MUST live outside Dashboard so React does not remount children on every keystroke. */
+/** Stable chrome — outside Dashboard so inputs don't remount on keystroke. */
 function SectionChrome({
   id,
-  onMove,
+  span,
+  dragging,
+  dragOver,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  onDragEnd,
+  onToggleSpan,
   children,
 }: {
   id: SectionId;
-  onMove: (id: SectionId, dir: -1 | 1) => void;
+  span: 'full' | 'half';
+  dragging: boolean;
+  dragOver: boolean;
+  onDragStart: (id: SectionId) => void;
+  onDragOver: (e: DragEvent, id: SectionId) => void;
+  onDrop: (id: SectionId) => void;
+  onDragEnd: () => void;
+  onToggleSpan: (id: SectionId) => void;
   children: React.ReactNode;
 }) {
   return (
-    <div className="relative group/section">
-      <div className="absolute -left-1 top-2 z-10 flex flex-col gap-0.5 opacity-70 sm:opacity-0 sm:group-hover/section:opacity-100 transition-opacity">
+    <div
+      className={cn(
+        'relative group/section transition-opacity',
+        dragging && 'opacity-40',
+        dragOver && 'ring-2 ring-accent/50 rounded-2xl',
+      )}
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', id);
+        onDragStart(id);
+      }}
+      onDragOver={(e) => onDragOver(e, id)}
+      onDrop={(e) => {
+        e.preventDefault();
+        onDrop(id);
+      }}
+      onDragEnd={onDragEnd}
+    >
+      <div className="absolute top-2 right-2 z-10 flex items-center gap-1 opacity-80 sm:opacity-0 sm:group-hover/section:opacity-100 transition-opacity">
         <button
           type="button"
-          onClick={() => onMove(id, -1)}
-          className="p-1 rounded-md bg-surface border border-border text-muted hover:text-fg"
-          title="Move up"
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleSpan(id);
+          }}
+          className="p-1.5 rounded-md bg-surface border border-border text-muted hover:text-fg shadow-sm"
+          title={span === 'full' ? 'Make half width (share row)' : 'Make full width'}
         >
-          <ChevronUp className="w-3.5 h-3.5" />
+          {span === 'full' ? (
+            <Columns2 className="w-3.5 h-3.5" />
+          ) : (
+            <RectangleHorizontal className="w-3.5 h-3.5" />
+          )}
         </button>
-        <button
-          type="button"
-          onClick={() => onMove(id, 1)}
-          className="p-1 rounded-md bg-surface border border-border text-muted hover:text-fg"
-          title="Move down"
+        <span
+          className="p-1.5 rounded-md bg-surface border border-border text-faint cursor-grab active:cursor-grabbing shadow-sm"
+          title="Drag to reorder"
         >
-          <ChevronDown className="w-3.5 h-3.5" />
-        </button>
+          <GripVertical className="w-3.5 h-3.5" />
+        </span>
       </div>
-      <div className="sm:pl-6">{children}</div>
-    </div>
-  );
-}
-
-function SectionChromePair({
-  onMovePair,
-  children,
-}: {
-  onMovePair: (dir: -1 | 1) => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="relative group/section">
-      <div className="absolute -left-1 top-2 z-10 flex flex-col gap-0.5 opacity-70 sm:opacity-0 sm:group-hover/section:opacity-100 transition-opacity">
-        <button
-          type="button"
-          onClick={() => onMovePair(-1)}
-          className="p-1 rounded-md bg-surface border border-border text-muted hover:text-fg"
-          title="Move up"
-        >
-          <ChevronUp className="w-3.5 h-3.5" />
-        </button>
-        <button
-          type="button"
-          onClick={() => onMovePair(1)}
-          className="p-1 rounded-md bg-surface border border-border text-muted hover:text-fg"
-          title="Move down"
-        >
-          <ChevronDown className="w-3.5 h-3.5" />
-        </button>
-      </div>
-      <div className="sm:pl-6 grid grid-cols-1 lg:grid-cols-2 gap-4">{children}</div>
+      <div className="min-w-0">{children}</div>
     </div>
   );
 }
@@ -135,8 +141,8 @@ export function Dashboard() {
     getMember,
     currentUser,
     isParent,
-    myHomescreenOrder,
-    setMyHomescreenOrder,
+    myHomescreenLayout,
+    setMyHomescreenLayout,
   } = useApp();
   const { events, todos, notes, messages, members, settings } = data;
   const chores = data.chores || [];
@@ -145,8 +151,46 @@ export function Dashboard() {
   const now = new Date();
   const myId = currentUser?.id || settings.currentUserId;
 
-  // Per-user order from context (synced under appearance[memberId].homescreenOrder)
-  const order = myHomescreenOrder as SectionId[];
+  // Per-user layout (order + full/half) from appearance
+  const layout = myHomescreenLayout;
+
+  const [dragId, setDragId] = useState<SectionId | null>(null);
+  const [overId, setOverId] = useState<SectionId | null>(null);
+
+  const persistLayout = (next: typeof layout) => {
+    setMyHomescreenLayout(next);
+  };
+
+  const onSectionDragStart = (id: SectionId) => setDragId(id);
+  const onSectionDragOver = (e: DragEvent, id: SectionId) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setOverId(id);
+  };
+  const onSectionDrop = (toId: SectionId) => {
+    const fromId = dragId;
+    setDragId(null);
+    setOverId(null);
+    if (!fromId || fromId === toId) return;
+    const next = [...layout];
+    const from = next.findIndex((x) => x.id === fromId);
+    const to = next.findIndex((x) => x.id === toId);
+    if (from < 0 || to < 0) return;
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved!);
+    persistLayout(next);
+  };
+  const onSectionDragEnd = () => {
+    setDragId(null);
+    setOverId(null);
+  };
+  const onToggleSpan = (id: SectionId) => {
+    persistLayout(
+      layout.map((x) =>
+        x.id === id ? { ...x, span: x.span === 'full' ? 'half' : 'full' } : x,
+      ),
+    );
+  };
 
   const progressMap = data.memberProgress || {};
   const coinBalances = data.coinBalances || {};
@@ -190,34 +234,6 @@ export function Dashboard() {
       setHeroOpen(true);
     }
   }, [announcement]);
-
-  const persistOrder = (next: SectionId[]) => {
-    setMyHomescreenOrder(next);
-  };
-
-  const moveSection = (id: SectionId, dir: -1 | 1) => {
-    const i = order.indexOf(id);
-    if (i < 0) return;
-    const j = i + dir;
-    if (j < 0 || j >= order.length) return;
-    const next = [...order];
-    [next[i], next[j]] = [next[j]!, next[i]!];
-    persistOrder(next);
-  };
-
-  /** Moves the combined Events + To-Dos row together, as one block. */
-  const movePairSection = (dir: -1 | 1) => {
-    const withoutPair = order.filter((x): x is SectionId => x !== 'events' && x !== 'todos');
-    const pairIndex = Math.min(order.indexOf('events'), order.indexOf('todos'));
-    const insertAt = Math.max(0, Math.min(withoutPair.length, pairIndex + dir));
-    const next: SectionId[] = [
-      ...withoutPair.slice(0, insertAt),
-      'events',
-      'todos',
-      ...withoutPair.slice(insertAt),
-    ];
-    persistOrder(next);
-  };
 
   const dismissHero = () => {
     setHeroOpen(false);
@@ -1079,9 +1095,14 @@ export function Dashboard() {
     <div className="p-4 lg:p-6 max-w-6xl mx-auto space-y-6">
       {/* Slim date strip always visible */}
       <div className="flex items-center justify-between gap-3">
-        <p className="text-sm text-muted font-medium">
-          {now.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
-        </p>
+        <div>
+          <p className="text-sm text-muted font-medium">
+            {now.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
+          </p>
+          <p className="text-[11px] text-faint mt-0.5 hidden sm:block">
+            Drag cards to reorder · use the width icon to full / half
+          </p>
+        </div>
         {!heroOpen && announcement && (
           <button
             type="button"
@@ -1120,24 +1141,53 @@ export function Dashboard() {
       )}
 
       {(() => {
-        let pairRendered = false;
-        return order.map((id) => {
-          if (id === 'events' || id === 'todos') {
-            if (pairRendered) return null;
-            pairRendered = true;
-            return (
-              <SectionChromePair key="events-todos-pair" onMovePair={movePairSection}>
-                {sections.events}
-                {sections.todos}
-              </SectionChromePair>
-            );
+        // Pack consecutive half-width widgets into rows of up to 2
+        const rows: { id: SectionId; span: 'full' | 'half' }[][] = [];
+        let halfBuf: { id: SectionId; span: 'full' | 'half' }[] = [];
+        const flush = () => {
+          if (halfBuf.length) {
+            rows.push(halfBuf);
+            halfBuf = [];
           }
-          return (
-            <SectionChrome key={id} id={id} onMove={moveSection}>
-              {sections[id]}
-            </SectionChrome>
-          );
-        });
+        };
+        for (const item of layout) {
+          const id = item.id as SectionId;
+          if (item.span === 'full') {
+            flush();
+            rows.push([{ id, span: 'full' }]);
+          } else {
+            halfBuf.push({ id, span: 'half' });
+            if (halfBuf.length >= 2) flush();
+          }
+        }
+        flush();
+
+        return rows.map((row, ri) => (
+          <div
+            key={`row-${ri}-${row.map((r) => r.id).join('-')}`}
+            className={cn(
+              'grid gap-4',
+              row.length > 1 ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1',
+            )}
+          >
+            {row.map(({ id, span }) => (
+              <SectionChrome
+                key={id}
+                id={id}
+                span={span}
+                dragging={dragId === id}
+                dragOver={overId === id && dragId !== id}
+                onDragStart={onSectionDragStart}
+                onDragOver={onSectionDragOver}
+                onDrop={onSectionDrop}
+                onDragEnd={onSectionDragEnd}
+                onToggleSpan={onToggleSpan}
+              >
+                {sections[id]}
+              </SectionChrome>
+            ))}
+          </div>
+        ));
       })()}
       {/* Quick event edit from home */}
       <Modal
