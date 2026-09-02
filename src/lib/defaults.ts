@@ -76,10 +76,20 @@ export function migratePayload(p: Partial<FamilyData>): FamilyData {
       : (i < 2 ? 'parent' as const : 'kid' as const);
     return { ...m, role };
   });
-  const todos = (p.todos || []).map((t) => ({
-    ...t,
-    createdById: t.createdById || t.memberId,
-  }));
+  const todos = (p.todos || []).map((t) => {
+    const status =
+      t.status === 'todo' || t.status === 'doing' || t.status === 'done'
+        ? t.status
+        : t.completed
+          ? ('done' as const)
+          : ('todo' as const);
+    return {
+      ...t,
+      createdById: t.createdById || t.memberId,
+      status,
+      completed: status === 'done',
+    };
+  });
   return {
     ...DEFAULT_DATA,
     ...p,

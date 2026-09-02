@@ -1,5 +1,6 @@
 export type Role = 'parent' | 'kid' | 'media';
 export type Priority = 'low' | 'medium' | 'high';
+export type TodoStatus = 'todo' | 'doing' | 'done';
 export type ViewId = 'dashboard' | 'calendar' | 'todos' | 'chores' | 'shopping' | 'notes' | 'messages' | 'media' | 'settings';
 export type SyncStatus = 'local' | 'connecting' | 'live' | 'error' | 'auth';
 export type ChoreCadence = 'daily' | 'weekly' | 'once'; // legacy
@@ -87,6 +88,11 @@ export interface Todo {
   memberId: string;
   createdById: string;
   completed: boolean;
+  /**
+   * Kanban column. Legacy todos without status: completed → done, else todo.
+   * Keep completed in sync (done ↔ true) for older digests.
+   */
+  status?: TodoStatus;
   priority: Priority;
   createdAt: string;
   /** Optional due datetime (ISO). Used for “due soon” notifications. */

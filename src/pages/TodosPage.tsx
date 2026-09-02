@@ -1,13 +1,12 @@
-import { useEffect, useState } from 'react';
-import { Plus, Trash2, CheckSquare } from 'lucide-react';
+import { useMemo, useState, type DragEvent } from 'react';
+import { Plus, Trash2, GripVertical } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Avatar } from '../components/ui/Avatar';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
-import { EmptyState } from '../components/ui/EmptyState';
 import { uid } from '../lib/uid';
-import type { Priority } from '../types';
+import type { Priority, Todo, TodoStatus } from '../types';
 import { cn } from '../lib/cn';
 
 /** Soft tint of a hex colour for card backgrounds. */
@@ -20,6 +19,24 @@ function tint(hex: string, alpha = 0.14): string {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
+/** Normalize legacy completed → status. */
+export function todoStatus(t: Todo): TodoStatus {
+  if (t.status === 'todo' || t.status === 'doing' || t.status === 'done') return t.status;
+  return t.completed ? 'done' : 'todo';
+}
+
+const COLUMNS: { id: TodoStatus; label: string; hint: string }[] = [
+  { id: 'todo', label: 'To Do', hint: 'Queued' },
+  { id: 'doing', label: 'Doing', hint: 'In progress' },
+  { id: 'done', label: 'Done', hint: 'Finished' },
+];
+
+const PRIORITY_COLOR: Record<Priority, string> = {
+  low: '#64748b',
+  medium: '#f59e0b',
+  high: '#ef4444',
+};
+
 export function TodosPage() {
   const { data, update, currentUser, getMember, isParent } = useApp();
   const myId = currentUser?.id || data.settings.currentUserId;
@@ -29,14 +46,11 @@ export function TodosPage() {
   const [priority, setPriority] = useState<Priority>('medium');
   const [dueAt, setDueAt] = useState('');
   const [assignId, setAssignId] = useState(myId);
+  const [composerOpen, setComposerOpen] = useState(false);
 
-  useEffect(() => {
-    const openMine = () => {};
-    window.addEventListener('fcc:quick-add', openMine);
-    return () => {
-      window.removeEventListener('fcc:quick-add', openMine);
-    };
-  }, []);
+  // Drag state
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [overCol, setOverCol] = useState<TodoStatus | null>(null);
 
   const members = data.members
     .filter((m) => m.role !== 'media')
@@ -44,9 +58,33 @@ export function TodosPage() {
 
   const listId = isParent ? activeId : myId;
   const listOwner = getMember(listId);
-  const list = data.todos.filter((t) => t.memberId === listId);
-  const open = list.filter((t) => !t.completed);
-  const done = list.filter((t) => t.completed);
+  const list = useMemo(
+    () => data.todos.filter((t) => t.memberId === listId),
+    [data.todos, listId],
+  );
+
+  const byStatus = useMemo(() => {
+    const map: Record<TodoStatus, Todo[]> = { todo: [], doing: [], done: [] };
+    for (const t of list) {
+      map[todoStatus(t)].push(t);
+    }
+    return map;
+  }, [list]);
+
+  const setTodoStatus = (id: string, status: TodoStatus) => {
+    update((d) => ({
+      ...d,
+      todos: d.todos.map((t) =>
+        t.id === id
+          ? {
+              ...t,
+              status,
+              completed: status === 'done',
+            }
+          : t,
+      ),
+    }));
+  };
 
   const addTodo = () => {
     if (!text.trim()) return;
@@ -60,6 +98,7 @@ export function TodosPage() {
           memberId,
           createdById: myId,
           completed: false,
+          status: 'todo' as TodoStatus,
           priority,
           createdAt: new Date().toISOString(),
           dueAt: dueAt ? new Date(dueAt).toISOString() : undefined,
@@ -69,16 +108,10 @@ export function TodosPage() {
     }));
     setText('');
     setDueAt('');
+    setComposerOpen(false);
   };
 
-  const toggleTodo = (id: string) => {
-    update((d) => ({
-      ...d,
-      todos: d.todos.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t)),
-    }));
-  };
-
-  const removeTodo = (id: string, t: (typeof data.todos)[0]) => {
+  const removeTodo = (id: string, t: Todo) => {
     const creator = data.members.find((m) => m.id === t.createdById);
     const fromParent = creator && creator.role === 'parent' && t.createdById !== t.memberId;
     if (!isParent && fromParent) return;
@@ -89,28 +122,71 @@ export function TodosPage() {
   const clearDoneTodos = () => {
     update((d) => ({
       ...d,
-      todos: d.todos.filter((t) => !(t.memberId === listId && t.completed && (isParent || t.createdById === myId))),
+      todos: d.todos.filter(
+        (t) =>
+          !(
+            t.memberId === listId &&
+            todoStatus(t) === 'done' &&
+            (isParent || t.createdById === myId)
+          ),
+      ),
     }));
   };
 
+  // --- DnD ---
+  const onDragStart = (e: DragEvent, id: string) => {
+    setDragId(id);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', id);
+  };
+  const onDragEnd = () => {
+    setDragId(null);
+    setOverCol(null);
+  };
+  const onDragOverCol = (e: DragEvent, col: TodoStatus) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setOverCol(col);
+  };
+  const onDropCol = (e: DragEvent, col: TodoStatus) => {
+    e.preventDefault();
+    const id = e.dataTransfer.getData('text/plain') || dragId;
+    if (id) setTodoStatus(id, col);
+    setDragId(null);
+    setOverCol(null);
+  };
+
+  const doneCount = byStatus.done.length;
+
   return (
-    <div className="p-4 lg:p-8 max-w-4xl mx-auto space-y-6">
+    <div className="p-4 lg:p-8 max-w-[1400px] mx-auto space-y-5 h-full flex flex-col min-h-0">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 shrink-0">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">To-Dos</h1>
-          <p className="text-sm text-muted mt-1">Personal lists by family member.</p>
+          <p className="text-sm text-muted mt-1">
+            Kanban board{listOwner ? ` · ${listOwner.name}` : ''}. Drag cards between columns.
+          </p>
         </div>
-        {done.length > 0 && (
-          <button type="button" onClick={clearDoneTodos} className="text-sm text-muted hover:text-fg self-start">
-            Clear done ({done.length})
-          </button>
-        )}
+        <div className="flex items-center gap-2 self-start">
+          {doneCount > 0 && (
+            <button
+              type="button"
+              onClick={clearDoneTodos}
+              className="text-sm text-muted hover:text-fg px-3 py-2 rounded-xl hover:bg-nav-hover"
+            >
+              Clear done ({doneCount})
+            </button>
+          )}
+          <Button onClick={() => setComposerOpen((v) => !v)} className="!py-2">
+            <Plus className="w-4 h-4" /> Add task
+          </Button>
+        </div>
       </div>
 
-      {/* Parent: whose personal list */}
+      {/* Parent: whose board */}
       {isParent && (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 shrink-0">
           {members.map((m) => (
             <button
               key={m.id}
@@ -134,154 +210,199 @@ export function TodosPage() {
               <Avatar {...m} size="sm" />
               {m.name}
               <span className="text-xs opacity-70">
-                {data.todos.filter((t) => t.memberId === m.id && !t.completed).length}
+                {data.todos.filter((t) => t.memberId === m.id && todoStatus(t) !== 'done').length}
               </span>
             </button>
           ))}
         </div>
       )}
 
-      <div className="grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] gap-6 items-start">
-        <Card className="!p-5 lg:!p-6 space-y-4 lg:sticky lg:top-20">
-          <h2 className="font-semibold text-fg">Add task</h2>
+      {/* Composer */}
+      {composerOpen && (
+        <Card className="!p-4 space-y-3 shrink-0">
           <Input
             value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder="What needs doing?"
+            autoFocus
             onKeyDown={(e) => e.key === 'Enter' && addTodo()}
           />
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 min-w-0">
-            <div className="min-w-0">
-              <label className="text-xs text-muted mb-1.5 block">Priority</label>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="text-xs text-muted mb-1 block">Priority</label>
               <select
                 value={priority}
                 onChange={(e) => setPriority(e.target.value as Priority)}
-                className="w-full max-w-full bg-input border border-border-strong rounded-xl px-3 py-2.5 text-sm text-fg"
+                className="w-full bg-input border border-border-strong rounded-xl px-3 py-2.5 text-sm text-fg"
               >
                 <option value="low">Low</option>
                 <option value="medium">Medium</option>
                 <option value="high">High</option>
               </select>
             </div>
-            <div className="min-w-0">
-              <label className="text-xs text-muted mb-1.5 block">Due (optional)</label>
+            <div>
+              <label className="text-xs text-muted mb-1 block">Due (optional)</label>
               <input
                 type="datetime-local"
                 value={dueAt}
                 onChange={(e) => setDueAt(e.target.value)}
-                className="w-full max-w-full min-w-0 bg-input border border-border-strong rounded-xl px-2 sm:px-3 py-2.5 text-sm text-fg"
+                className="w-full bg-input border border-border-strong rounded-xl px-2 py-2.5 text-sm text-fg"
               />
             </div>
+            {isParent ? (
+              <div>
+                <label className="text-xs text-muted mb-1 block">Assign to</label>
+                <select
+                  value={assignId}
+                  onChange={(e) => setAssignId(e.target.value)}
+                  className="w-full bg-input border border-border-strong rounded-xl px-3 py-2.5 text-sm text-fg"
+                >
+                  {members.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.emoji ? `${m.emoji} ` : ''}
+                      {m.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div className="flex items-end">
+                <Button onClick={addTodo} className="w-full">
+                  <Plus className="w-4 h-4" /> Add to board
+                </Button>
+              </div>
+            )}
           </div>
           {isParent && (
-            <div>
-              <label className="text-xs text-muted mb-1.5 block">Assign to</label>
-              <select
-                value={assignId}
-                onChange={(e) => setAssignId(e.target.value)}
-                className="w-full bg-input border border-border-strong rounded-xl px-3 py-2.5 text-sm text-fg"
-              >
-                {members.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.emoji ? `${m.emoji} ` : ''}
-                    {m.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <Button onClick={addTodo} className="w-full sm:w-auto">
+              <Plus className="w-4 h-4" /> Add to board
+            </Button>
           )}
-          <Button onClick={addTodo} className="w-full">
-            <Plus className="w-4 h-4" /> Add task
-          </Button>
         </Card>
+      )}
 
-        <div className="space-y-3">
-          {list.length === 0 ? (
-            <Card className="!p-8">
-              <EmptyState icon={CheckSquare} title="No tasks yet" description="Add a task using the form." />
-            </Card>
-          ) : (
-            <>
-              {open.length > 0 && (
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted px-1">Open · {open.length}</p>
-              )}
-              {[...open, ...done].map((t) => {
-                const assignee = getMember(t.memberId) || listOwner;
-                const color = assignee?.color || '#6366f1';
-                const creator = data.members.find((m) => m.id === t.createdById);
-                const fromParent = creator && creator.role === 'parent' && t.createdById !== t.memberId;
-                const canDelete = isParent || (!fromParent && (t.createdById === myId || t.memberId === myId));
-                return (
-                  <Card
-                    key={t.id}
-                    className={cn(
-                      '!p-4 flex items-start gap-3 border-l-4 overflow-hidden',
-                      t.completed && 'opacity-55',
-                    )}
-                    style={{
-                      borderLeftColor: color,
-                      backgroundColor: tint(color, t.completed ? 0.08 : 0.18),
-                    }}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => toggleTodo(t.id)}
-                      className={cn(
-                        'mt-0.5 w-6 h-6 rounded-lg border-2 flex items-center justify-center shrink-0 transition-colors',
-                        t.completed
-                          ? 'bg-accent border-accent text-accent-ink'
-                          : 'border-border-strong hover:border-accent',
-                      )}
-                      style={!t.completed ? { borderColor: color } : undefined}
-                    >
-                      {t.completed && <span className="text-xs">✓</span>}
-                    </button>
-                    <div className="flex-1 min-w-0 py-0.5">
-                      <p className={cn('text-base font-medium', t.completed && 'line-through text-muted')}>
-                        {t.text}
-                      </p>
-                      <div className="flex flex-wrap gap-2 mt-1.5 items-center">
-                        {assignee && (
-                          <span className="inline-flex items-center gap-1.5 text-xs text-muted">
-                            <Avatar {...assignee} size="sm" className="!w-7 !h-7 !text-sm" />
-                            {assignee.name}
-                          </span>
+      {/* Kanban columns */}
+      <div className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden -mx-4 px-4 lg:mx-0 lg:px-0">
+        <div className="flex gap-3 h-full min-h-[28rem] lg:min-h-0 lg:grid lg:grid-cols-3 lg:gap-4">
+          {COLUMNS.map((col) => {
+            const items = byStatus[col.id];
+            const isOver = overCol === col.id;
+            return (
+              <div
+                key={col.id}
+                className={cn(
+                  'flex flex-col w-[min(85vw,20rem)] sm:w-80 lg:w-auto shrink-0 lg:shrink rounded-2xl border bg-surface/60 min-h-0 transition-colors',
+                  isOver ? 'border-accent bg-accent/5' : 'border-border',
+                )}
+                onDragOver={(e) => onDragOverCol(e, col.id)}
+                onDragLeave={() => setOverCol((c) => (c === col.id ? null : c))}
+                onDrop={(e) => onDropCol(e, col.id)}
+              >
+                <div className="flex items-center justify-between gap-2 px-3 py-2.5 border-b border-border shrink-0">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-fg">{col.label}</p>
+                    <p className="text-[11px] text-faint">{col.hint}</p>
+                  </div>
+                  <span className="text-xs font-bold tabular-nums px-2 py-0.5 rounded-full bg-surface-2 text-muted">
+                    {items.length}
+                  </span>
+                </div>
+
+                <div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-2">
+                  {items.length === 0 && (
+                    <p className="text-xs text-faint text-center py-8 px-2">
+                      {isOver ? 'Drop here' : 'Empty'}
+                    </p>
+                  )}
+                  {items.map((t) => {
+                    const assignee = getMember(t.memberId) || listOwner;
+                    const color = assignee?.color || '#6366f1';
+                    const creator = data.members.find((m) => m.id === t.createdById);
+                    const fromParent =
+                      creator && creator.role === 'parent' && t.createdById !== t.memberId;
+                    const canDelete =
+                      isParent || (!fromParent && (t.createdById === myId || t.memberId === myId));
+                    const status = todoStatus(t);
+
+                    return (
+                      <div
+                        key={t.id}
+                        draggable
+                        onDragStart={(e) => onDragStart(e, t.id)}
+                        onDragEnd={onDragEnd}
+                        className={cn(
+                          'rounded-xl border border-border bg-page p-3 cursor-grab active:cursor-grabbing select-none shadow-sm',
+                          dragId === t.id && 'opacity-40',
+                          status === 'done' && 'opacity-70',
                         )}
-                        <span
-                          className="text-[11px] font-semibold uppercase tracking-wide"
-                          style={{
-                            color: { low: '#64748b', medium: '#f59e0b', high: '#ef4444' }[t.priority],
-                          }}
-                        >
-                          {t.priority}
-                        </span>
-                        {t.dueAt && (
-                          <span className="text-xs text-muted">
-                            Due{' '}
-                            {new Date(t.dueAt).toLocaleString([], {
-                              month: 'short',
-                              day: 'numeric',
-                              hour: 'numeric',
-                              minute: '2-digit',
-                            })}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    {canDelete && (
-                      <button
-                        type="button"
-                        onClick={() => removeTodo(t.id, t)}
-                        className="p-2 text-faint hover:text-red-400 rounded-lg hover:bg-red-500/10"
+                        style={{ borderLeftWidth: 3, borderLeftColor: color }}
                       >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    )}
-                  </Card>
-                );
-              })}
-            </>
-          )}
+                        <div className="flex items-start gap-2">
+                          <GripVertical className="w-4 h-4 text-faint shrink-0 mt-0.5" />
+                          <div className="flex-1 min-w-0">
+                            <p
+                              className={cn(
+                                'text-sm font-medium text-fg leading-snug',
+                                status === 'done' && 'line-through text-muted',
+                              )}
+                            >
+                              {t.text}
+                            </p>
+                            <div className="flex flex-wrap gap-1.5 mt-2 items-center">
+                              <span
+                                className="text-[10px] font-bold uppercase tracking-wide"
+                                style={{ color: PRIORITY_COLOR[t.priority] }}
+                              >
+                                {t.priority}
+                              </span>
+                              {t.dueAt && (
+                                <span className="text-[11px] text-muted">
+                                  {new Date(t.dueAt).toLocaleString([], {
+                                    month: 'short',
+                                    day: 'numeric',
+                                    hour: 'numeric',
+                                    minute: '2-digit',
+                                  })}
+                                </span>
+                              )}
+                            </div>
+                            {/* Mobile-friendly status chips (no drag required) */}
+                            <div className="flex flex-wrap gap-1 mt-2 lg:hidden">
+                              {COLUMNS.map((c) => (
+                                <button
+                                  key={c.id}
+                                  type="button"
+                                  onClick={() => setTodoStatus(t.id, c.id)}
+                                  className={cn(
+                                    'text-[10px] font-semibold px-2 py-0.5 rounded-md border transition-colors',
+                                    status === c.id
+                                      ? 'border-accent bg-accent/15 text-accent'
+                                      : 'border-border text-faint hover:text-fg',
+                                  )}
+                                >
+                                  {c.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          {canDelete && (
+                            <button
+                              type="button"
+                              onClick={() => removeTodo(t.id, t)}
+                              className="p-1.5 text-faint hover:text-red-400 rounded-lg hover:bg-red-500/10 shrink-0"
+                              title="Delete"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
