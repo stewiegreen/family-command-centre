@@ -17,11 +17,6 @@ function hasAnyBalance(map?: Record<string, number> | null): boolean {
   return Object.values(map).some((v) => typeof v === 'number' && v !== 0);
 }
 
-function hasAnyProgress(map?: Record<string, { xp?: number }> | null): boolean {
-  if (!map) return false;
-  return Object.values(map).some((p) => (p?.xp ?? 0) > 0);
-}
-
 export const DEFAULT_MEMBERS: Member[] = [
   { id: '1', name: 'Alex', color: '#6366f1', emoji: '👨', initials: 'A', role: 'parent' },
   { id: '2', name: 'Sam', color: '#ec4899', emoji: '👩', initials: 'S', role: 'parent' },

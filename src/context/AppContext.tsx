@@ -59,6 +59,8 @@ interface AppContextValue {
   isMediaOnly: boolean;
   cloudReady: boolean;
   cloudError: string | null;
+  /** Number of writes currently in flight to Firestore. 0 = fully saved. */
+  pendingWrites: number;
   familyId: string;
   syncStatus: SyncStatus;
   authUser: User | null;
@@ -109,6 +111,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [view, setView] = useState<ViewId>('dashboard');
   const [cloudReady, setCloudReady] = useState(false);
   const [cloudError, setCloudError] = useState<string | null>(null);
+  const [pendingWrites, setPendingWrites] = useState(0);
   const [familyId, setFamilyId] = useState(() => localStorage.getItem(FAMILY_ID_KEY) || '');
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('local');
   const [authUser, setAuthUser] = useState<User | null>(null);
@@ -312,6 +315,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return;
     }
     writingRef.current = true;
+    setPendingWrites((n) => n + 1);
     try {
       await cloudWrite(fid!, next);
       setSyncStatus('live');
@@ -319,8 +323,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch (e) {
       console.error('[persist] write failed', e);
       setCloudError(e instanceof Error ? e.message : 'Write failed');
-      setSyncStatus('error');
+      // Deliberately NOT setSyncStatus('error') here — that value already
+      // means "disconnected" elsewhere in the app and renders as "Offline",
+      // which is actively misleading for a write that failed for some other
+      // reason (e.g. a permissions rejection) while the connection is fine.
     } finally {
+      setPendingWrites((n) => Math.max(0, n - 1));
       setTimeout(() => {
         writingRef.current = false;
       }, 400);
@@ -354,6 +362,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     },
     [persist],
   );
+
+  // Warn before the tab closes/refreshes while a save is still in flight —
+  // this is the window where a kid's just-earned XP/coins could be lost if
+  // they refresh before the write actually reaches Firestore.
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (pendingWrites > 0) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [pendingWrites]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -743,6 +765,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     isMediaOnly,
     cloudReady,
     cloudError,
+    pendingWrites,
     familyId,
     syncStatus,
     authUser,

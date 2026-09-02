@@ -59,6 +59,8 @@ export function Layout({ children }: { children: ReactNode }) {
     isParent,
     isMediaOnly,
     syncStatus,
+    cloudError,
+    pendingWrites,
     familyId,
     signOut,
     authUser,
@@ -122,6 +124,11 @@ export function Layout({ children }: { children: ReactNode }) {
 
   return (
     <div className="h-dvh max-h-dvh flex overflow-hidden bg-page text-fg">
+      {cloudError && (
+        <div className="fixed top-0 inset-x-0 z-[100] bg-red-500 text-white text-sm font-medium px-4 py-2 flex items-center justify-center gap-2 shadow-lg">
+          <span>⚠️ Something didn't save: {cloudError}. Don't close this yet — trying again.</span>
+        </div>
+      )}
       {/* Desktop sidebar */}
       <aside
         className={cn(
@@ -143,7 +150,13 @@ export function Layout({ children }: { children: ReactNode }) {
               <div className="min-w-0">
                 <h1 className="font-semibold truncate text-fg">{settings.familyName}</h1>
                 <p className="text-xs text-faint">
-                  {syncStatus === 'live' ? (
+                  {pendingWrites > 0 ? (
+                    <span className="text-amber-500">● Saving…</span>
+                  ) : cloudError ? (
+                    <span className="text-red-500" title={cloudError}>
+                      ● Not saved — {cloudError}
+                    </span>
+                  ) : syncStatus === 'live' ? (
                     <span className="text-accent">● Live{familyId ? ` · ${familyId}` : ''}</span>
                   ) : syncStatus === 'connecting' ? (
                     <span className="text-amber-500">● Syncing…</span>
@@ -398,7 +411,13 @@ export function Layout({ children }: { children: ReactNode }) {
                 <div className="min-w-0">
                   <p className="font-semibold truncate">{settings.familyName}</p>
                   <p className="text-xs text-faint truncate">
-                    {syncStatus === 'live' ? 'Live sync' : 'Local'}
+                    {pendingWrites > 0
+                      ? 'Saving…'
+                      : cloudError
+                        ? 'Not saved — check connection'
+                        : syncStatus === 'live'
+                          ? 'Live sync'
+                          : 'Local'}
                   </p>
                 </div>
               </div>

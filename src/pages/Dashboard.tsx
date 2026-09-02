@@ -23,7 +23,7 @@ import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Modal } from '../components/ui/Modal';
 import { ProfileLookCard } from '../components/ProfileLookEditor';
-import type { CalendarEvent, ExpandedEvent, PresenceStatus, Quest, ViewId } from '../types';
+import type { CalendarEvent, ExpandedEvent, FamilyData, PresenceStatus, Quest, ViewId } from '../types';
 import { FAMILY_LIST_ID, PRESENCE_OPTIONS } from '../types';
 import { upcomingExpanded } from '../lib/recurrence';
 import {
@@ -179,9 +179,6 @@ export function Dashboard() {
   const shopOpen = shopping.filter((s) => !s.bought).length;
   const hour = now.getHours();
   const greeting = hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening';
-  const progressMembers = isParent
-    ? members.filter((m) => m.role !== 'media')
-    : members.filter((m) => m.id === myId);
   const household = members.filter((m) => m.role !== 'media');
 
   const setMyStatus = (status: PresenceStatus) => {
@@ -348,7 +345,7 @@ export function Dashboard() {
         at,
         weekId,
       };
-      let result = {
+      let result: FamilyData = {
         ...d,
         chores: (d.chores || []).map((c) =>
           c.id === quest.id
