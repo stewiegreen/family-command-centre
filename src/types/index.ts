@@ -209,7 +209,14 @@ export interface ScreenTimeLogEntry {
 export interface ShoppingItem {
   id: string;
   text: string;
+  /** e.g. "2", "500g", "1 L" — free-form for flexibility. */
+  quantity?: string;
+  /** Preferred brand or short note (e.g. "Coles brand", "organic"). */
+  brand?: string;
+  /** Store name — items with the same store form a list section. */
   store?: string;
+  /** Lower = higher in list. Used for drag-reorder. */
+  sort?: number;
   claimedById?: string | null;
   bought: boolean;
   createdById: string;
