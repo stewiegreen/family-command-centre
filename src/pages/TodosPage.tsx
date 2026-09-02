@@ -1,5 +1,5 @@
 import { useMemo, useState, type DragEvent } from 'react';
-import { Plus, Trash2, GripVertical } from 'lucide-react';
+import { Plus, Trash2, GripVertical, Pencil, Check, X } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Avatar } from '../components/ui/Avatar';
 import { Button } from '../components/ui/Button';
@@ -25,6 +25,15 @@ export function todoStatus(t: Todo): TodoStatus {
   return t.completed ? 'done' : 'todo';
 }
 
+/** datetime-local value from ISO (local). */
+function toLocalInput(iso?: string): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 const COLUMNS: { id: TodoStatus; label: string; hint: string }[] = [
   { id: 'todo', label: 'To Do', hint: 'Queued' },
   { id: 'doing', label: 'Doing', hint: 'In progress' },
@@ -35,6 +44,14 @@ const PRIORITY_COLOR: Record<Priority, string> = {
   low: '#64748b',
   medium: '#f59e0b',
   high: '#ef4444',
+};
+
+type EditDraft = {
+  id: string;
+  text: string;
+  priority: Priority;
+  dueAt: string;
+  memberId: string;
 };
 
 export function TodosPage() {
@@ -51,6 +68,9 @@ export function TodosPage() {
   // Drag state
   const [dragId, setDragId] = useState<string | null>(null);
   const [overCol, setOverCol] = useState<TodoStatus | null>(null);
+
+  // Edit state
+  const [edit, setEdit] = useState<EditDraft | null>(null);
 
   const members = data.members
     .filter((m) => m.role !== 'media')
@@ -70,6 +90,48 @@ export function TodosPage() {
     }
     return map;
   }, [list]);
+
+  const canEditTodo = (t: Todo) => {
+    if (isParent) return true;
+    const creator = data.members.find((m) => m.id === t.createdById);
+    const fromParent = creator && creator.role === 'parent' && t.createdById !== t.memberId;
+    if (fromParent) return false;
+    return t.createdById === myId || t.memberId === myId;
+  };
+
+  const startEdit = (t: Todo) => {
+    if (!canEditTodo(t)) return;
+    setEdit({
+      id: t.id,
+      text: t.text,
+      priority: t.priority,
+      dueAt: toLocalInput(t.dueAt),
+      memberId: t.memberId,
+    });
+  };
+
+  const cancelEdit = () => setEdit(null);
+
+  const saveEdit = () => {
+    if (!edit) return;
+    const trimmed = edit.text.trim();
+    if (!trimmed) return;
+    update((d) => ({
+      ...d,
+      todos: d.todos.map((t) => {
+        if (t.id !== edit.id) return t;
+        return {
+          ...t,
+          text: trimmed,
+          priority: edit.priority,
+          dueAt: edit.dueAt ? new Date(edit.dueAt).toISOString() : undefined,
+          memberId: isParent ? edit.memberId : t.memberId,
+        };
+      }),
+    }));
+    // If parent reassigned to another board, leave edit mode
+    setEdit(null);
+  };
 
   const setTodoStatus = (id: string, status: TodoStatus) => {
     update((d) => ({
@@ -112,10 +174,7 @@ export function TodosPage() {
   };
 
   const removeTodo = (id: string, t: Todo) => {
-    const creator = data.members.find((m) => m.id === t.createdById);
-    const fromParent = creator && creator.role === 'parent' && t.createdById !== t.memberId;
-    if (!isParent && fromParent) return;
-    if (!isParent && t.createdById !== myId && t.memberId !== myId) return;
+    if (!canEditTodo(t)) return;
     update((d) => ({ ...d, todos: d.todos.filter((x) => x.id !== id) }));
   };
 
@@ -135,6 +194,10 @@ export function TodosPage() {
 
   // --- DnD ---
   const onDragStart = (e: DragEvent, id: string) => {
+    if (edit?.id === id) {
+      e.preventDefault();
+      return;
+    }
     setDragId(id);
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', id);
@@ -317,21 +380,100 @@ export function TodosPage() {
                   {items.map((t) => {
                     const assignee = getMember(t.memberId) || listOwner;
                     const color = assignee?.color || '#6366f1';
-                    const creator = data.members.find((m) => m.id === t.createdById);
-                    const fromParent =
-                      creator && creator.role === 'parent' && t.createdById !== t.memberId;
-                    const canDelete =
-                      isParent || (!fromParent && (t.createdById === myId || t.memberId === myId));
                     const status = todoStatus(t);
+                    const editing = edit?.id === t.id;
+                    const canEdit = canEditTodo(t);
+
+                    if (editing && edit) {
+                      return (
+                        <div
+                          key={t.id}
+                          className="rounded-xl border border-accent bg-page p-3 shadow-sm space-y-2"
+                          style={{ borderLeftWidth: 3, borderLeftColor: color }}
+                        >
+                          <textarea
+                            value={edit.text}
+                            onChange={(e) => setEdit({ ...edit, text: e.target.value })}
+                            rows={2}
+                            className="w-full bg-input border border-border-strong rounded-lg px-2.5 py-2 text-sm text-fg resize-y min-h-[2.5rem]"
+                            autoFocus
+                            onKeyDown={(e) => {
+                              if (e.key === 'Escape') cancelEdit();
+                              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) saveEdit();
+                            }}
+                          />
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="text-[10px] text-muted mb-0.5 block">Priority</label>
+                              <select
+                                value={edit.priority}
+                                onChange={(e) =>
+                                  setEdit({ ...edit, priority: e.target.value as Priority })
+                                }
+                                className="w-full bg-input border border-border-strong rounded-lg px-2 py-1.5 text-xs text-fg"
+                              >
+                                <option value="low">Low</option>
+                                <option value="medium">Medium</option>
+                                <option value="high">High</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label className="text-[10px] text-muted mb-0.5 block">Due</label>
+                              <input
+                                type="datetime-local"
+                                value={edit.dueAt}
+                                onChange={(e) => setEdit({ ...edit, dueAt: e.target.value })}
+                                className="w-full bg-input border border-border-strong rounded-lg px-1.5 py-1.5 text-xs text-fg"
+                              />
+                            </div>
+                          </div>
+                          {isParent && (
+                            <div>
+                              <label className="text-[10px] text-muted mb-0.5 block">Assign to</label>
+                              <select
+                                value={edit.memberId}
+                                onChange={(e) => setEdit({ ...edit, memberId: e.target.value })}
+                                className="w-full bg-input border border-border-strong rounded-lg px-2 py-1.5 text-xs text-fg"
+                              >
+                                {members.map((m) => (
+                                  <option key={m.id} value={m.id}>
+                                    {m.emoji ? `${m.emoji} ` : ''}
+                                    {m.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
+                          <div className="flex items-center justify-end gap-1.5 pt-0.5">
+                            <button
+                              type="button"
+                              onClick={cancelEdit}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs text-muted hover:bg-nav-hover"
+                            >
+                              <X className="w-3.5 h-3.5" /> Cancel
+                            </button>
+                            <button
+                              type="button"
+                              onClick={saveEdit}
+                              disabled={!edit.text.trim()}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-accent text-accent-ink disabled:opacity-40"
+                            >
+                              <Check className="w-3.5 h-3.5" /> Save
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    }
 
                     return (
                       <div
                         key={t.id}
-                        draggable
+                        draggable={!editing}
                         onDragStart={(e) => onDragStart(e, t.id)}
                         onDragEnd={onDragEnd}
+                        onDoubleClick={() => canEdit && startEdit(t)}
                         className={cn(
-                          'rounded-xl border border-border bg-page p-3 cursor-grab active:cursor-grabbing select-none shadow-sm',
+                          'rounded-xl border border-border bg-page p-3 cursor-grab active:cursor-grabbing select-none shadow-sm group',
                           dragId === t.id && 'opacity-40',
                           status === 'done' && 'opacity-70',
                         )}
@@ -366,7 +508,7 @@ export function TodosPage() {
                                 </span>
                               )}
                             </div>
-                            {/* Mobile-friendly status chips (no drag required) */}
+                            {/* Mobile-friendly status chips */}
                             <div className="flex flex-wrap gap-1 mt-2 lg:hidden">
                               {COLUMNS.map((c) => (
                                 <button
@@ -385,16 +527,28 @@ export function TodosPage() {
                               ))}
                             </div>
                           </div>
-                          {canDelete && (
-                            <button
-                              type="button"
-                              onClick={() => removeTodo(t.id, t)}
-                              className="p-1.5 text-faint hover:text-red-400 rounded-lg hover:bg-red-500/10 shrink-0"
-                              title="Delete"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          )}
+                          <div className="flex flex-col gap-0.5 shrink-0">
+                            {canEdit && (
+                              <button
+                                type="button"
+                                onClick={() => startEdit(t)}
+                                className="p-1.5 text-faint hover:text-accent rounded-lg hover:bg-accent/10"
+                                title="Edit"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                            {canEdit && (
+                              <button
+                                type="button"
+                                onClick={() => removeTodo(t.id, t)}
+                                className="p-1.5 text-faint hover:text-red-400 rounded-lg hover:bg-red-500/10"
+                                title="Delete"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
                     );
