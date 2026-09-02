@@ -138,7 +138,15 @@ export function ChoresPage() {
   });
 
   const openQuests = useMemo(
-    () => chores.filter((c) => c.status === 'open' || !c.status),
+    () =>
+      chores
+        .filter((c) => c.status === 'open' || !c.status)
+        .slice()
+        .sort(
+          (a, b) =>
+            DIFFICULTY_ORDER.indexOf(a.difficulty ?? 'medium') -
+            DIFFICULTY_ORDER.indexOf(b.difficulty ?? 'medium'),
+        ),
     [chores],
   );
   const pendingQuests = useMemo(
