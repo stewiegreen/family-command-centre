@@ -139,7 +139,7 @@ export function Layout({ children }: { children: ReactNode }) {
         <div className={cn('border-b border-border', collapsed ? 'p-3' : 'p-5')}>
           <div className={cn('flex items-center', collapsed ? 'justify-center' : 'gap-3')}>
             <img
-              src="/hq-mark.svg"
+              src="/hq-mark.png"
               alt="GreenHQ"
               width={40}
               height={40}
@@ -402,7 +402,7 @@ export function Layout({ children }: { children: ReactNode }) {
             <div className="flex items-center justify-between p-4 border-b border-border">
               <div className="flex items-center gap-3 min-w-0">
                 <img
-                  src="/hq-mark.svg"
+                  src="/hq-mark.png"
                   alt="GreenHQ"
                   width={36}
                   height={36}
