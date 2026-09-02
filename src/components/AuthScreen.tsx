@@ -46,26 +46,38 @@ export function AuthScreen() {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-page relative overflow-hidden">
+      {/* Subtle cyber grid / glow behind the wordmark */}
       <div
-        className="pointer-events-none absolute inset-0 opacity-60"
+        className="pointer-events-none absolute inset-0"
         style={{
           background:
-            'radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--app-accent) 14%, transparent), transparent 60%)',
+            'radial-gradient(ellipse 80% 50% at 50% 28%, color-mix(in srgb, #a3e635 12%, transparent), transparent 70%)',
         }}
       />
-      <div className="w-full max-w-md space-y-4 relative z-10">
-        <div className="text-center mb-6">
+      <div
+        className="pointer-events-none absolute inset-0 opacity-[0.07]"
+        style={{
+          backgroundImage:
+            'linear-gradient(rgba(163,230,53,0.35) 1px, transparent 1px), linear-gradient(90deg, rgba(163,230,53,0.35) 1px, transparent 1px)',
+          backgroundSize: '48px 48px',
+          maskImage: 'radial-gradient(ellipse 70% 55% at 50% 30%, black, transparent)',
+        }}
+      />
+
+      <div className="w-full max-w-md space-y-5 relative z-10">
+        <div className="text-center">
           <img
             src="/greenhq-logo.png"
-            alt="Green HQ — Our family. Our home. Our mission."
-            className="w-full max-w-sm mx-auto mb-4"
+            alt="Green HQ"
+            className="w-full max-w-[22rem] sm:max-w-md mx-auto drop-shadow-[0_0_24px_rgba(163,230,53,0.25)]"
           />
-          <p className="text-sm text-muted mt-1">
+          <p className="text-sm text-muted mt-3">
             {HAS_BUILT_IN_CONFIG
               ? 'Sign in with your email — same link works on every phone'
               : 'Each person signs in with their own email'}
           </p>
         </div>
+
         <Card className="space-y-4">
           <div className="flex gap-2 p-1 bg-surface rounded-xl">
             <button
@@ -135,7 +147,8 @@ export function AuthScreen() {
           </form>
           {mode === 'signin' && (
             <p className="text-xs text-muted text-center">
-              First time on this device? Use the same email you created on another phone, or Create account then join with an invite.
+              First time on this device? Use the same email you created on another phone, or Create
+              account then join with an invite.
             </p>
           )}
         </Card>
