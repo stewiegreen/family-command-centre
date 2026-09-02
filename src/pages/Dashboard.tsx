@@ -173,6 +173,7 @@ export function Dashboard() {
 
   const [shopDraft, setShopDraft] = useState('');
   const [todoDraft, setTodoDraft] = useState('');
+  const [eventDraft, setEventDraft] = useState('');
   const [editEvent, setEditEvent] = useState<CalendarEvent | null>(null);
   const [evTitle, setEvTitle] = useState('');
   const [evLocation, setEvLocation] = useState('');
@@ -309,9 +310,11 @@ export function Dashboard() {
   const toggleTodo = (id: string) => {
     update((d) => ({
       ...d,
-      todos: d.todos.map((td) =>
-        td.id === id ? { ...td, completed: !td.completed } : td,
-      ),
+      todos: d.todos.map((td) => {
+        if (td.id !== id) return td;
+        const next = !td.completed;
+        return { ...td, completed: next, status: next ? ('done' as const) : ('todo' as const) };
+      }),
     }));
   };
 
@@ -327,6 +330,7 @@ export function Dashboard() {
           memberId: myId,
           createdById: myId,
           completed: false,
+          status: 'todo' as const,
           priority: 'medium' as const,
           createdAt: new Date().toISOString(),
         },
@@ -334,6 +338,33 @@ export function Dashboard() {
       ],
     }));
     setTodoDraft('');
+  };
+
+  /** Quick all-day event for today from the home card. */
+  const addQuickEvent = () => {
+    const title = eventDraft.trim();
+    if (!title) return;
+    const startLocal = new Date();
+    startLocal.setHours(12, 0, 0, 0);
+    const endExclusive = new Date(startLocal);
+    endExclusive.setDate(endExclusive.getDate() + 1);
+    endExclusive.setHours(0, 0, 0, 0);
+    update((d) => ({
+      ...d,
+      events: [
+        ...d.events,
+        {
+          id: crypto.randomUUID(),
+          title,
+          start: startLocal.toISOString(),
+          end: endExclusive.toISOString(),
+          allDay: true,
+          memberId: myId,
+          memberIds: [myId],
+        },
+      ],
+    }));
+    setEventDraft('');
   };
 
   const openEventEdit = (ev: ExpandedEvent | CalendarEvent) => {
@@ -641,16 +672,31 @@ export function Dashboard() {
     ),
     events: (
       <Card>
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-3">
           <h2 className="font-semibold text-fg">Upcoming Events</h2>
           <button type="button" onClick={() => setView('calendar')} className="text-xs text-accent">
             Calendar →
           </button>
         </div>
+        <div className="flex gap-2 mb-3">
+          <input
+            className="flex-1 rounded-xl border border-border bg-inset px-3 py-2 text-sm text-fg outline-none focus:border-accent"
+            placeholder="Add an event for today…"
+            value={eventDraft}
+            onChange={(e) => setEventDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') addQuickEvent();
+            }}
+          />
+          <Button size="sm" onClick={addQuickEvent} disabled={!eventDraft.trim()}>
+            <Plus className="w-4 h-4" />
+          </Button>
+        </div>
+        <p className="text-[11px] text-faint mb-2">Quick add creates an all-day event for today. Open Calendar for times.</p>
         {upcoming.length === 0 ? (
-          <p className="text-sm text-muted py-6 text-center">No upcoming events. Enjoy the calm! ☀️</p>
+          <p className="text-sm text-muted py-4 text-center">No upcoming events. Enjoy the calm! ☀️</p>
         ) : (
-          <div className="max-h-72 overflow-y-auto space-y-2 pr-0.5">
+          <div className="max-h-64 overflow-y-auto space-y-2 pr-0.5">
             {upcoming.map((ev) => {
               const m = getMember(ev.memberId);
               const when = new Date(ev.instanceStart || ev.start);
@@ -700,13 +746,27 @@ export function Dashboard() {
             All lists →
           </button>
         </div>
-        <p className="text-xs text-muted mb-3">
+        <div className="flex gap-2 mb-3">
+          <input
+            className="flex-1 rounded-xl border border-border bg-inset px-3 py-2 text-sm text-fg outline-none focus:border-accent"
+            placeholder="Add a to-do for me…"
+            value={todoDraft}
+            onChange={(e) => setTodoDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') addMyTodo();
+            }}
+          />
+          <Button size="sm" onClick={addMyTodo} disabled={!todoDraft.trim()}>
+            <Plus className="w-4 h-4" />
+          </Button>
+        </div>
+        <p className="text-xs text-muted mb-2">
           Your tasks and the family list — tap to complete.
         </p>
         {myOpenTodos.length === 0 ? (
-          <p className="text-sm text-muted py-4 text-center">Nothing on your list. Nice work.</p>
+          <p className="text-sm text-muted py-3 text-center">Nothing on your list. Nice work.</p>
         ) : (
-          <div className="max-h-64 overflow-y-auto space-y-1.5 mb-3">
+          <div className="max-h-64 overflow-y-auto space-y-1.5">
             {myOpenTodos.slice(0, 12).map((td) => (
               <button
                 key={td.id}
@@ -725,20 +785,6 @@ export function Dashboard() {
             ))}
           </div>
         )}
-        <div className="flex gap-2">
-          <input
-            className="flex-1 rounded-xl border border-border bg-inset px-3 py-2 text-sm text-fg outline-none focus:border-accent"
-            placeholder="Add a to-do for me…"
-            value={todoDraft}
-            onChange={(e) => setTodoDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') addMyTodo();
-            }}
-          />
-          <Button size="sm" onClick={addMyTodo} disabled={!todoDraft.trim()}>
-            <Plus className="w-4 h-4" />
-          </Button>
-        </div>
       </Card>
     ),
 
@@ -987,25 +1033,7 @@ export function Dashboard() {
               Full list →
             </button>
           </div>
-          {openShopItems.length === 0 ? (
-            <p className="text-sm text-muted py-4 text-center">List is empty.</p>
-          ) : (
-            <div className="max-h-56 overflow-y-auto space-y-1.5 mb-3">
-              {openShopItems.slice(0, 20).map((s) => (
-                <button
-                  key={s.id}
-                  type="button"
-                  onClick={() => toggleBought(s.id)}
-                  className="w-full flex items-center gap-3 p-2.5 rounded-xl border border-border hover:bg-nav-hover/50 text-left transition-colors"
-                >
-                  <span className="w-5 h-5 rounded-md border border-border-strong shrink-0" />
-                  <span className="text-sm text-fg flex-1 min-w-0 truncate">{s.text}</span>
-                  {s.store ? <span className="text-[11px] text-muted shrink-0">{s.store}</span> : null}
-                </button>
-              ))}
-            </div>
-          )}
-          <div className="flex gap-2">
+          <div className="flex gap-2 mb-3">
             <input
               className="flex-1 rounded-xl border border-border bg-inset px-3 py-2 text-sm text-fg outline-none focus:border-accent"
               placeholder="Add to shopping list…"
@@ -1019,6 +1047,27 @@ export function Dashboard() {
               <Plus className="w-4 h-4" />
             </Button>
           </div>
+          {openShopItems.length === 0 ? (
+            <p className="text-sm text-muted py-3 text-center">List is empty.</p>
+          ) : (
+            <div className="max-h-56 overflow-y-auto space-y-1.5">
+              {openShopItems.slice(0, 20).map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => toggleBought(s.id)}
+                  className="w-full flex items-center gap-3 p-2.5 rounded-xl border border-border hover:bg-nav-hover/50 text-left transition-colors"
+                >
+                  <span className="w-5 h-5 rounded-md border border-border-strong shrink-0" />
+                  <span className="text-sm text-fg flex-1 min-w-0 truncate">
+                    {s.quantity ? `${s.quantity} ` : ''}
+                    {s.text}
+                  </span>
+                  {s.store ? <span className="text-[11px] text-muted shrink-0">{s.store}</span> : null}
+                </button>
+              ))}
+            </div>
+          )}
         </Card>
       </div>
     ),
