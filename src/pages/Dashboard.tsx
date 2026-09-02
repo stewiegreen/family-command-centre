@@ -49,7 +49,7 @@ const COLOR_ICON: Record<string, string> = {
 
 const DISMISS_ANN_KEY = 'fcc_dismissed_announcement';
 
-type SectionId = 'stats' | 'chorequest' | 'presence' | 'digest' | 'events' | 'todos' | 'choresShop' | 'look';
+type SectionId = 'stats' | 'chorequest' | 'presence' | 'digest' | 'events' | 'todos' | 'chores' | 'shopping' | 'look';
 
 function startOfWeekMonday(d: Date) {
   const x = new Date(d);
@@ -88,7 +88,7 @@ function SectionChrome({
   return (
     <div
       className={cn(
-        'relative group/section transition-opacity',
+        'relative group/section transition-opacity h-full min-h-0 flex flex-col',
         dragging && 'opacity-40',
         dragOver && 'ring-2 ring-accent/50 rounded-2xl',
       )}
@@ -128,7 +128,7 @@ function SectionChrome({
           <GripVertical className="w-3.5 h-3.5" />
         </span>
       </div>
-      <div className="min-w-0">{children}</div>
+      <div className="min-w-0 flex-1 flex flex-col [&>*]:h-full">{children}</div>
     </div>
   );
 }
@@ -974,118 +974,118 @@ export function Dashboard() {
         )}
       </Card>
     ),
-    choresShop: (
-      <div className="grid lg:grid-cols-2 gap-4">
-        <Card>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="font-semibold text-fg flex items-center gap-2">
-              <Sword className="w-4 h-4 text-accent" />
-              {isParent ? 'Chores to approve' : 'My quests'}
-            </h2>
-            <button type="button" onClick={() => setView('chores')} className="text-xs text-accent">
-              Board →
-            </button>
-          </div>
-          {myChores.length === 0 ? (
-            <p className="text-sm text-muted py-4 text-center">
-              {isParent ? 'No quests waiting for approval.' : 'No open quests — check back soon.'}
-            </p>
-          ) : (
-            <div className="max-h-72 overflow-y-auto space-y-2">
-              {myChores.map((c) => {
-                const submitter = c.submittedById ? getMember(c.submittedById) : undefined;
-                return (
-                  <div
-                    key={c.id}
-                    className="p-3 rounded-xl border border-border bg-inset/50 space-y-2"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="font-medium text-sm text-fg">{c.title}</p>
-                        <p className="text-xs text-muted mt-0.5">
-                          {c.status === 'pending'
-                            ? submitter
-                              ? `${submitter.name} finished this`
-                              : 'Pending approval'
-                            : 'Open'}
-                          {(c.xp || c.coins) ? ` · +${c.xp ?? 0} XP · +${c.coins ?? 0}c` : ''}
-                        </p>
-                      </div>
-                      {submitter && c.status === 'pending' && <Avatar {...submitter} size="sm" />}
-                    </div>
-                    {isParent && c.status === 'pending' && (
-                      <div className="flex gap-2">
-                        <Button size="sm" className="flex-1" onClick={() => approveQuestHome(c)}>
-                          <Check className="w-3.5 h-3.5 mr-1" />
-                          Approve
-                        </Button>
-                        <Button size="sm" variant="ghost" onClick={() => rejectQuestHome(c)}>
-                          <X className="w-3.5 h-3.5" />
-                        </Button>
-                      </div>
-                    )}
-                    {!isParent && c.status === 'open' && (
-                      <Button size="sm" variant="secondary" className="w-full" onClick={() => submitQuestHome(c)}>
-                        I finished this
-                      </Button>
-                    )}
-                    {!isParent && c.status === 'pending' && c.submittedById === myId && (
-                      <p className="text-xs text-amber-600">Waiting for a parent…</p>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </Card>
-
-        <Card>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="font-semibold text-fg flex items-center gap-2">
-              <ShoppingCart className="w-4 h-4 text-sky-500" />
-              Shopping
-            </h2>
-            <button type="button" onClick={() => setView('shopping')} className="text-xs text-accent">
-              Full list →
-            </button>
-          </div>
-          <div className="flex gap-2 mb-3">
-            <input
-              className="flex-1 rounded-xl border border-border bg-inset px-3 py-2 text-sm text-fg outline-none focus:border-accent"
-              placeholder="Add to shopping list…"
-              value={shopDraft}
-              onChange={(e) => setShopDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') addShopItem();
-              }}
-            />
-            <Button size="sm" onClick={addShopItem} disabled={!shopDraft.trim()}>
-              <Plus className="w-4 h-4" />
-            </Button>
-          </div>
-          {openShopItems.length === 0 ? (
-            <p className="text-sm text-muted py-3 text-center">List is empty.</p>
-          ) : (
-            <div className="max-h-56 overflow-y-auto space-y-1.5">
-              {openShopItems.slice(0, 20).map((s) => (
-                <button
-                  key={s.id}
-                  type="button"
-                  onClick={() => toggleBought(s.id)}
-                  className="w-full flex items-center gap-3 p-2.5 rounded-xl border border-border hover:bg-nav-hover/50 text-left transition-colors"
+    chores: (
+      <Card className="h-full flex flex-col">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-semibold text-fg flex items-center gap-2">
+            <Sword className="w-4 h-4 text-accent" />
+            {isParent ? 'Chores to approve' : 'My quests'}
+          </h2>
+          <button type="button" onClick={() => setView('chores')} className="text-xs text-accent">
+            Board →
+          </button>
+        </div>
+        {myChores.length === 0 ? (
+          <p className="text-sm text-muted py-4 text-center flex-1 flex items-center justify-center">
+            {isParent ? 'No quests waiting for approval.' : 'No open quests — check back soon.'}
+          </p>
+        ) : (
+          <div className="max-h-72 overflow-y-auto space-y-2 flex-1 min-h-0">
+            {myChores.map((c) => {
+              const submitter = c.submittedById ? getMember(c.submittedById) : undefined;
+              return (
+                <div
+                  key={c.id}
+                  className="p-3 rounded-xl border border-border bg-inset/50 space-y-2"
                 >
-                  <span className="w-5 h-5 rounded-md border border-border-strong shrink-0" />
-                  <span className="text-sm text-fg flex-1 min-w-0 truncate">
-                    {s.quantity ? `${s.quantity} ` : ''}
-                    {s.text}
-                  </span>
-                  {s.store ? <span className="text-[11px] text-muted shrink-0">{s.store}</span> : null}
-                </button>
-              ))}
-            </div>
-          )}
-        </Card>
-      </div>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-medium text-sm text-fg">{c.title}</p>
+                      <p className="text-xs text-muted mt-0.5">
+                        {c.status === 'pending'
+                          ? submitter
+                            ? `${submitter.name} finished this`
+                            : 'Pending approval'
+                          : 'Open'}
+                        {(c.xp || c.coins) ? ` · +${c.xp ?? 0} XP · +${c.coins ?? 0}c` : ''}
+                      </p>
+                    </div>
+                    {submitter && c.status === 'pending' && <Avatar {...submitter} size="sm" />}
+                  </div>
+                  {isParent && c.status === 'pending' && (
+                    <div className="flex gap-2">
+                      <Button size="sm" className="flex-1" onClick={() => approveQuestHome(c)}>
+                        <Check className="w-3.5 h-3.5 mr-1" />
+                        Approve
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => rejectQuestHome(c)}>
+                        <X className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  )}
+                  {!isParent && c.status === 'open' && (
+                    <Button size="sm" variant="secondary" className="w-full" onClick={() => submitQuestHome(c)}>
+                      I finished this
+                    </Button>
+                  )}
+                  {!isParent && c.status === 'pending' && c.submittedById === myId && (
+                    <p className="text-xs text-amber-600">Waiting for a parent…</p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Card>
+    ),
+
+    shopping: (
+      <Card className="h-full flex flex-col">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-semibold text-fg flex items-center gap-2">
+            <ShoppingCart className="w-4 h-4 text-sky-500" />
+            Shopping
+          </h2>
+          <button type="button" onClick={() => setView('shopping')} className="text-xs text-accent">
+            Full list →
+          </button>
+        </div>
+        <div className="flex gap-2 mb-3">
+          <input
+            className="flex-1 rounded-xl border border-border bg-inset px-3 py-2 text-sm text-fg outline-none focus:border-accent"
+            placeholder="Add to shopping list…"
+            value={shopDraft}
+            onChange={(e) => setShopDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') addShopItem();
+            }}
+          />
+          <Button size="sm" onClick={addShopItem} disabled={!shopDraft.trim()}>
+            <Plus className="w-4 h-4" />
+          </Button>
+        </div>
+        {openShopItems.length === 0 ? (
+          <p className="text-sm text-muted py-3 text-center flex-1 flex items-center justify-center">List is empty.</p>
+        ) : (
+          <div className="max-h-56 overflow-y-auto space-y-1.5 flex-1 min-h-0">
+            {openShopItems.slice(0, 20).map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => toggleBought(s.id)}
+                className="w-full flex items-center gap-3 p-2.5 rounded-xl border border-border hover:bg-nav-hover/50 text-left transition-colors"
+              >
+                <span className="w-5 h-5 rounded-md border border-border-strong shrink-0" />
+                <span className="text-sm text-fg flex-1 min-w-0 truncate">
+                  {s.quantity ? `${s.quantity} ` : ''}
+                  {s.text}
+                </span>
+                {s.store ? <span className="text-[11px] text-muted shrink-0">{s.store}</span> : null}
+              </button>
+            ))}
+          </div>
+        )}
+      </Card>
     ),
 
     look: <ProfileLookCard />,
@@ -1166,7 +1166,7 @@ export function Dashboard() {
           <div
             key={`row-${ri}-${row.map((r) => r.id).join('-')}`}
             className={cn(
-              'grid gap-4',
+              'grid gap-4 items-stretch',
               row.length > 1 ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1',
             )}
           >

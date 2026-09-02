@@ -9,7 +9,8 @@ export const HOMESCREEN_WIDGETS = [
   'digest',
   'events',
   'todos',
-  'choresShop',
+  'chores',
+  'shopping',
   'look',
 ] as const;
 
@@ -29,7 +30,8 @@ export const DEFAULT_HOMESCREEN_LAYOUT: HomescreenLayoutItem[] = [
   { id: 'digest', span: 'full' },
   { id: 'events', span: 'half' },
   { id: 'todos', span: 'half' },
-  { id: 'choresShop', span: 'full' },
+  { id: 'chores', span: 'half' },
+  { id: 'shopping', span: 'half' },
   { id: 'look', span: 'full' },
 ];
 
@@ -61,13 +63,23 @@ export function resolveHomescreenLayout(
   if (savedLayout?.length) {
     for (const item of savedLayout) {
       if (!item?.id) continue;
-      const span = item.span === 'half' ? 'half' : 'full';
-      push(item.id, span);
+      const span: HomescreenSpan = item.span === 'half' ? 'half' : 'full';
+      if (item.id === 'choresShop') {
+        push('chores', span === 'full' ? 'half' : span);
+        push('shopping', span === 'full' ? 'half' : span);
+      } else {
+        push(item.id, span);
+      }
     }
   } else if (savedOrder?.length) {
     for (const id of savedOrder) {
-      // Legacy: events + todos were paired → default half
-      const span: HomescreenSpan = id === 'events' || id === 'todos' ? 'half' : 'full';
+      if (id === 'choresShop') {
+        push('chores', 'half');
+        push('shopping', 'half');
+        continue;
+      }
+      const span: HomescreenSpan =
+        id === 'events' || id === 'todos' || id === 'chores' || id === 'shopping' ? 'half' : 'full';
       push(id, span);
     }
   }
