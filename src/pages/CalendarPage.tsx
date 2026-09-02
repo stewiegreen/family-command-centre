@@ -291,14 +291,13 @@ export function CalendarPage() {
     openNew(day, a / 60, Math.max(b, a + SNAP_MIN) / 60);
   };
 
-  /** Persist resized times onto the master event (series). */
+  /** Persist resized / moved times onto the master event (series). */
   const resizeEvent = (ev: ExpandedEvent, newStart: Date, newEnd: Date) => {
     if (newEnd.getTime() <= newStart.getTime()) return;
     update((d) => ({
       ...d,
       events: d.events.map((e) => {
         if (e.id !== ev.masterId) return e;
-        // Keep date from original master; apply new local times
         return {
           ...e,
           start: newStart.toISOString(),
@@ -306,6 +305,42 @@ export function CalendarPage() {
           allDay: false,
         };
       }),
+    }));
+  };
+
+  /** Move an all-day / multi-day event to a new start calendar day (keeps duration). */
+  const moveEventToDay = (ev: ExpandedEvent, targetDay: Date) => {
+    const master = data.events.find((e) => e.id === ev.masterId);
+    if (!master) return;
+    const oldStart = new Date(ev.instanceStart);
+    const oldEnd = new Date(ev.instanceEnd);
+    const durationMs = oldEnd.getTime() - oldStart.getTime();
+    if (durationMs <= 0) return;
+
+    // Align to local calendar day of target
+    const newStart = new Date(targetDay);
+    if (master.allDay) {
+      newStart.setHours(12, 0, 0, 0);
+      const newEnd = new Date(newStart.getTime() + durationMs);
+      update((d) => ({
+        ...d,
+        events: d.events.map((e) =>
+          e.id === ev.masterId
+            ? { ...e, start: newStart.toISOString(), end: newEnd.toISOString() }
+            : e,
+        ),
+      }));
+      return;
+    }
+    newStart.setHours(oldStart.getHours(), oldStart.getMinutes(), 0, 0);
+    const newEnd = new Date(newStart.getTime() + durationMs);
+    update((d) => ({
+      ...d,
+      events: d.events.map((e) =>
+        e.id === ev.masterId
+          ? { ...e, start: newStart.toISOString(), end: newEnd.toISOString(), allDay: false }
+          : e,
+      ),
     }));
   };
 
@@ -583,6 +618,7 @@ export function CalendarPage() {
             onDayClick={(d) => openNew(d)}
             onEventClick={openEdit}
             onToggleTodo={toggleTodo}
+            onMoveEventToDay={moveEventToDay}
           />
         )}
         {view === 'week' && (
@@ -623,8 +659,8 @@ export function CalendarPage() {
 
       <p className="text-[11px] text-muted text-center shrink-0 leading-tight">
         {view === 'month'
-          ? 'Tap a day to add · tap an event to edit. Multi-day events span across days.'
-          : 'Timed events sit on the timeline · all-day events are in the top strip.'}
+          ? 'Drag an event to another day · tap to edit. Multi-day events span across days.'
+          : 'Drag events to move · drag edges to resize · drag empty grid to create.'}
       </p>
 
       {/* Scope: this vs series */}
@@ -880,6 +916,7 @@ function MonthView({
   onDayClick,
   onEventClick,
   onToggleTodo,
+  onMoveEventToDay,
 }: {
   cursor: Date;
   weeks: Date[][];
@@ -890,6 +927,7 @@ function MonthView({
   onDayClick: (d: Date) => void;
   onEventClick: (ev: ExpandedEvent) => void;
   onToggleTodo: (id: string) => void;
+  onMoveEventToDay: (ev: ExpandedEvent, day: Date) => void;
 }) {
   return (
     <Card className="!p-1.5 sm:!p-2 h-full min-h-0 flex flex-col overflow-hidden">
@@ -917,6 +955,7 @@ function MonthView({
               onDayClick={onDayClick}
               onEventClick={onEventClick}
               onToggleTodo={onToggleTodo}
+              onMoveEventToDay={onMoveEventToDay}
             />
           ))}
         </div>
@@ -935,6 +974,7 @@ function MonthWeekRow({
   onDayClick,
   onEventClick,
   onToggleTodo,
+  onMoveEventToDay,
 }: {
   week: Date[];
   cursor: Date;
@@ -945,6 +985,7 @@ function MonthWeekRow({
   onDayClick: (d: Date) => void;
   onEventClick: (ev: ExpandedEvent) => void;
   onToggleTodo: (id: string) => void;
+  onMoveEventToDay: (ev: ExpandedEvent, day: Date) => void;
 }) {
   // Multi-day / all-day spanning: events that cover more than one calendar day in this week
   const weekStart = startOfDay(week[0]);
@@ -1012,6 +1053,22 @@ function MonthWeekRow({
               key={day.toISOString()}
               type="button"
               onClick={() => onDayClick(day)}
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const raw = e.dataTransfer.getData('application/x-fcc-event');
+                if (!raw) return;
+                try {
+                  const parsed = JSON.parse(raw) as ExpandedEvent;
+                  onMoveEventToDay(parsed, day);
+                } catch {
+                  /* ignore */
+                }
+              }}
               className={cn(
                 'h-full min-h-0 p-1 sm:p-1.5 rounded-lg sm:rounded-xl text-left transition-colors flex flex-col overflow-hidden',
                 inMonth ? 'hover:bg-nav-hover' : 'opacity-40',
@@ -1039,11 +1096,17 @@ function MonthWeekRow({
                   return (
                     <div
                       key={ev.id}
+                      draggable
+                      onDragStart={(e) => {
+                        e.stopPropagation();
+                        e.dataTransfer.setData('application/x-fcc-event', JSON.stringify(ev));
+                        e.dataTransfer.effectAllowed = 'move';
+                      }}
                       onClick={(e) => {
                         e.stopPropagation();
                         onEventClick(ev);
                       }}
-                      className="text-[11px] sm:text-xs truncate px-1 py-0.5 rounded flex items-center gap-0.5 leading-tight"
+                      className="text-[11px] sm:text-xs truncate px-1 py-0.5 rounded flex items-center gap-0.5 leading-tight cursor-grab active:cursor-grabbing"
                       style={{
                         backgroundColor: col + '40',
                         color: col,
@@ -1102,7 +1165,13 @@ function MonthWeekRow({
         return (
           <div
             key={ev.id + '-span'}
-            className="absolute pointer-events-auto text-[11px] sm:text-xs truncate px-1.5 rounded-md font-medium cursor-pointer z-[1] leading-tight"
+            draggable
+            onDragStart={(e) => {
+              e.stopPropagation();
+              e.dataTransfer.setData('application/x-fcc-event', JSON.stringify(ev));
+              e.dataTransfer.effectAllowed = 'move';
+            }}
+            className="absolute pointer-events-auto text-[11px] sm:text-xs truncate px-1.5 rounded-md font-medium cursor-grab active:cursor-grabbing z-[1] leading-tight"
             style={{
               left: `calc(${(startCol / 7) * 100}% + 2px)`,
               width: `calc(${((endCol - startCol) / 7) * 100}% - 4px)`,
@@ -1199,7 +1268,9 @@ function TimeGridView({
     startMins: number;
     endMins: number;
   }>(null);
-  const dragMode = useRef<'none' | 'create' | 'resize-start' | 'resize-end'>('none');
+  const dragMode = useRef<'none' | 'create' | 'resize-start' | 'resize-end' | 'move'>('none');
+  const moveOffsetMins = useRef(0); // pointer mins - event start mins at grab
+  const moveDurationMins = useRef(60);
   const dragEv = useRef<ExpandedEvent | null>(null);
   const resizeDraft = useRef<{ start: Date; end: Date } | null>(null);
   const gridEls = useRef<(HTMLDivElement | null)[]>([]);
@@ -1233,6 +1304,46 @@ function TimeGridView({
     if (dragMode.current === 'create' && draft && draft.dayIndex === dayIndex) {
       if (Math.abs(mins - draft.startMins) >= SNAP_MIN) suppressClick.current = true;
       setDraft({ ...draft, endMins: mins });
+      return;
+    }
+
+    if (dragMode.current === 'move' && dragEv.current) {
+      suppressClick.current = true;
+      const ev = dragEv.current;
+      // Resolve day column under pointer (allows cross-day moves in week view)
+      let di = dayIndex;
+      for (let i = 0; i < gridEls.current.length; i++) {
+        const cell = gridEls.current[i];
+        if (!cell) continue;
+        const r = cell.getBoundingClientRect();
+        if (e.clientX >= r.left && e.clientX <= r.right) {
+          di = i;
+          break;
+        }
+      }
+      const day = days[di] || days[dayIndex];
+      const cell = gridEls.current[di] || gridEls.current[dayIndex];
+      const top = cell?.getBoundingClientRect().top ?? e.clientY;
+      const minsHere = yToMins(e.clientY, top);
+      let startMins = minsHere - moveOffsetMins.current;
+      startMins = snapMins(Math.max(HOUR_START * 60, Math.min(HOUR_END * 60 - SNAP_MIN, startMins)));
+      const dur = moveDurationMins.current;
+      let endMins = startMins + dur;
+      if (endMins > HOUR_END * 60) {
+        endMins = HOUR_END * 60;
+        startMins = Math.max(HOUR_START * 60, endMins - dur);
+      }
+      const s = new Date(day);
+      s.setHours(0, 0, 0, 0);
+      s.setMinutes(startMins);
+      const en = new Date(day);
+      en.setHours(0, 0, 0, 0);
+      en.setMinutes(endMins);
+      resizeDraft.current = { start: s, end: en };
+      setResizePreview((prev) => ({
+        ...prev,
+        [ev.id]: { start: s.getTime(), end: en.getTime() },
+      }));
       return;
     }
 
@@ -1288,7 +1399,7 @@ function TimeGridView({
     }
 
     if (
-      (mode === 'resize-start' || mode === 'resize-end') &&
+      (mode === 'resize-start' || mode === 'resize-end' || mode === 'move') &&
       dragEv.current &&
       resizeDraft.current
     ) {
@@ -1318,6 +1429,28 @@ function TimeGridView({
       end: new Date(ev.instanceEnd),
     };
     suppressClick.current = true;
+  };
+
+  const startMove = (ev: ExpandedEvent, dayIndex: number, e: ReactPointerEvent) => {
+    // Don't start move from resize handles
+    if ((e.target as HTMLElement).closest('[data-resize-handle]')) return;
+    e.stopPropagation();
+    e.preventDefault();
+    const el = gridEls.current[dayIndex];
+    if (!el) return;
+    el.setPointerCapture(e.pointerId);
+    const top = el.getBoundingClientRect().top;
+    const pointerMins = yToMins(e.clientY, top);
+    const s = new Date(ev.instanceStart);
+    const en = new Date(ev.instanceEnd);
+    const startMins = s.getHours() * 60 + s.getMinutes();
+    const endMins = en.getHours() * 60 + en.getMinutes();
+    dragMode.current = 'move';
+    dragEv.current = ev;
+    moveOffsetMins.current = pointerMins - startMins;
+    moveDurationMins.current = Math.max(SNAP_MIN, endMins - startMins);
+    resizeDraft.current = { start: s, end: en };
+    suppressClick.current = false; // only suppress after actual movement
   };
 
   return (
@@ -1515,7 +1648,7 @@ function TimeGridView({
                       <div
                         key={ev.id}
                         data-event-block
-                        className="absolute z-[1] text-left text-xs sm:text-sm rounded-md overflow-hidden border border-black/10 group"
+                        className="absolute z-[1] text-left text-xs sm:text-sm rounded-md overflow-hidden border border-black/10 group cursor-grab active:cursor-grabbing"
                         style={{
                           top,
                           height,
@@ -1525,24 +1658,18 @@ function TimeGridView({
                           color: col,
                           borderLeft: `3px solid ${col}`,
                         }}
+                        onPointerDown={(pe) => startMove(ev, di, pe)}
                       >
                         {/* Resize handles */}
                         <div
-                          className="absolute left-0 right-0 top-0 h-3 cursor-ns-resize touch-none opacity-0 group-hover:opacity-100 bg-gradient-to-b from-black/15 to-transparent"
+                          data-resize-handle
+                          className="absolute left-0 right-0 top-0 h-3 cursor-ns-resize touch-none opacity-0 group-hover:opacity-100 bg-gradient-to-b from-black/15 to-transparent z-[2]"
                           onPointerDown={(pe) => startResize(ev, 'start', di, pe)}
                           title="Drag to change start"
                         />
                         <button
                           type="button"
-                          className="w-full h-full text-left px-1 py-0.5 overflow-hidden"
-                          onClick={(ce) => {
-                            ce.stopPropagation();
-                            if (suppressClick.current) {
-                              suppressClick.current = false;
-                              return;
-                            }
-                            onEventClick(ev);
-                          }}
+                          className="w-full h-full text-left px-1 py-0.5 overflow-hidden pointer-events-none"
                           title={`${format(s, 'H:mm')}–${format(e, 'H:mm')} ${ev.title}`}
                         >
                           <div className="font-medium truncate leading-tight">
@@ -1555,8 +1682,21 @@ function TimeGridView({
                             </div>
                           )}
                         </button>
+                        {/* Click target: open edit if we didn't actually drag */}
                         <div
-                          className="absolute left-0 right-0 bottom-0 h-3 cursor-ns-resize touch-none opacity-0 group-hover:opacity-100 sm:opacity-70 bg-gradient-to-t from-black/15 to-transparent"
+                          className="absolute inset-0 z-[1]"
+                          onClick={(ce) => {
+                            ce.stopPropagation();
+                            if (suppressClick.current) {
+                              suppressClick.current = false;
+                              return;
+                            }
+                            onEventClick(ev);
+                          }}
+                        />
+                        <div
+                          data-resize-handle
+                          className="absolute left-0 right-0 bottom-0 h-3 cursor-ns-resize touch-none opacity-0 group-hover:opacity-100 sm:opacity-70 bg-gradient-to-t from-black/15 to-transparent z-[2]"
                           onPointerDown={(pe) => startResize(ev, 'end', di, pe)}
                           title="Drag to change end"
                         />
@@ -1570,7 +1710,7 @@ function TimeGridView({
         </div>
       </div>
       <p className="text-[10px] text-faint text-center py-1.5 px-2 border-t border-border">
-        Drag on the grid to create · drag event edges to resize
+        Drag events to move · edges to resize · empty grid to create
       </p>
     </Card>
   );
