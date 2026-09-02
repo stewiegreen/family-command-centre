@@ -366,33 +366,8 @@ export function Layout({ children }: { children: ReactNode }) {
             )}
           </div>
         </header>
-        <main className="flex-1 min-h-0 overflow-y-auto pb-24 lg:pb-6">{children}</main>
+        <main className="flex-1 min-h-0 overflow-y-auto pb-6">{children}</main>
       </div>
-
-      {/* Mobile bottom nav */}
-      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 border-t border-border bg-header backdrop-blur-xl pb-[env(safe-area-inset-bottom)]">
-        <div className="flex items-center justify-around h-16 px-1">
-          {navItems.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => setView(item.id)}
-              className={cn(
-                'relative flex flex-col items-center justify-center gap-0.5 w-14 h-14 rounded-xl',
-                view === item.id ? 'text-accent' : 'text-faint',
-              )}
-            >
-              <item.icon className="w-5 h-5" />
-              <span className="text-[10px] font-medium">{item.label}</span>
-              {item.id === 'messages' && unread > 0 && (
-                <span className="absolute top-1 right-1.5 bg-accent text-accent-ink text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
-                  {unread}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
-      </nav>
 
       {/* Mobile drawer */}
       {sidebarOpen && (
