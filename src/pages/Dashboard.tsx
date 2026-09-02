@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type DragEvent } from 'react';
+import { useEffect, useMemo, useState, type DragEvent, type ReactNode } from 'react';
 import {
   Calendar,
   Check,
@@ -13,7 +13,7 @@ import {
   Sparkles,
   GripVertical,
   Columns2,
-  RectangleHorizontal,
+  Square,
   Sword,
   Trophy,
   X,
@@ -83,7 +83,7 @@ function SectionChrome({
   onDrop: (id: SectionId) => void;
   onDragEnd: () => void;
   onToggleSpan: (id: SectionId) => void;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <div
@@ -105,7 +105,7 @@ function SectionChrome({
       }}
       onDragEnd={onDragEnd}
     >
-      <div className="absolute top-2 right-2 z-10 flex items-center gap-1 opacity-80 sm:opacity-0 sm:group-hover/section:opacity-100 transition-opacity">
+      <div className="absolute top-2 right-2 z-10 flex items-center gap-1 opacity-100 transition-opacity">
         <button
           type="button"
           onClick={(e) => {
@@ -118,7 +118,7 @@ function SectionChrome({
           {span === 'full' ? (
             <Columns2 className="w-3.5 h-3.5" />
           ) : (
-            <RectangleHorizontal className="w-3.5 h-3.5" />
+            <Square className="w-3.5 h-3.5" />
           )}
         </button>
         <span
@@ -512,7 +512,7 @@ export function Dashboard() {
     weekStart.getTime() + 6 * 86400000,
   ).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`;
 
-  const sections: Record<SectionId, React.ReactNode> = {
+  const sections: Record<SectionId, ReactNode> = {
     stats: (
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {cards.map((c) => (
