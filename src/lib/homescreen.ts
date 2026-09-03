@@ -29,6 +29,26 @@ export type HomescreenWidgetId = (typeof HOMESCREEN_WIDGETS)[number];
 /** A row is 1 id (full width) or 2 ids (each shares the row, half width). */
 export type HomescreenRow = HomescreenWidgetId[];
 
+/**
+ * Firestore-safe on-disk shape. Firestore rejects arrays nested directly
+ * inside arrays (`string[][]`), so each row is wrapped in an object.
+ */
+export interface HomescreenRowDoc {
+  ids: string[];
+}
+
+export function toHomescreenRowDocs(rows: HomescreenRow[]): HomescreenRowDoc[] {
+  return rows.map((ids) => ({ ids }));
+}
+
+function fromHomescreenRowDocs(docs: HomescreenRowDoc[]): HomescreenRow[] {
+  return docs
+    .map((d) => (Array.isArray(d?.ids) ? d.ids.filter(isWidgetId) : []))
+    .filter((row) => row.length > 0)
+    .map((row) => row.slice(0, 2) as HomescreenRow);
+}
+
+
 /** Default: events+todos share a row, chores+shopping share a row. */
 export const DEFAULT_HOMESCREEN_ROWS: HomescreenRow[] = [
   ['stats'],
@@ -100,17 +120,14 @@ function rowsFromLegacyOrder(order: string[]): HomescreenRow[] {
  * added after the user's layout was saved) as its own full-width row.
  */
 export function resolveHomescreenRows(
-  savedRows?: HomescreenRow[] | null,
+  savedRows?: HomescreenRowDoc[] | null,
   savedLayout?: HomescreenLayoutItem[] | null,
   savedOrder?: string[] | null,
 ): HomescreenRow[] {
   let rows: HomescreenRow[];
 
   if (savedRows?.length) {
-    rows = savedRows
-      .map((row) => row.filter(isWidgetId))
-      .filter((row) => row.length > 0)
-      .map((row) => row.slice(0, 2) as HomescreenRow);
+    rows = fromHomescreenRowDocs(savedRows);
   } else if (savedLayout?.length) {
     rows = rowsFromLegacyLayout(savedLayout);
   } else if (savedOrder?.length) {

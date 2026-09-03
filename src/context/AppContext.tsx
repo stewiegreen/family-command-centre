@@ -20,6 +20,7 @@ import {
 import { migratePayload } from '../lib/defaults';
 import {
   resolveHomescreenRows,
+  toHomescreenRowDocs,
   type HomescreenRow,
 } from '../lib/homescreen';
 import {
@@ -736,7 +737,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   const myHomescreenRows = resolveHomescreenRows(
-    data.appearance?.[data.settings.currentUserId]?.homescreenRows as HomescreenRow[] | undefined,
+    data.appearance?.[data.settings.currentUserId]?.homescreenRows,
     data.appearance?.[data.settings.currentUserId]?.homescreenLayout as
       | { id: string; span: 'full' | 'half' }[]
       | undefined,
@@ -755,7 +756,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
             ...(d.appearance || {}),
             [id]: {
               ...prev,
-              homescreenRows: rows,
+              // Stored as { ids: string[] }[], never string[][] —
+              // Firestore rejects arrays nested directly in arrays.
+              homescreenRows: toHomescreenRowDocs(rows),
               // Keep legacy fields in sync so an older build reading this
               // family's data (unlikely, but possible mid-rollout) still
               // gets a sane full-width fallback rather than crashing.

@@ -314,9 +314,11 @@ export interface FamilyData {
       homescreenLayout?: { id: string; span: 'full' | 'half' }[];
       /**
        * Preferred layout: explicit rows of 1 (full width) or 2 (shared
-       * row) widget ids. Source of truth when present.
+       * row) widget ids. Source of truth when present. Stored as
+       * { ids: string[] }[] (not string[][]) because Firestore rejects
+       * arrays nested directly inside arrays.
        */
-      homescreenRows?: string[][];
+      homescreenRows?: { ids: string[] }[];
     }
   >;
   /** memberId → earned screen-time minutes balance. */
