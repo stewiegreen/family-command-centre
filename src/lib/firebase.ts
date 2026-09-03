@@ -317,6 +317,7 @@ export async function cloudWrite(familyId: string, data: FamilyData): Promise<vo
     coinBalances: data.coinBalances || {},
     coinLedger: (data.coinLedger || []).slice(0, 200),
     rewardCatalog: data.rewardCatalog || [],
+    questCatalog: data.questCatalog || [],
     redemptions: (data.redemptions || []).slice(0, 100),
     weekState: data.weekState ?? null,
     choreQuest: data.choreQuest ?? null,
