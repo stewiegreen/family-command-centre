@@ -58,6 +58,9 @@ function newId() {
   return crypto.randomUUID();
 }
 
+/** Bump when shipping a Chores/ChoreQuest UI change so deploy lag is obvious. */
+const CHOREQUEST_UI_VERSION = 'catalog-1';
+
 type TabId = 'quests' | 'catalog' | 'shop' | 'vault' | 'board' | 'rates';
 
 const KIND_LABEL: Record<RewardKind, string> = {
@@ -1182,31 +1185,47 @@ export function ChoresPage() {
         </Card>
       )}
 
-      {/* Tabs */}
-      <div className="flex gap-1 p-1 rounded-xl bg-inset border border-border">
-        {tabs.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => setTab(t.id)}
-            className={cn(
-              'flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-              tab === t.id ? 'bg-surface text-fg shadow-sm' : 'text-muted hover:text-fg',
-            )}
-          >
-            {t.label}
-            {typeof t.count === 'number' && t.count > 0 && (
-              <span className="ml-1.5 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1 rounded-full bg-accent text-white text-[11px]">
-                {t.count}
-              </span>
-            )}
-          </button>
-        ))}
+      {/* Tabs — scrollable so Catalog stays visible on narrow screens */}
+      <div className="overflow-x-auto -mx-1 px-1">
+        <div className="flex gap-1 p-1 rounded-xl bg-inset border border-border min-w-max">
+          {tabs.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setTab(t.id)}
+              className={cn(
+                'rounded-lg px-3 py-2 text-sm font-medium transition-colors whitespace-nowrap',
+                tab === t.id ? 'bg-surface text-fg shadow-sm' : 'text-muted hover:text-fg',
+              )}
+            >
+              {t.label}
+              {typeof t.count === 'number' && t.count > 0 && (
+                <span className="ml-1.5 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1 rounded-full bg-accent text-white text-[11px]">
+                  {t.count}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* ── QUESTS TAB ─────────────────────────────────────── */}
       {tab === 'quests' && (
         <>
+          {isParent && (
+            <div className="flex flex-wrap gap-2">
+              <Button variant="secondary" size="sm" onClick={() => setTab('catalog')}>
+                <BookMarked className="w-3.5 h-3.5 mr-1.5" />
+                Catalog
+                {activeTemplates.length > 0 ? ` (${activeTemplates.length})` : ''}
+              </Button>
+              {activeTemplates.length > 0 && (
+                <p className="text-xs text-muted self-center">
+                  Post reusable chores from your master list
+                </p>
+              )}
+            </div>
+          )}
           {isParent && kids.length > 0 && (
             <Card className="!p-4">
               <h2 className="text-sm font-semibold text-fg mb-3 flex items-center gap-2">
@@ -2133,6 +2152,10 @@ export function ChoresPage() {
           </div>
         )}
       </Modal>
+
+      <p className="text-[10px] text-muted/60 text-center pt-2 select-none" title="ChoreQuest UI build">
+        ChoreQuest · {CHOREQUEST_UI_VERSION}
+      </p>
     </div>
   );
 }
