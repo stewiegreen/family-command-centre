@@ -820,7 +820,28 @@ export function ChoresPage() {
 
   const [spendOpen, setSpendOpen] = useState(false);
   const [spendMins, setSpendMins] = useState(30);
-  const [spendMemberId, setSpendMemberId] = useState(myId);
+  /** Who the "Use Screen Time" controls target (kid for parents; self for kids). */
+  const [spendMemberId, setSpendMemberId] = useState(() => {
+    if (isParent) {
+      const firstKid = data.members.find((m) => m.role === 'kid');
+      return firstKid?.id || myId;
+    }
+    return myId;
+  });
+
+  // Keep selection valid if members list changes
+  useEffect(() => {
+    if (isParent) {
+      if (!kids.some((k) => k.id === spendMemberId)) {
+        setSpendMemberId(kids[0]?.id || myId);
+      }
+    } else if (spendMemberId !== myId) {
+      setSpendMemberId(myId);
+    }
+  }, [isParent, kids, spendMemberId, myId]);
+
+  const spendBalance = screenTimeMap[spendMemberId] ?? 0;
+  const spendTarget = getMember(spendMemberId);
 
   const claimChest = () => {
     if (!me) return;
@@ -1081,32 +1102,106 @@ export function ChoresPage() {
             </>
           )}
 
-          {(myScreen > 0 || isParent) && (
-            <div className="flex flex-wrap gap-2">
-              {[15, 30, 60].map((m) => (
+          {/* Kids: spend own bank */}
+          {!isParent && myScreen > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted">Use Screen Time</p>
+              <div className="flex flex-wrap gap-2">
+                {[15, 30, 60].map((m) => (
+                  <Button
+                    key={m}
+                    size="sm"
+                    variant="secondary"
+                    disabled={myScreen < m}
+                    onClick={() => spendScreenTime(myId, m)}
+                  >
+                    Use {m}m
+                  </Button>
+                ))}
                 <Button
-                  key={m}
                   size="sm"
-                  variant="secondary"
-                  disabled={myScreen < m}
-                  onClick={() => spendScreenTime(myId, m)}
+                  variant="ghost"
+                  onClick={() => {
+                    setSpendMemberId(myId);
+                    setSpendMins(Math.min(30, Math.max(5, myScreen || 30)));
+                    setSpendOpen(true);
+                  }}
                 >
-                  Use {m}m
+                  Custom…
                 </Button>
-              ))}
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => {
-                  setSpendMemberId(myId);
-                  setSpendMins(Math.min(30, Math.max(5, myScreen || 30)));
-                  setSpendOpen(true);
-                }}
-              >
-                Custom…
-              </Button>
+              </div>
             </div>
           )}
+        </Card>
+      )}
+
+      {/* Parents: kid-first Use Screen Time strip */}
+      {isParent && kids.length > 0 && (
+        <Card className="!p-4 lg:!p-5 space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <MonitorPlay className="w-4 h-4 text-sky-600 shrink-0" />
+              <h2 className="text-sm font-semibold text-fg">Use Screen Time</h2>
+            </div>
+            {spendTarget && (
+              <p className="text-xs text-muted shrink-0">
+                <span className="font-medium text-fg">{spendTarget.name}</span>
+                {' · '}
+                {spendBalance}m left
+              </p>
+            )}
+          </div>
+          <p className="text-[11px] text-muted -mt-1">
+            Pick who is watching, then log minutes from their bank.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {kids.map((k) => {
+              const bal = screenTimeMap[k.id] ?? 0;
+              const selected = spendMemberId === k.id;
+              return (
+                <button
+                  key={k.id}
+                  type="button"
+                  onClick={() => setSpendMemberId(k.id)}
+                  className={cn(
+                    'flex items-center gap-2 px-2.5 py-1.5 rounded-2xl border text-sm transition-colors',
+                    selected
+                      ? 'border-accent bg-accent/15 text-fg'
+                      : 'border-border bg-inset text-muted hover:bg-nav-hover hover:text-fg',
+                  )}
+                >
+                  <Avatar {...k} size="sm" className="!w-7 !h-7 !text-sm" />
+                  <span className="font-medium text-fg">{k.name}</span>
+                  <span className={cn('text-xs tabular-nums', bal > 0 ? 'text-sky-600' : 'text-faint')}>
+                    {bal}m
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {[15, 30, 60].map((m) => (
+              <Button
+                key={m}
+                size="sm"
+                variant="secondary"
+                disabled={spendBalance < m}
+                onClick={() => spendScreenTime(spendMemberId, m)}
+              >
+                Use {m}m
+              </Button>
+            ))}
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setSpendMins(Math.min(30, Math.max(5, spendBalance || 15)));
+                setSpendOpen(true);
+              }}
+            >
+              Custom…
+            </Button>
+          </div>
         </Card>
       )}
 
@@ -2078,7 +2173,7 @@ export function ChoresPage() {
       </Modal>
 
       {/* Spend screen time */}
-      <Modal open={spendOpen} onClose={() => setSpendOpen(false)} title="Use screen time">
+      <Modal open={spendOpen} onClose={() => setSpendOpen(false)} title="Use Screen Time">
         <div className="space-y-4">
           <p className="text-sm text-muted">
             Minutes come from the screen-time bank (bought with Treasure in the shop).
@@ -2091,7 +2186,6 @@ export function ChoresPage() {
                 value={spendMemberId}
                 onChange={(e) => setSpendMemberId(e.target.value)}
               >
-                <option value={myId}>{me?.name || 'Me'} (you)</option>
                 {kids.map((k) => (
                   <option key={k.id} value={k.id}>
                     {k.name} · {(screenTimeMap[k.id] ?? 0)}m left
