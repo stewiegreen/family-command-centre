@@ -129,7 +129,7 @@ function SectionChrome({
       }}
       onDragEnd={onDragEnd}
     >
-      <div className="absolute top-2 right-2 z-10 flex items-center gap-1 opacity-100 transition-opacity">
+      <div className="flex items-center justify-end gap-1 mb-1 shrink-0">
         <div className="relative">
           <button
             type="button"
@@ -141,7 +141,7 @@ function SectionChrome({
                 setMenuOpen((v) => !v);
               }
             }}
-            className="p-1.5 rounded-md bg-surface border border-border text-muted hover:text-fg shadow-sm"
+            className="p-1 rounded-md text-faint hover:text-fg hover:bg-nav-hover"
             title={paired ? 'Make full width' : 'Share row with another card'}
           >
             {paired ? (
@@ -179,7 +179,7 @@ function SectionChrome({
           )}
         </div>
         <span
-          className="p-1.5 rounded-md bg-surface border border-border text-faint cursor-grab active:cursor-grabbing shadow-sm"
+          className="p-1 rounded-md text-faint cursor-grab active:cursor-grabbing hover:text-fg hover:bg-nav-hover"
           title="Drag onto another card to share its row"
         >
           <GripVertical className="w-3.5 h-3.5" />
