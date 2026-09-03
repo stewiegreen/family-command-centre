@@ -100,9 +100,9 @@ export function ChoresPage() {
   const [title, setTitle] = useState('');
   const [difficulty, setDifficulty] = useState<QuestDifficulty>('medium');
   const [customRewards, setCustomRewards] = useState(false);
+  const [repeatable, setRepeatable] = useState(true);
   const [customXp, setCustomXp] = useState(25);
   const [customCoins, setCustomCoins] = useState(12);
-  const [repeatable, setRepeatable] = useState(true);
   const [alsoSaveToCatalog, setAlsoSaveToCatalog] = useState(false);
   const [levelUp, setLevelUp] = useState<{ name: string; level: number } | null>(null);
   const [ratesDraft, setRatesDraft] = useState<ChoreQuestConfig | null>(null);
@@ -236,10 +236,10 @@ export function ChoresPage() {
     setTitle('');
     setDifficulty('medium');
     setCustomRewards(false);
+    setRepeatable(true);
     const r = rewardsForDifficultyWithConfig('medium', cq);
     setCustomXp(r.xp);
     setCustomCoins(r.coins);
-    setRepeatable(true);
     setCreateOpen(true);
   };
 
@@ -272,8 +272,8 @@ export function ChoresPage() {
                 difficulty,
                 xp: Math.max(0, Math.floor(xp)),
                 coins: Math.max(0, Math.floor(coins)),
-                rewardMinutes: 0,
                 repeatable,
+                rewardMinutes: 0,
               }
             : c,
         ),
@@ -285,8 +285,8 @@ export function ChoresPage() {
         createdById: me.id,
         xp: customRewards ? xp : undefined,
         coins: customRewards ? coins : undefined,
-        config: cq,
         repeatable,
+        config: cq,
       });
       update((d) => {
         let next: FamilyData = {

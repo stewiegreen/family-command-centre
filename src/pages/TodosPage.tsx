@@ -7,7 +7,6 @@ import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
 import type { Priority, Todo, TodoStatus } from '../types';
 import { applyTodoStatus, findQuestForTodo, todoStatusOf } from '../lib/todoQuest';
-
 import { cn } from '../lib/cn';
 
 /** Soft tint of a hex colour for card backgrounds. */
@@ -164,7 +163,7 @@ export function TodosPage() {
             priority,
             createdAt: new Date().toISOString(),
             dueAt: due,
-            questId: questId || undefined,
+            questId,
           },
           ...d.todos,
         ],
@@ -286,13 +285,36 @@ export function TodosPage() {
       {/* Composer */}
       {composerOpen && (
         <Card className="!p-4 space-y-3 shrink-0">
-          <Input
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="What needs doing?"
-            autoFocus
-            onKeyDown={(e) => e.key === 'Enter' && addTodo()}
-          />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-muted mb-1 block">What needs doing?</label>
+              <Input
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                placeholder="What needs doing?"
+                autoFocus
+                onKeyDown={(e) => e.key === 'Enter' && addTodo()}
+              />
+            </div>
+            <div>
+              <label className="text-xs text-muted mb-1 block">ChoreQuest (optional)</label>
+              <select
+                value={questId}
+                onChange={(e) => setQuestId(e.target.value)}
+                className="w-full bg-input border border-border-strong rounded-xl px-3 py-2.5 text-sm text-fg"
+              >
+                <option value="">No ChoreQuest</option>
+                {openQuests.map((q) => (
+                  <option key={q.id} value={q.id}>
+                    ⚔️ {q.title} · +{q.xp} XP · +{q.coins}c
+                  </option>
+                ))}
+              </select>
+              <p className="text-[11px] text-muted mt-1">
+                Select an existing open quest. Completing this task will submit it for approval.
+              </p>
+            </div>
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="text-xs text-muted mb-1 block">Priority</label>
@@ -338,22 +360,6 @@ export function TodosPage() {
                 </Button>
               </div>
             )}
-          </div>
-          <div>
-            <label className="text-xs text-muted mb-1 block">ChoreQuest (optional)</label>
-            <select
-              value={questId}
-              onChange={(e) => setQuestId(e.target.value)}
-              className="w-full bg-input border border-border-strong rounded-xl px-3 py-2.5 text-sm text-fg"
-            >
-              <option value="">No ChoreQuest</option>
-              {openQuests.map((q) => (
-                <option key={q.id} value={q.id}>
-                  ⚔️ {q.title} · +{q.xp} XP · +{q.coins}c
-                </option>
-              ))}
-            </select>
-            <p className="text-[11px] text-muted mt-1">Select an existing open quest. Completing this task will submit it for approval.</p>
           </div>
           {isParent && (
             <Button onClick={addTodo} className="w-full sm:w-auto">
