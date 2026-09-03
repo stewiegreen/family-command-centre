@@ -318,6 +318,8 @@ export async function cloudWrite(familyId: string, data: FamilyData): Promise<vo
     coinLedger: (data.coinLedger || []).slice(0, 200),
     rewardCatalog: data.rewardCatalog || [],
     questCatalog: data.questCatalog || [],
+    shoppingCatalog: data.shoppingCatalog || [],
+    shoppingStoreOrder: data.shoppingStoreOrder || [],
     redemptions: (data.redemptions || []).slice(0, 100),
     weekState: data.weekState ?? null,
     choreQuest: data.choreQuest ?? null,

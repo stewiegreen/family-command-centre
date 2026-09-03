@@ -37,6 +37,8 @@ export const DEFAULT_DATA: FamilyData = {
   coinLedger: [],
   rewardCatalog: [],
   questCatalog: [],
+  shoppingCatalog: [],
+  shoppingStoreOrder: [],
   redemptions: [],
   settings: DEFAULT_SETTINGS,
 };
@@ -134,6 +136,8 @@ export function migratePayload(p: Partial<FamilyData>): FamilyData {
     coinLedger: p.coinLedger || [],
     rewardCatalog: ensureRewardCatalog(p.rewardCatalog),
     questCatalog: ensureQuestCatalog(p.questCatalog),
+    shoppingCatalog: p.shoppingCatalog || [],
+    shoppingStoreOrder: p.shoppingStoreOrder || [],
     redemptions: p.redemptions || [],
     weekState: p.weekState,
     choreQuest: p.choreQuest,

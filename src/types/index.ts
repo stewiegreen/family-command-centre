@@ -237,12 +237,27 @@ export interface ShoppingItem {
   quantity?: string;
   /** Preferred brand or short note (e.g. "Coles brand", "organic"). */
   brand?: string;
+  /** Grocery aisle/type. Missing/unrecognized → treated as 'other'. */
+  category?: string;
   claimedById?: string | null;
   bought: boolean;
   createdById: string;
   createdAt: string;
   /** Lower = higher in list. Used for drag-reorder. */
   sort?: number;
+}
+
+/** Reusable "Usual Items" template for the shopping list. */
+export interface ShoppingCatalogItem {
+  id: string;
+  text: string;
+  category?: string;
+  defaultQuantity?: string;
+  defaultBrand?: string;
+  defaultStore?: string;
+  archived: boolean;
+  sort: number;
+  createdAt: string;
 }
 
 export interface Note {
@@ -314,6 +329,10 @@ export interface FamilyData {
   /** Quest board (legacy field name `chores`). */
   chores: Quest[];
   shopping: ShoppingItem[];
+  /** Reusable usual-items catalog (tap to add to live list). */
+  shoppingCatalog?: ShoppingCatalogItem[];
+  /** Preferred store-tab order (store names). New stores append. */
+  shoppingStoreOrder?: string[];
   notes: Note[];
   messages: Message[];
   settings: Settings;
