@@ -841,7 +841,6 @@ export function ChoresPage() {
   }, [isParent, kids, spendMemberId, myId]);
 
   const spendBalance = screenTimeMap[spendMemberId] ?? 0;
-  const spendTarget = getMember(spendMemberId);
 
   const claimChest = () => {
     if (!me) return;
