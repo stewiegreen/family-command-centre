@@ -80,6 +80,8 @@ export interface ExpandedEvent extends CalendarEvent {
   instanceEnd: string;
 }
 
+export type TodoStatus = 'todo' | 'doing' | 'done';
+
 export interface Todo {
   id: string;
   text: string;
@@ -91,6 +93,11 @@ export interface Todo {
   createdAt: string;
   /** Optional due datetime (ISO). Used for “due soon” notifications. */
   dueAt?: string;
+  /**
+   * Kanban column. Legacy todos without status: completed → done, else todo.
+   * Keep completed in sync (done ↔ true) for older digests.
+   */
+  status?: TodoStatus;
 }
 
 /**
@@ -226,10 +233,16 @@ export interface ShoppingItem {
   id: string;
   text: string;
   store?: string;
+  /** e.g. "2", "500g", "1 L" — free-form for flexibility. */
+  quantity?: string;
+  /** Preferred brand or short note (e.g. "Coles brand", "organic"). */
+  brand?: string;
   claimedById?: string | null;
   bought: boolean;
   createdById: string;
   createdAt: string;
+  /** Lower = higher in list. Used for drag-reorder. */
+  sort?: number;
 }
 
 export interface Note {
@@ -313,6 +326,7 @@ export interface FamilyData {
       emoji?: string;
       color?: string;
       theme?: ThemeId;
+      /** Ordered list of dashboard widget ids for this member only. */
       /** Ordered list of dashboard widget ids for this member only (legacy). */
       homescreenOrder?: string[];
       /**
