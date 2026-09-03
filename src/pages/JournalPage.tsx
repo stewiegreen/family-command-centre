@@ -267,7 +267,7 @@ export function JournalPage() {
   const list = tab === 'mine' ? mine : sharedWithMe;
 
   return (
-    <div className="p-4 lg:p-8 max-w-2xl mx-auto space-y-6">
+    <div className="p-4 lg:p-8 max-w-5xl mx-auto space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
@@ -397,7 +397,7 @@ export function JournalPage() {
             : 'Nothing shared with you yet.'}
         </Card>
       ) : (
-        <div className="space-y-3">
+        <div className="grid sm:grid-cols-2 gap-3">
           {list.map((e) => {
             const author = getMember(e.authorId);
             const isMine = e.authorId === myId || e.authorUid === myUid;

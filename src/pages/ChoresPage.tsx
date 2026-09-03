@@ -1027,7 +1027,7 @@ export function ChoresPage() {
   ];
 
   return (
-    <div className="p-4 lg:p-6 max-w-3xl mx-auto space-y-6">
+    <div className="p-4 lg:p-6 max-w-5xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
@@ -1151,16 +1151,7 @@ export function ChoresPage() {
           <p className="text-[11px] text-muted">
             Pick who is watching, then log minutes from their bank.
           </p>
-          <div
-            className={cn(
-              'grid gap-2',
-              kids.length === 1 && 'grid-cols-1 max-w-[9rem]',
-              kids.length === 2 && 'grid-cols-2',
-              kids.length === 3 && 'grid-cols-3',
-              kids.length === 4 && 'grid-cols-2 sm:grid-cols-4',
-              kids.length >= 5 && 'grid-cols-3 sm:grid-cols-5',
-            )}
-          >
+          <div className="flex flex-wrap gap-2">
             {kids.map((k) => {
               const look = getMember(k.id) || k;
               const bal = screenTimeMap[k.id] ?? 0;
@@ -1171,7 +1162,7 @@ export function ChoresPage() {
                   type="button"
                   onClick={() => setSpendMemberId(k.id)}
                   className={cn(
-                    'flex flex-col items-center justify-center gap-1.5 p-3 rounded-2xl border text-center transition-colors aspect-square min-h-[5.5rem]',
+                    'flex items-center gap-2 pl-2 pr-3 py-1.5 rounded-full border transition-colors',
                     selected
                       ? 'border-accent bg-accent/15 ring-2 ring-accent/30'
                       : 'border-border bg-inset hover:bg-nav-hover',
@@ -1182,11 +1173,9 @@ export function ChoresPage() {
                     emoji={look.emoji}
                     color={look.color}
                     initials={look.initials}
-                    size="md"
+                    size="sm"
                   />
-                  <span className="text-xs font-semibold text-fg truncate max-w-full px-0.5">
-                    {look.name}
-                  </span>
+                  <span className="text-xs font-semibold text-fg">{look.name}</span>
                   <span
                     className={cn(
                       'text-[11px] tabular-nums font-medium',

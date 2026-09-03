@@ -633,7 +633,7 @@ export function ShoppingPage() {
   };
 
   return (
-    <div className="p-4 lg:p-8 max-w-3xl mx-auto space-y-6">
+    <div className="p-4 lg:p-8 max-w-5xl mx-auto space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Shopping</h1>
@@ -1017,15 +1017,17 @@ export function ShoppingPage() {
               <h2 className="text-sm font-semibold text-muted uppercase tracking-wide px-1">
                 Need ({visibleOpen.length})
               </h2>
-              {openByCategory.map(({ cat, items }) => (
-                <div key={cat} className="space-y-2">
-                  <h3 className="text-xs font-semibold text-faint uppercase tracking-wide px-1">
-                    {SHOPPING_CATEGORY_LABELS[cat]}
-                    <span className="ml-1.5 font-normal opacity-70">{items.length}</span>
-                  </h3>
-                  <div className="space-y-2">{items.map(renderOpenItem)}</div>
-                </div>
-              ))}
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4">
+                {openByCategory.map(({ cat, items }) => (
+                  <div key={cat} className="space-y-2">
+                    <h3 className="text-xs font-semibold text-faint uppercase tracking-wide px-1">
+                      {SHOPPING_CATEGORY_LABELS[cat]}
+                      <span className="ml-1.5 font-normal opacity-70">{items.length}</span>
+                    </h3>
+                    <div className="space-y-2">{items.map(renderOpenItem)}</div>
+                  </div>
+                ))}
+              </div>
             </section>
           )}
 
