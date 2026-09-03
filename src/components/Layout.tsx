@@ -287,24 +287,6 @@ export function Layout({ children }: { children: ReactNode }) {
             </div>
           )}
 
-          <button
-            type="button"
-            onClick={() => setCollapsed(!collapsed)}
-            className={cn(
-              'w-full flex items-center rounded-xl text-sm font-medium text-muted hover:bg-nav-hover hover:text-fg transition-colors',
-              collapsed ? 'justify-center px-2 py-2.5' : 'gap-3 px-3 py-2.5',
-            )}
-            title={collapsed ? 'Expand menu' : 'Minimize menu'}
-          >
-            {collapsed ? (
-              <PanelLeftOpen className="w-5 h-5 shrink-0" />
-            ) : (
-              <>
-                <PanelLeftClose className="w-5 h-5 shrink-0" />
-                <span>Minimize</span>
-              </>
-            )}
-          </button>
         </div>
       </aside>
 
@@ -318,17 +300,19 @@ export function Layout({ children }: { children: ReactNode }) {
             >
               <Menu className="w-5 h-5" />
             </button>
-            {/* Desktop: also allow expand when collapsed via header (optional affordance) */}
-            {collapsed && (
-              <button
-                type="button"
-                className="hidden lg:inline-flex p-2 -ml-1 rounded-xl hover:bg-nav-hover text-muted"
-                onClick={() => setCollapsed(false)}
-                title="Expand menu"
-              >
+            {/* Desktop: toggle sidebar collapse from the header */}
+            <button
+              type="button"
+              className="hidden lg:inline-flex p-2 -ml-1 rounded-xl hover:bg-nav-hover text-muted"
+              onClick={() => setCollapsed(!collapsed)}
+              title={collapsed ? 'Expand menu' : 'Collapse menu'}
+            >
+              {collapsed ? (
                 <PanelLeftOpen className="w-5 h-5" />
-              </button>
-            )}
+              ) : (
+                <PanelLeftClose className="w-5 h-5" />
+              )}
+            </button>
             <div className="min-w-0">
               <p className="text-sm font-medium truncate text-fg">
                 Hey, {currentUser?.name || 'there'} 👋
