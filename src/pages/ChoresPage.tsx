@@ -1185,16 +1185,16 @@ export function ChoresPage() {
         </Card>
       )}
 
-      {/* Tabs — scrollable so Catalog stays visible on narrow screens */}
+      {/* Tabs — evenly spaced, scrollable as a fallback on very narrow screens */}
       <div className="overflow-x-auto -mx-1 px-1">
-        <div className="flex gap-2 p-1.5 rounded-xl bg-inset border border-border min-w-max">
+        <div className="flex gap-1 p-1.5 rounded-xl bg-inset border border-border min-w-max sm:min-w-0">
           {tabs.map((t) => (
             <button
               key={t.id}
               type="button"
               onClick={() => setTab(t.id)}
               className={cn(
-                'rounded-lg px-4 py-2.5 text-sm font-medium transition-colors whitespace-nowrap',
+                'flex-1 rounded-lg px-3 py-2.5 text-sm font-medium text-center transition-colors whitespace-nowrap',
                 tab === t.id ? 'bg-surface text-fg shadow-sm' : 'text-muted hover:text-fg',
               )}
             >
@@ -1212,20 +1212,6 @@ export function ChoresPage() {
       {/* ── QUESTS TAB ─────────────────────────────────────── */}
       {tab === 'quests' && (
         <>
-          {isParent && (
-            <div className="flex flex-wrap gap-2">
-              <Button variant="secondary" size="sm" onClick={() => setTab('catalog')}>
-                <BookMarked className="w-3.5 h-3.5 mr-1.5" />
-                Catalog
-                {activeTemplates.length > 0 ? ` (${activeTemplates.length})` : ''}
-              </Button>
-              {activeTemplates.length > 0 && (
-                <p className="text-xs text-muted self-center">
-                  Post reusable chores from your master list
-                </p>
-              )}
-            </div>
-          )}
           {isParent && kids.length > 0 && (
             <Card className="!p-4">
               <h2 className="text-sm font-semibold text-fg mb-3 flex items-center gap-2">
