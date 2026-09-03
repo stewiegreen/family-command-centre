@@ -19,8 +19,8 @@ import {
 } from '../lib/storage';
 import { migratePayload } from '../lib/defaults';
 import {
-  resolveHomescreenLayout,
-  type HomescreenLayoutItem,
+  resolveHomescreenRows,
+  type HomescreenRow,
 } from '../lib/homescreen';
 import {
   cloudCreateInvite,
@@ -81,14 +81,10 @@ interface AppContextValue {
   switchProfile: (memberId: string, pin?: string) => { ok: boolean; error?: string };
   /** Set theme for the current member (kids can change their own). */
   setMyTheme: (theme: import('../types').ThemeId) => void;
-  /** Current member's homescreen layout (order + full/half span). */
-  myHomescreenLayout: HomescreenLayoutItem[];
+  /** Current member's homescreen layout: rows of 1 (full) or 2 (shared) card ids. */
+  myHomescreenRows: HomescreenRow[];
   /** Persist homescreen layout for the current member only. */
-  setMyHomescreenLayout: (layout: HomescreenLayoutItem[]) => void;
-  /** @deprecated Prefer myHomescreenLayout — still resolved for older callers. */
-  myHomescreenOrder: string[];
-  /** @deprecated Prefer setMyHomescreenLayout. */
-  setMyHomescreenOrder: (order: string[]) => void;
+  setMyHomescreenRows: (rows: HomescreenRow[]) => void;
   connectCloud: (cfg: FirebaseConfig) => Promise<boolean>;
   createFamily: (displayName: string) => Promise<string>;
   joinFamily: (inviteCode: string, displayName: string) => Promise<string>;
@@ -739,17 +735,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [update],
   );
 
-  const myHomescreenLayout = resolveHomescreenLayout(
+  const myHomescreenRows = resolveHomescreenRows(
+    data.appearance?.[data.settings.currentUserId]?.homescreenRows as HomescreenRow[] | undefined,
     data.appearance?.[data.settings.currentUserId]?.homescreenLayout as
-      | HomescreenLayoutItem[]
+      | { id: string; span: 'full' | 'half' }[]
       | undefined,
     data.appearance?.[data.settings.currentUserId]?.homescreenOrder,
   );
 
-  const myHomescreenOrder = myHomescreenLayout.map((x) => x.id);
-
-  const setMyHomescreenLayout = useCallback(
-    (layout: HomescreenLayoutItem[]) => {
+  const setMyHomescreenRows = useCallback(
+    (rows: HomescreenRow[]) => {
       update((d) => {
         const id = d.settings.currentUserId;
         if (!id) return d;
@@ -760,31 +755,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
             ...(d.appearance || {}),
             [id]: {
               ...prev,
-              homescreenLayout: layout,
-              homescreenOrder: layout.map((x) => x.id),
+              homescreenRows: rows,
+              // Keep legacy fields in sync so an older build reading this
+              // family's data (unlikely, but possible mid-rollout) still
+              // gets a sane full-width fallback rather than crashing.
+              homescreenOrder: rows.flat(),
+              homescreenLayout: undefined,
             },
           },
         };
       });
     },
     [update],
-  );
-
-  const setMyHomescreenOrder = useCallback(
-    (order: string[]) => {
-      setMyHomescreenLayout(
-        resolveHomescreenLayout(
-          order.map((id) => ({
-            id,
-            span:
-              myHomescreenLayout.find((x) => x.id === id)?.span ??
-              (id === 'events' || id === 'todos' ? 'half' : 'full'),
-          })) as HomescreenLayoutItem[],
-          order,
-        ),
-      );
-    },
-    [setMyHomescreenLayout, myHomescreenLayout],
   );
 
   const value: AppContextValue = {
@@ -812,10 +794,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     unlockKidPin,
     switchProfile,
     setMyTheme,
-    myHomescreenLayout,
-    setMyHomescreenLayout,
-    myHomescreenOrder,
-    setMyHomescreenOrder,
+    myHomescreenRows,
+    setMyHomescreenRows,
     connectCloud,
     createFamily,
     joinFamily,

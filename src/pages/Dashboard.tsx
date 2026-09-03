@@ -28,6 +28,12 @@ import type { CalendarEvent, ExpandedEvent, FamilyData, PresenceStatus, Quest, V
 import { FAMILY_LIST_ID, PRESENCE_OPTIONS } from '../types';
 import { upcomingExpanded } from '../lib/recurrence';
 import {
+  pairOrReorder,
+  popOutToFullRow,
+  isPaired,
+  type HomescreenWidgetId,
+} from '../lib/homescreen';
+import {
   ensureProgress,
   getChoreQuestConfig,
   isoWeekId,
@@ -49,7 +55,19 @@ const COLOR_ICON: Record<string, string> = {
 
 const DISMISS_ANN_KEY = 'fcc_dismissed_announcement';
 
-type SectionId = 'stats' | 'chorequest' | 'presence' | 'digest' | 'events' | 'todos' | 'chores' | 'shopping' | 'look';
+type SectionId = HomescreenWidgetId;
+
+const SECTION_LABELS: Record<SectionId, string> = {
+  stats: 'Quick stats',
+  chorequest: 'ChoreQuest',
+  presence: 'Where is everyone',
+  digest: 'This week',
+  events: 'Upcoming Events',
+  todos: 'My to-dos',
+  chores: 'Chores',
+  shopping: 'Shopping',
+  look: 'Profile look',
+};
 
 function startOfWeekMonday(d: Date) {
   const x = new Date(d);
@@ -64,27 +82,33 @@ function startOfWeekMonday(d: Date) {
 /** Stable chrome — outside Dashboard so inputs don't remount on keystroke. */
 function SectionChrome({
   id,
-  span,
+  paired,
   dragging,
   dragOver,
   onDragStart,
   onDragOver,
   onDrop,
   onDragEnd,
-  onToggleSpan,
+  onPopOut,
+  partnerOptions,
+  onChoosePartner,
   children,
 }: {
   id: SectionId;
-  span: 'full' | 'half';
+  paired: boolean;
   dragging: boolean;
   dragOver: boolean;
   onDragStart: (id: SectionId) => void;
   onDragOver: (e: DragEvent, id: SectionId) => void;
   onDrop: (id: SectionId) => void;
   onDragEnd: () => void;
-  onToggleSpan: (id: SectionId) => void;
+  onPopOut: (id: SectionId) => void;
+  partnerOptions: { id: SectionId; label: string }[];
+  onChoosePartner: (fromId: SectionId, toId: SectionId) => void;
   children: ReactNode;
 }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+
   return (
     <div
       className={cn(
@@ -106,24 +130,57 @@ function SectionChrome({
       onDragEnd={onDragEnd}
     >
       <div className="absolute top-2 right-2 z-10 flex items-center gap-1 opacity-100 transition-opacity">
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleSpan(id);
-          }}
-          className="p-1.5 rounded-md bg-surface border border-border text-muted hover:text-fg shadow-sm"
-          title={span === 'full' ? 'Make half width (share row)' : 'Make full width'}
-        >
-          {span === 'full' ? (
-            <Columns2 className="w-3.5 h-3.5" />
-          ) : (
-            <Square className="w-3.5 h-3.5" />
+        <div className="relative">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (paired) {
+                onPopOut(id);
+              } else {
+                setMenuOpen((v) => !v);
+              }
+            }}
+            className="p-1.5 rounded-md bg-surface border border-border text-muted hover:text-fg shadow-sm"
+            title={paired ? 'Make full width' : 'Share row with another card'}
+          >
+            {paired ? (
+              <Square className="w-3.5 h-3.5" />
+            ) : (
+              <Columns2 className="w-3.5 h-3.5" />
+            )}
+          </button>
+          {menuOpen && !paired && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
+              <div className="absolute right-0 top-full mt-1 z-20 w-48 rounded-xl border border-border bg-surface shadow-lg overflow-hidden">
+                <p className="px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-faint border-b border-border">
+                  Share row with…
+                </p>
+                {partnerOptions.length === 0 ? (
+                  <p className="px-3 py-2.5 text-xs text-muted">No other cards free right now.</p>
+                ) : (
+                  partnerOptions.map((opt) => (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => {
+                        onChoosePartner(id, opt.id);
+                        setMenuOpen(false);
+                      }}
+                      className="w-full text-left px-3 py-2 text-sm text-fg hover:bg-nav-hover"
+                    >
+                      {opt.label}
+                    </button>
+                  ))
+                )}
+              </div>
+            </>
           )}
-        </button>
+        </div>
         <span
           className="p-1.5 rounded-md bg-surface border border-border text-faint cursor-grab active:cursor-grabbing shadow-sm"
-          title="Drag to reorder"
+          title="Drag onto another card to share its row"
         >
           <GripVertical className="w-3.5 h-3.5" />
         </span>
@@ -141,8 +198,8 @@ export function Dashboard() {
     getMember,
     currentUser,
     isParent,
-    myHomescreenLayout,
-    setMyHomescreenLayout,
+    myHomescreenRows,
+    setMyHomescreenRows,
   } = useApp();
   const { events, todos, notes, messages, members, settings } = data;
   const chores = data.chores || [];
@@ -151,15 +208,11 @@ export function Dashboard() {
   const now = new Date();
   const myId = currentUser?.id || settings.currentUserId;
 
-  // Per-user layout (order + full/half) from appearance
-  const layout = myHomescreenLayout;
+  // Per-user layout: rows of 1 (full width) or 2 (shared) card ids.
+  const rows = myHomescreenRows;
 
   const [dragId, setDragId] = useState<SectionId | null>(null);
   const [overId, setOverId] = useState<SectionId | null>(null);
-
-  const persistLayout = (next: typeof layout) => {
-    setMyHomescreenLayout(next);
-  };
 
   const onSectionDragStart = (id: SectionId) => setDragId(id);
   const onSectionDragOver = (e: DragEvent, id: SectionId) => {
@@ -167,30 +220,30 @@ export function Dashboard() {
     e.dataTransfer.dropEffect = 'move';
     setOverId(id);
   };
+  /** Dropping (or picking from the menu) always pairs fromId into toId's row. */
+  const pairSections = (fromId: SectionId, toId: SectionId) => {
+    if (fromId === toId) return;
+    setMyHomescreenRows(pairOrReorder(rows, fromId, toId));
+  };
   const onSectionDrop = (toId: SectionId) => {
     const fromId = dragId;
     setDragId(null);
     setOverId(null);
-    if (!fromId || fromId === toId) return;
-    const next = [...layout];
-    const from = next.findIndex((x) => x.id === fromId);
-    const to = next.findIndex((x) => x.id === toId);
-    if (from < 0 || to < 0) return;
-    const [moved] = next.splice(from, 1);
-    next.splice(to, 0, moved!);
-    persistLayout(next);
+    if (!fromId) return;
+    pairSections(fromId, toId);
   };
   const onSectionDragEnd = () => {
     setDragId(null);
     setOverId(null);
   };
-  const onToggleSpan = (id: SectionId) => {
-    persistLayout(
-      layout.map((x) =>
-        x.id === id ? { ...x, span: x.span === 'full' ? 'half' : 'full' } : x,
-      ),
-    );
+  const onPopOut = (id: SectionId) => {
+    setMyHomescreenRows(popOutToFullRow(rows, id));
   };
+  /** Other cards currently alone in their row — valid drop/pick targets to share a row with. */
+  const soloPartnersFor = (id: SectionId): { id: SectionId; label: string }[] =>
+    rows
+      .filter((row) => row.length === 1 && row[0] !== id)
+      .map((row) => ({ id: row[0]!, label: SECTION_LABELS[row[0]!] }));
 
   const progressMap = data.memberProgress || {};
   const coinBalances = data.coinBalances || {};
@@ -1140,55 +1193,34 @@ export function Dashboard() {
         </section>
       )}
 
-      {(() => {
-        // Pack consecutive half-width widgets into rows of up to 2
-        const rows: { id: SectionId; span: 'full' | 'half' }[][] = [];
-        let halfBuf: { id: SectionId; span: 'full' | 'half' }[] = [];
-        const flush = () => {
-          if (halfBuf.length) {
-            rows.push(halfBuf);
-            halfBuf = [];
-          }
-        };
-        for (const item of layout) {
-          const id = item.id as SectionId;
-          if (item.span === 'full') {
-            flush();
-            rows.push([{ id, span: 'full' }]);
-          } else {
-            halfBuf.push({ id, span: 'half' });
-            if (halfBuf.length >= 2) flush();
-          }
-        }
-        flush();
-
-        return rows.map((row, ri) => (
-          <div
-            key={`row-${ri}-${row.map((r) => r.id).join('-')}`}
-            className={cn(
-              'grid gap-4 items-stretch',
-              row.length > 1 ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1',
-            )}
-          >
-            {row.map(({ id, span }) => (
-              <SectionChrome
-                key={id}
-                id={id}
-                span={span}
-                dragging={dragId === id}
-                dragOver={overId === id && dragId !== id}
-                onDragStart={onSectionDragStart}
-                onDragOver={onSectionDragOver}
-                onDrop={onSectionDrop}
-                onDragEnd={onSectionDragEnd}
-                onToggleSpan={onToggleSpan}
-              >
-                {sections[id]}
-              </SectionChrome>
-            ))}
-          </div>
-        ));
-      })()}
+      {rows.map((row, ri) => (
+        <div
+          key={`row-${ri}-${row.join('-')}`}
+          className={cn(
+            'grid gap-4 items-stretch',
+            row.length > 1 ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1',
+          )}
+        >
+          {row.map((id) => (
+            <SectionChrome
+              key={id}
+              id={id}
+              paired={isPaired(rows, id)}
+              dragging={dragId === id}
+              dragOver={overId === id && dragId !== id}
+              onDragStart={onSectionDragStart}
+              onDragOver={onSectionDragOver}
+              onDrop={onSectionDrop}
+              onDragEnd={onSectionDragEnd}
+              onPopOut={onPopOut}
+              partnerOptions={soloPartnersFor(id)}
+              onChoosePartner={pairSections}
+            >
+              {sections[id]}
+            </SectionChrome>
+          ))}
+        </div>
+      ))}
       {/* Quick event edit from home */}
       <Modal
         open={!!editEvent}

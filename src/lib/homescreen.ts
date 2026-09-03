@@ -1,5 +1,15 @@
 /**
- * Per-member homescreen section order + width (full | half).
+ * Per-member homescreen layout.
+ *
+ * Layout is a list of ROWS. Each row holds 1 card id (full width) or
+ * 2 card ids (share the row, half width each). This is the source of
+ * truth -- there is no separate "span" field to keep in sync, so a pair
+ * can never drift out of sync with how it's actually drawn.
+ *
+ * Dragging card A onto card B always means "put A in B's row" (pairing
+ * them, bumping out whoever B was paired with, if anyone). Popping a
+ * card out (via the toolbar button) always means "give it its own
+ * full-width row".
  */
 
 export const HOMESCREEN_WIDGETS = [
@@ -15,134 +25,180 @@ export const HOMESCREEN_WIDGETS = [
 ] as const;
 
 export type HomescreenWidgetId = (typeof HOMESCREEN_WIDGETS)[number];
-export type HomescreenSpan = 'full' | 'half';
 
-export interface HomescreenLayoutItem {
-  id: HomescreenWidgetId;
-  span: HomescreenSpan;
-}
+/** A row is 1 id (full width) or 2 ids (each shares the row, half width). */
+export type HomescreenRow = HomescreenWidgetId[];
 
-/** Default: events + todos share a row; everything else full width. */
-export const DEFAULT_HOMESCREEN_LAYOUT: HomescreenLayoutItem[] = [
-  { id: 'stats', span: 'full' },
-  { id: 'chorequest', span: 'full' },
-  { id: 'presence', span: 'full' },
-  { id: 'digest', span: 'full' },
-  { id: 'events', span: 'half' },
-  { id: 'todos', span: 'half' },
-  { id: 'chores', span: 'half' },
-  { id: 'shopping', span: 'half' },
-  { id: 'look', span: 'full' },
+/** Default: events+todos share a row, chores+shopping share a row. */
+export const DEFAULT_HOMESCREEN_ROWS: HomescreenRow[] = [
+  ['stats'],
+  ['chorequest'],
+  ['presence'],
+  ['digest'],
+  ['events', 'todos'],
+  ['chores', 'shopping'],
+  ['look'],
 ];
 
-/** @deprecated flat order only — kept for migrate */
-export const DEFAULT_HOMESCREEN_ORDER: string[] = DEFAULT_HOMESCREEN_LAYOUT.map((x) => x.id);
+/** @deprecated legacy per-card span shape, kept only for migrating old saved data. */
+export interface HomescreenLayoutItem {
+  id: string;
+  span: 'full' | 'half';
+}
 
 export function isWidgetId(id: string): id is HomescreenWidgetId {
   return (HOMESCREEN_WIDGETS as readonly string[]).includes(id);
 }
 
 /**
- * Resolve layout from saved layout and/or legacy order.
- * Ensures every known widget appears exactly once.
+ * Turn a legacy flat "order + span" layout into rows, using the same
+ * consecutive-half-pairing rule the old renderer used. Only used once,
+ * to migrate a user's previously-saved layout the first time they load
+ * the new row-based dashboard.
  */
-export function resolveHomescreenLayout(
-  savedLayout?: HomescreenLayoutItem[] | null,
-  savedOrder?: string[] | null,
-): HomescreenLayoutItem[] {
-  const known = new Set<string>(HOMESCREEN_WIDGETS);
-  const result: HomescreenLayoutItem[] = [];
-  const seen = new Set<string>();
-
-  const push = (id: string, span: HomescreenSpan) => {
-    if (!known.has(id) || seen.has(id)) return;
-    result.push({ id: id as HomescreenWidgetId, span });
-    seen.add(id);
-  };
-
-  if (savedLayout?.length) {
-    for (const item of savedLayout) {
-      if (!item?.id) continue;
-      const span: HomescreenSpan = item.span === 'half' ? 'half' : 'full';
-      if (item.id === 'choresShop') {
-        push('chores', span === 'full' ? 'half' : span);
-        push('shopping', span === 'full' ? 'half' : span);
-      } else {
-        push(item.id, span);
-      }
-    }
-  } else if (savedOrder?.length) {
-    for (const id of savedOrder) {
-      if (id === 'choresShop') {
-        push('chores', 'half');
-        push('shopping', 'half');
-        continue;
-      }
-      const span: HomescreenSpan =
-        id === 'events' || id === 'todos' || id === 'chores' || id === 'shopping' ? 'half' : 'full';
-      push(id, span);
-    }
-  }
-
-  for (const def of DEFAULT_HOMESCREEN_LAYOUT) {
-    if (!seen.has(def.id)) push(def.id, def.span);
-  }
-
-  return result;
-}
-
-/** Legacy helper used by older callers. */
-export function resolveHomescreenOrder(saved?: string[] | null): string[] {
-  return resolveHomescreenLayout(null, saved).map((x) => x.id);
-}
-
-/** Pack sequential layout items into visual rows (1–2 cells). */
-export function packHomescreenRows(
-  layout: HomescreenLayoutItem[],
-): HomescreenLayoutItem[][] {
-  const rows: HomescreenLayoutItem[][] = [];
-  let halfBuf: HomescreenLayoutItem[] = [];
-
-  const flushHalf = () => {
+function rowsFromLegacyLayout(legacy: HomescreenLayoutItem[]): HomescreenRow[] {
+  const rows: HomescreenRow[] = [];
+  let halfBuf: HomescreenWidgetId[] = [];
+  const flush = () => {
     if (halfBuf.length) {
       rows.push(halfBuf);
       halfBuf = [];
     }
   };
-
-  for (const item of layout) {
-    if (item.span === 'full') {
-      flushHalf();
-      rows.push([item]);
+  for (const item of legacy) {
+    if (!isWidgetId(item.id)) continue;
+    if (item.span === 'half') {
+      halfBuf.push(item.id);
+      if (halfBuf.length >= 2) flush();
     } else {
-      halfBuf.push(item);
-      if (halfBuf.length >= 2) flushHalf();
+      flush();
+      rows.push([item.id]);
     }
   }
-  flushHalf();
+  flush();
   return rows;
 }
 
-export function reorderLayout(
-  layout: HomescreenLayoutItem[],
+function rowsFromLegacyOrder(order: string[]): HomescreenRow[] {
+  return rowsFromLegacyLayout(
+    order
+      .filter(isWidgetId)
+      .map((id) => ({
+        id,
+        span:
+          id === 'events' || id === 'todos' || id === 'chores' || id === 'shopping'
+            ? ('half' as const)
+            : ('full' as const),
+      })),
+  );
+}
+
+/**
+ * Resolve the row layout to render, preferring the new row-based save,
+ * falling back to migrating whatever legacy shape is present, and always
+ * appending any known widget the saved data is missing (e.g. a widget
+ * added after the user's layout was saved) as its own full-width row.
+ */
+export function resolveHomescreenRows(
+  savedRows?: HomescreenRow[] | null,
+  savedLayout?: HomescreenLayoutItem[] | null,
+  savedOrder?: string[] | null,
+): HomescreenRow[] {
+  let rows: HomescreenRow[];
+
+  if (savedRows?.length) {
+    rows = savedRows
+      .map((row) => row.filter(isWidgetId))
+      .filter((row) => row.length > 0)
+      .map((row) => row.slice(0, 2) as HomescreenRow);
+  } else if (savedLayout?.length) {
+    rows = rowsFromLegacyLayout(savedLayout);
+  } else if (savedOrder?.length) {
+    rows = rowsFromLegacyOrder(savedOrder);
+  } else {
+    rows = [];
+  }
+
+  // De-dupe (a card should only ever appear once) and track what's placed.
+  const seen = new Set<HomescreenWidgetId>();
+  rows = rows
+    .map((row) => row.filter((id) => (seen.has(id) ? false : (seen.add(id), true))))
+    .filter((row) => row.length > 0);
+
+  for (const def of DEFAULT_HOMESCREEN_ROWS) {
+    for (const id of def) {
+      if (!seen.has(id)) {
+        rows.push([id]);
+        seen.add(id);
+      }
+    }
+  }
+
+  return rows;
+}
+
+/** Which row (and index within it) a card currently sits in. */
+function locate(rows: HomescreenRow[], id: HomescreenWidgetId): { row: number; pos: number } | null {
+  for (let r = 0; r < rows.length; r++) {
+    const pos = rows[r]!.indexOf(id);
+    if (pos >= 0) return { row: r, pos };
+  }
+  return null;
+}
+
+/**
+ * Drop `fromId` onto `toId`:
+ * - If `toId`'s row has a free slot (currently solo), `fromId` joins it --
+ *   the two cards now share a row.
+ * - If `toId`'s row is already full (a pair), `fromId` is inserted as its
+ *   own new full-width row right next to it (a normal reorder).
+ * `fromId` is always removed from its old spot first; if that empties a
+ * shared row, the remaining card becomes a solo full-width row.
+ */
+export function pairOrReorder(
+  rows: HomescreenRow[],
   fromId: string,
   toId: string,
-): HomescreenLayoutItem[] {
-  if (fromId === toId) return layout;
-  const next = [...layout];
-  const from = next.findIndex((x) => x.id === fromId);
-  const to = next.findIndex((x) => x.id === toId);
-  if (from < 0 || to < 0) return layout;
-  const [moved] = next.splice(from, 1);
-  next.splice(to, 0, moved!);
+): HomescreenRow[] {
+  if (fromId === toId || !isWidgetId(fromId) || !isWidgetId(toId)) return rows;
+  const from = locate(rows, fromId);
+  const to = locate(rows, toId);
+  if (!from || !to) return rows;
+
+  // Remove fromId from its current row.
+  const next = rows.map((row) => row.slice()) as HomescreenRow[];
+  const oldRow = next[from.row]!;
+  oldRow.splice(from.pos, 1);
+  if (oldRow.length === 0) next.splice(from.row, 1);
+
+  // Re-locate the target row (index may have shifted if we removed a row before it).
+  const toRow2 = locate(next, toId)!;
+  const targetRow = next[toRow2.row]!;
+
+  if (targetRow.length < 2) {
+    targetRow.push(fromId);
+  } else {
+    next.splice(toRow2.row + 1, 0, [fromId]);
+  }
+
   return next;
 }
 
-export function toggleSpan(
-  layout: HomescreenLayoutItem[],
-  id: string,
-): HomescreenLayoutItem[] {
-  return layout.map((x) =>
-    x.id === id ? { ...x, span: x.span === 'full' ? 'half' : 'full' } : x,
-  );
+/** Pop a card out to its own full-width row. Its old row partner (if any) also becomes solo. */
+export function popOutToFullRow(rows: HomescreenRow[], id: string): HomescreenRow[] {
+  if (!isWidgetId(id)) return rows;
+  const at = locate(rows, id);
+  if (!at) return rows;
+  const row = rows[at.row]!;
+  if (row.length < 2) return rows; // already full width
+
+  const partner = row.find((x) => x !== id)!;
+  const next = rows.map((r) => r.slice()) as HomescreenRow[];
+  next.splice(at.row, 1, [partner], [id]);
+  return next;
+}
+
+export function isPaired(rows: HomescreenRow[], id: string): boolean {
+  const at = isWidgetId(id) ? locate(rows, id) : null;
+  return !!at && rows[at.row]!.length === 2;
 }

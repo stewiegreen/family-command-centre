@@ -307,10 +307,16 @@ export interface FamilyData {
       /** Ordered list of dashboard widget ids for this member only (legacy). */
       homescreenOrder?: string[];
       /**
-       * Preferred layout: order + full/half width per widget.
-       * Takes precedence over homescreenOrder when present.
+       * @deprecated legacy order + full/half width per widget.
+       * Migrated into homescreenRows on first load; kept only so old
+       * saved data still parses.
        */
       homescreenLayout?: { id: string; span: 'full' | 'half' }[];
+      /**
+       * Preferred layout: explicit rows of 1 (full width) or 2 (shared
+       * row) widget ids. Source of truth when present.
+       */
+      homescreenRows?: string[][];
     }
   >;
   /** memberId → earned screen-time minutes balance. */
