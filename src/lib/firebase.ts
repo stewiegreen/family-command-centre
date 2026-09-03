@@ -4,7 +4,7 @@
 import type { FirebaseApp } from 'firebase/app';
 import type { Auth, User } from 'firebase/auth';
 import type { Firestore } from 'firebase/firestore';
-import type { FamilyData, FirebaseConfig, Invite, Member, Message, Role } from '../types';
+import type { FamilyData, FirebaseConfig, Invite, JournalEntry, Member, Message, Role } from '../types';
 import { MEMBER_COLORS, MEMBER_EMOJIS, migratePayload } from './defaults';
 import { makeFamilyCode, makeInviteCode, uid } from './uid';
 import { CURRENT_USER_KEY, FAMILY_ID_KEY } from './storage';
@@ -479,6 +479,128 @@ export function subscribeMessages(
     unsub2();
   };
 }
+
+function journalCol(familyId: string) {
+  return fsMod!.collection(db!, 'families', familyId, 'journal');
+}
+
+export async function cloudCreateJournalEntry(
+  familyId: string,
+  entry: Omit<JournalEntry, 'id'> & { id?: string },
+): Promise<JournalEntry> {
+  if (!db || !fsMod) throw new Error('Cloud not connected');
+  const id = entry.id || uid();
+  const payload: Record<string, unknown> = {
+    authorId: entry.authorId,
+    authorUid: entry.authorUid,
+    visibility: entry.visibility,
+    text: entry.text,
+    createdAt: entry.createdAt,
+    updatedAt: entry.updatedAt,
+  };
+  if (entry.mood) payload.mood = entry.mood;
+  if (entry.promptId) payload.promptId = entry.promptId;
+  await fsMod.setDoc(fsMod.doc(journalCol(familyId), id), payload);
+  return { id, ...(payload as Omit<JournalEntry, 'id'>) };
+}
+
+export async function cloudUpdateJournalEntry(
+  familyId: string,
+  entryId: string,
+  patch: Partial<Pick<JournalEntry, 'text' | 'mood' | 'visibility' | 'updatedAt' | 'promptId'>>,
+): Promise<void> {
+  if (!db || !fsMod) throw new Error('Cloud not connected');
+  const clean: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(patch)) {
+    if (v !== undefined) clean[k] = v;
+  }
+  await fsMod.updateDoc(fsMod.doc(journalCol(familyId), entryId), clean);
+}
+
+export async function cloudDeleteJournalEntry(
+  familyId: string,
+  entryId: string,
+): Promise<void> {
+  if (!db || !fsMod) throw new Error('Cloud not connected');
+  await fsMod.deleteDoc(fsMod.doc(journalCol(familyId), entryId));
+}
+
+/**
+ * Merge up to three queries: my entries, family-tier, and (if parent) parents-tier.
+ * Same multi-listener Map merge pattern as subscribeMessages.
+ */
+export function subscribeJournalEntries(
+  familyId: string,
+  myUid: string,
+  isParent: boolean,
+  onData: (entries: JournalEntry[]) => void,
+  onError: (err: Error) => void,
+): () => void {
+  if (!db || !fsMod) {
+    onError(new Error('Cloud not connected'));
+    return () => {};
+  }
+  const col = journalCol(familyId);
+  const qMine = fsMod.query(col, fsMod.where('authorUid', '==', myUid));
+  const qFamily = fsMod.query(col, fsMod.where('visibility', '==', 'family'));
+  const qParents = isParent
+    ? fsMod.query(col, fsMod.where('visibility', '==', 'parents'))
+    : null;
+
+  let mine: JournalEntry[] = [];
+  let family: JournalEntry[] = [];
+  let parents: JournalEntry[] = [];
+
+  const mapDoc = (d: { id: string; data: () => Record<string, unknown> }) =>
+    ({ id: d.id, ...(d.data() as Omit<JournalEntry, 'id'>) });
+
+  const emit = () => {
+    const map = new Map<string, JournalEntry>();
+    for (const e of [...mine, ...family, ...parents]) map.set(e.id, e);
+    onData(
+      Array.from(map.values()).sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    );
+  };
+
+  const unsubs: Array<() => void> = [];
+  unsubs.push(
+    fsMod.onSnapshot(
+      qMine,
+      (snap: { docs: Array<{ id: string; data: () => Record<string, unknown> }> }) => {
+        mine = snap.docs.map(mapDoc);
+        emit();
+      },
+      (err: Error) => onError(err),
+    ),
+  );
+  unsubs.push(
+    fsMod.onSnapshot(
+      qFamily,
+      (snap: { docs: Array<{ id: string; data: () => Record<string, unknown> }> }) => {
+        family = snap.docs.map(mapDoc);
+        emit();
+      },
+      (err: Error) => onError(err),
+    ),
+  );
+  if (qParents) {
+    unsubs.push(
+      fsMod.onSnapshot(
+        qParents,
+        (snap: { docs: Array<{ id: string; data: () => Record<string, unknown> }> }) => {
+          parents = snap.docs.map(mapDoc);
+          emit();
+        },
+        (err: Error) => onError(err),
+      ),
+    );
+  }
+
+  return () => {
+    for (const u of unsubs) u();
+  };
+}
+
 
 export function subscribeFamily(
   familyId: string,

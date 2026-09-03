@@ -134,6 +134,37 @@ service cloud.firestore {
           && (request.auth.uid == resource.data.fromUid
               || isParentOf(familyId));
       }
+
+      // Journal: one doc per entry. Privacy is per-document (not a FamilyData array).
+      match /journal/{entryId} {
+        allow read: if signedIn()
+          && isMember(familyId)
+          && (
+            request.auth.uid == resource.data.authorUid
+            || resource.data.visibility == 'family'
+            || (resource.data.visibility == 'parents' && isParentOf(familyId))
+          );
+
+        allow create: if signedIn()
+          && isMember(familyId)
+          && request.resource.data.keys().hasAll(
+               ['authorId', 'authorUid', 'visibility', 'text', 'createdAt', 'updatedAt'])
+          && request.resource.data.authorUid == request.auth.uid
+          && request.resource.data.visibility in ['private', 'parents', 'family']
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 5000;
+
+        allow update: if signedIn()
+          && isMember(familyId)
+          && request.auth.uid == resource.data.authorUid
+          && request.resource.data.authorUid == resource.data.authorUid
+          && request.resource.data.visibility in ['private', 'parents', 'family'];
+
+        allow delete: if signedIn()
+          && isMember(familyId)
+          && request.auth.uid == resource.data.authorUid;
+      }
     }
   }
 }

@@ -9,6 +9,7 @@ import { TodosPage } from './pages/TodosPage';
 import { ChoresPage } from './pages/ChoresPage';
 import { ShoppingPage } from './pages/ShoppingPage';
 import { NotesPage } from './pages/NotesPage';
+import { JournalPage } from './pages/JournalPage';
 import { MessagesPage } from './pages/MessagesPage';
 import { MediaPage } from './pages/MediaPage';
 import { SettingsPage } from './pages/SettingsPage';
@@ -83,6 +84,7 @@ function AppShell() {
             {view === 'chores' && <ChoresPage />}
             {view === 'shopping' && <ShoppingPage />}
             {view === 'notes' && <NotesPage />}
+            {view === 'journal' && <JournalPage />}
             {view === 'messages' && <MessagesPage />}
             {view === 'media' && <MediaPage />}
             {view === 'settings' && isParent && <SettingsPage />}

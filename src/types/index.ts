@@ -1,6 +1,6 @@
 export type Role = 'parent' | 'kid' | 'media';
 export type Priority = 'low' | 'medium' | 'high';
-export type ViewId = 'dashboard' | 'calendar' | 'todos' | 'chores' | 'shopping' | 'notes' | 'messages' | 'media' | 'settings';
+export type ViewId = 'dashboard' | 'calendar' | 'todos' | 'chores' | 'shopping' | 'notes' | 'journal' | 'messages' | 'media' | 'settings';
 export type SyncStatus = 'local' | 'connecting' | 'live' | 'error' | 'auth';
 export type ChoreCadence = 'daily' | 'weekly' | 'once'; // legacy
 export type ChoreStatus = 'open' | 'pending' | 'done';
@@ -258,6 +258,25 @@ export interface ShoppingCatalogItem {
   archived: boolean;
   sort: number;
   createdAt: string;
+}
+
+export type JournalVisibility = 'private' | 'parents' | 'family';
+
+/** One document in families/{familyId}/journal/{entryId} — not a FamilyData field. */
+export interface JournalEntry {
+  id: string;
+  /** Member.id of the author. */
+  authorId: string;
+  /** Firebase Auth uid — rules key for privacy. Shared for PIN-only profiles under one login. */
+  authorUid: string;
+  visibility: JournalVisibility;
+  text: string;
+  /** Optional mood emoji. */
+  mood?: string;
+  /** Optional prompt-of-the-day id. */
+  promptId?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface Note {

@@ -5,6 +5,7 @@ import {
   CheckSquare,
   Sword,
   StickyNote,
+  BookOpen,
   MessageCircle,
   Film,
   Settings,
@@ -36,6 +37,7 @@ const NAV: { id: ViewId; label: string; icon: typeof Home }[] = [
   { id: 'chores', label: 'Chores', icon: Sword },
   { id: 'shopping', label: 'Shopping', icon: ShoppingCart },
   { id: 'notes', label: 'Notes', icon: StickyNote },
+  { id: 'journal', label: 'Journal', icon: BookOpen },
   { id: 'messages', label: 'Messages', icon: MessageCircle },
   { id: 'media', label: 'Media', icon: Film },
 ];
