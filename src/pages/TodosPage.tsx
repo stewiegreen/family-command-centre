@@ -5,9 +5,8 @@ import { Avatar } from '../components/ui/Avatar';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
-import type { Priority, QuestDifficulty, Todo, TodoStatus } from '../types';
+import type { Priority, Todo, TodoStatus } from '../types';
 import { applyTodoStatus, findQuestForTodo, todoStatusOf } from '../lib/todoQuest';
-import { DIFFICULTY_ORDER, DIFFICULTY_REWARDS, buildQuest, getChoreQuestConfig } from '../lib/quest';
 import { cn } from '../lib/cn';
 
 /** Soft tint of a hex colour for card backgrounds. */
@@ -64,9 +63,8 @@ export function TodosPage() {
   const [dueAt, setDueAt] = useState('');
   const [assignId, setAssignId] = useState(myId);
   const [composerOpen, setComposerOpen] = useState(false);
-  /** Attach a ChoreQuest so kids see XP/Treasure; completing the todo submits the quest. */
-  const [asQuest, setAsQuest] = useState(false);
-  const [questDiff, setQuestDiff] = useState<QuestDifficulty>('medium');
+  /** Link this task to an existing open ChoreQuest. The quest itself is never duplicated. */
+  const [questId, setQuestId] = useState('');
 
   // Drag state
   const [dragId, setDragId] = useState<string | null>(null);
@@ -146,24 +144,8 @@ export function TodosPage() {
     const memberId = isParent ? assignId : myId;
     const todoId = crypto.randomUUID();
     const due = dueAt ? new Date(dueAt).toISOString() : undefined;
-    update((d) => {
-      const cq = getChoreQuestConfig(d);
-      let chores = d.chores || [];
-      let questId: string | undefined;
-      if (asQuest) {
-        const q = buildQuest({
-          title: trimmed,
-          difficulty: questDiff,
-          createdById: myId,
-          config: cq,
-          todoId,
-        });
-        questId = q.id;
-        chores = [...chores, q];
-      }
-      return {
+    update((d) => ({
         ...d,
-        chores,
         todos: [
           {
             id: todoId,
@@ -175,16 +157,14 @@ export function TodosPage() {
             priority,
             createdAt: new Date().toISOString(),
             dueAt: due,
-            questId,
+            questId: questId || undefined,
           },
           ...d.todos,
         ],
-      };
-    });
+      }));
     setText('');
     setDueAt('');
-    setAsQuest(false);
-    setQuestDiff('medium');
+    setQuestId('');
     setComposerOpen(false);
   };
 
@@ -351,35 +331,26 @@ export function TodosPage() {
               </div>
             )}
           </div>
-          <label className="flex items-center gap-2 text-sm text-muted">
-            <input
-              type="checkbox"
-              checked={asQuest}
-              onChange={(e) => setAsQuest(e.target.checked)}
-            />
-            Also post as ChoreQuest — kids see XP & Treasure
-          </label>
-          {asQuest && (
-            <div className="flex flex-wrap gap-2">
-              {DIFFICULTY_ORDER.map((d) => {
-                const meta = DIFFICULTY_REWARDS[d];
-                return (
-                  <button
-                    key={d}
-                    type="button"
-                    onClick={() => setQuestDiff(d)}
-                    className={
-                      questDiff === d
-                        ? 'px-3 py-1.5 rounded-full text-xs border border-accent bg-accent/15 text-accent'
-                        : 'px-3 py-1.5 rounded-full text-xs border border-border text-muted hover:bg-nav-hover'
-                    }
-                  >
-                    {meta.emoji} {meta.label} · +{meta.xp} XP · +{meta.coins}c
-                  </button>
-                );
-              })}
-            </div>
-          )}
+          <div>
+            <label className="text-xs text-muted mb-1 block">ChoreQuest (optional)</label>
+            <select
+              value={questId}
+              onChange={(e) => setQuestId(e.target.value)}
+              className="w-full bg-input border border-border-strong rounded-xl px-3 py-2.5 text-sm text-fg"
+            >
+              <option value="">No quest</option>
+              {(data.chores || [])
+                .filter((q) => q.status === 'open')
+                .slice()
+                .sort((a, b) => a.title.localeCompare(b.title))
+                .map((q) => (
+                  <option key={q.id} value={q.id}>
+                    ⚔️ {q.title} · +{q.xp} XP · +{q.coins}c
+                  </option>
+                ))}
+            </select>
+            <p className="text-[11px] text-muted mt-1">Link an existing open quest — creating a task will not create another quest.</p>
+          </div>
           {isParent && (
             <Button onClick={addTodo} className="w-full sm:w-auto">
               <Plus className="w-4 h-4" /> Add to board
