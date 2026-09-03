@@ -1193,34 +1193,36 @@ export function Dashboard() {
         </section>
       )}
 
-      {rows.map((row, ri) => (
-        <div
-          key={`row-${ri}-${row.join('-')}`}
-          className={cn(
-            'grid gap-4 items-stretch',
-            row.length > 1 ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1',
-          )}
-        >
-          {row.map((id) => (
-            <SectionChrome
-              key={id}
-              id={id}
-              paired={isPaired(rows, id)}
-              dragging={dragId === id}
-              dragOver={overId === id && dragId !== id}
-              onDragStart={onSectionDragStart}
-              onDragOver={onSectionDragOver}
-              onDrop={onSectionDrop}
-              onDragEnd={onSectionDragEnd}
-              onPopOut={onPopOut}
-              partnerOptions={soloPartnersFor(id)}
-              onChoosePartner={pairSections}
-            >
-              {sections[id]}
-            </SectionChrome>
-          ))}
-        </div>
-      ))}
+      <div className="space-y-2">
+        {rows.map((row, ri) => (
+          <div
+            key={`row-${ri}-${row.join('-')}`}
+            className={cn(
+              'grid gap-2 items-stretch',
+              row.length > 1 ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1',
+            )}
+          >
+            {row.map((id) => (
+              <SectionChrome
+                key={id}
+                id={id}
+                paired={isPaired(rows, id)}
+                dragging={dragId === id}
+                dragOver={overId === id && dragId !== id}
+                onDragStart={onSectionDragStart}
+                onDragOver={onSectionDragOver}
+                onDrop={onSectionDrop}
+                onDragEnd={onSectionDragEnd}
+                onPopOut={onPopOut}
+                partnerOptions={soloPartnersFor(id)}
+                onChoosePartner={pairSections}
+              >
+                {sections[id]}
+              </SectionChrome>
+            ))}
+          </div>
+        ))}
+      </div>
       {/* Quick event edit from home */}
       <Modal
         open={!!editEvent}
