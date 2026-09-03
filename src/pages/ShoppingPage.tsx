@@ -15,7 +15,6 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { Avatar } from '../components/ui/Avatar';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
@@ -69,7 +68,7 @@ type CatalogDraft = {
 };
 
 export function ShoppingPage() {
-  const { data, update, currentUser, getMember, isParent } = useApp();
+  const { data, update, currentUser, isParent } = useApp();
   const myId = currentUser?.id || data.settings.currentUserId;
 
   const [shopText, setShopText] = useState('');
@@ -222,18 +221,6 @@ export function ShoppingPage() {
     setShopQty('');
     setShopBrand('');
     // keep store + category for rapid multi-add
-  };
-
-  const claimShopping = (id: string) => {
-    update((d) => ({
-      ...d,
-      shopping: (d.shopping || []).map((s) => {
-        if (s.id !== id) return s;
-        if (s.claimedById === myId) return { ...s, claimedById: null };
-        if (s.claimedById && s.claimedById !== myId) return s;
-        return { ...s, claimedById: myId };
-      }),
-    }));
   };
 
   const toggleBought = (id: string) => {
@@ -498,9 +485,6 @@ export function ShoppingPage() {
   );
 
   const renderOpenItem = (s: ShoppingItem) => {
-    const claimer = s.claimedById ? getMember(s.claimedById) : null;
-    const canClaim = !s.claimedById || s.claimedById === myId;
-    const claimColor = claimer?.color;
     const isEditing = edit?.id === s.id;
 
     if (isEditing && edit) {
@@ -550,19 +534,11 @@ export function ShoppingPage() {
         onDrop={(e) => onDrop(e, s.id)}
         onDragEnd={onDragEnd}
         className={cn(
-          '!p-3 sm:!p-4 flex items-center gap-2 sm:gap-3 border-l-4 cursor-grab active:cursor-grabbing',
+          '!p-3 sm:!p-4 flex items-center gap-2 sm:gap-3 border-l-4 border-l-transparent cursor-grab active:cursor-grabbing',
           dragId === s.id && 'opacity-40',
           overId === s.id && dragId !== s.id && 'ring-2 ring-accent/40',
           flashId === s.id && 'ring-2 ring-accent',
         )}
-        style={
-          claimColor
-            ? {
-                borderLeftColor: claimColor,
-                backgroundColor: claimColor + '22',
-              }
-            : { borderLeftColor: 'transparent' }
-        }
       >
         <GripVertical className="w-4 h-4 text-faint shrink-0" />
         <button
@@ -587,15 +563,6 @@ export function ShoppingPage() {
             {s.store && activeStore === ALL_STORES && (
               <span className="px-2 py-0.5 rounded-md bg-surface-2">{s.store}</span>
             )}
-            {claimer && (
-              <span
-                className="inline-flex items-center gap-1.5"
-                style={{ color: claimColor }}
-              >
-                <Avatar {...claimer} size="sm" className="!w-6 !h-6 !text-sm" />
-                {claimer.id === myId ? 'You' : claimer.name}
-              </span>
-            )}
           </div>
         </div>
         <div className="flex items-center gap-1 shrink-0">
@@ -608,15 +575,6 @@ export function ShoppingPage() {
             >
               <Pencil className="w-4 h-4" />
             </button>
-          )}
-          {canClaim && (
-            <Button
-              size="sm"
-              variant={s.claimedById === myId ? 'secondary' : 'ghost'}
-              onClick={() => claimShopping(s.id)}
-            >
-              {s.claimedById === myId ? 'Unclaim' : 'Claim'}
-            </Button>
           )}
           {(isParent || s.createdById === myId) && (
             <button
