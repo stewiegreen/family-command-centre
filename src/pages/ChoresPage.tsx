@@ -1048,62 +1048,56 @@ export function ChoresPage() {
         )}
       </div>
 
-      {/* Progress + currencies */}
-      {me && me.role !== 'media' && (
+      {/* Progress + currencies (kids only — parents don't earn XP/coins/screen bank) */}
+      {me && me.role !== 'media' && !isParent && (
         <Card className="!p-4 lg:!p-5 space-y-3">
-          {!isParent && (
-            <>
-              <div className="flex items-center gap-4">
-                <div className="relative">
-                  <Avatar {...me} size="lg" />
-                  <span className="absolute -bottom-1 -right-1 min-w-[1.5rem] h-6 px-1 rounded-full bg-accent text-white text-xs font-bold flex items-center justify-center border-2 border-surface">
-                    {myBar.level}
-                  </span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2 mb-1">
-                    <p className="font-semibold text-fg truncate">
-                      Level {myBar.level}
-                      <span className="text-muted font-normal text-sm"> · {myProgress.xp} XP</span>
-                    </p>
-                  </div>
-                  <div className="h-2.5 rounded-full bg-surface-3 overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-accent transition-all duration-500"
-                      style={{ width: `${myBar.pct}%` }}
-                    />
-                  </div>
-                  <p className="text-xs text-muted mt-1">
-                    {myBar.intoLevel} / {myBar.needed} XP to level {myBar.level + 1}
-                  </p>
-                </div>
+          <div className="flex items-center gap-4">
+            <div className="relative">
+              <Avatar {...me} size="lg" />
+              <span className="absolute -bottom-1 -right-1 min-w-[1.5rem] h-6 px-1 rounded-full bg-accent text-white text-xs font-bold flex items-center justify-center border-2 border-surface">
+                {myBar.level}
+              </span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <p className="font-semibold text-fg truncate">
+                  Level {myBar.level}
+                  <span className="text-muted font-normal text-sm"> · {myProgress.xp} XP</span>
+                </p>
               </div>
-
-              {/* Two currencies: Treasure coins + Screen time bank */}
-              <div className="grid grid-cols-2 gap-2">
-                <div className="rounded-xl bg-inset border border-border px-3 py-2.5">
-                  <p className="text-[11px] uppercase tracking-wide text-muted mb-0.5">Treasure</p>
-                  <p className="text-lg font-bold text-amber-600 flex items-center gap-1.5">
-                    <Coins className="w-4 h-4" />
-                    {myCoins}
-                  </p>
-                  <p className="text-[11px] text-muted mt-0.5">Earn from quests · spend in shop</p>
-                </div>
-                <div className="rounded-xl bg-inset border border-border px-3 py-2.5">
-                  <p className="text-[11px] uppercase tracking-wide text-muted mb-0.5">Screen time</p>
-                  <p className="text-lg font-bold text-sky-600 flex items-center gap-1.5">
-                    <MonitorPlay className="w-4 h-4" />
-                    {myScreen}
-                    <span className="text-sm font-semibold">min</span>
-                  </p>
-                  <p className="text-[11px] text-muted mt-0.5">Buy with coins · spend to watch/play</p>
-                </div>
+              <div className="h-2.5 rounded-full bg-surface-3 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-accent transition-all duration-500"
+                  style={{ width: `${myBar.pct}%` }}
+                />
               </div>
-            </>
-          )}
+              <p className="text-xs text-muted mt-1">
+                {myBar.intoLevel} / {myBar.needed} XP to level {myBar.level + 1}
+              </p>
+            </div>
+          </div>
 
-          {/* Kids: spend own bank */}
-          {!isParent && myScreen > 0 && (
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-xl bg-inset border border-border px-3 py-2.5">
+              <p className="text-[11px] uppercase tracking-wide text-muted mb-0.5">Treasure</p>
+              <p className="text-lg font-bold text-amber-600 flex items-center gap-1.5">
+                <Coins className="w-4 h-4" />
+                {myCoins}
+              </p>
+              <p className="text-[11px] text-muted mt-0.5">Earn from quests · spend in shop</p>
+            </div>
+            <div className="rounded-xl bg-inset border border-border px-3 py-2.5">
+              <p className="text-[11px] uppercase tracking-wide text-muted mb-0.5">Screen time</p>
+              <p className="text-lg font-bold text-sky-600 flex items-center gap-1.5">
+                <MonitorPlay className="w-4 h-4" />
+                {myScreen}
+                <span className="text-sm font-semibold">min</span>
+              </p>
+              <p className="text-[11px] text-muted mt-0.5">Buy with coins · spend to watch/play</p>
+            </div>
+          </div>
+
+          {myScreen > 0 && (
             <div className="space-y-2">
               <p className="text-xs font-semibold uppercase tracking-wide text-muted">Use Screen Time</p>
               <div className="flex flex-wrap gap-2">
@@ -1138,24 +1132,25 @@ export function ChoresPage() {
       {/* Parents: kid-first Use Screen Time strip */}
       {isParent && kids.length > 0 && (
         <Card className="!p-4 lg:!p-5 space-y-3">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 min-w-0">
-              <MonitorPlay className="w-4 h-4 text-sky-600 shrink-0" />
-              <h2 className="text-sm font-semibold text-fg">Use Screen Time</h2>
-            </div>
-            {spendTarget && (
-              <p className="text-xs text-muted shrink-0">
-                <span className="font-medium text-fg">{spendTarget.name}</span>
-                {' · '}
-                {spendBalance}m left
-              </p>
-            )}
+          <div className="flex items-center gap-2">
+            <MonitorPlay className="w-4 h-4 text-sky-600 shrink-0" />
+            <h2 className="text-sm font-semibold text-fg">Use Screen Time</h2>
           </div>
-          <p className="text-[11px] text-muted -mt-1">
+          <p className="text-[11px] text-muted">
             Pick who is watching, then log minutes from their bank.
           </p>
-          <div className="flex flex-wrap gap-2">
+          <div
+            className={cn(
+              'grid gap-2',
+              kids.length === 1 && 'grid-cols-1 max-w-[9rem]',
+              kids.length === 2 && 'grid-cols-2',
+              kids.length === 3 && 'grid-cols-3',
+              kids.length === 4 && 'grid-cols-2 sm:grid-cols-4',
+              kids.length >= 5 && 'grid-cols-3 sm:grid-cols-5',
+            )}
+          >
             {kids.map((k) => {
+              const look = getMember(k.id) || k;
               const bal = screenTimeMap[k.id] ?? 0;
               const selected = spendMemberId === k.id;
               return (
@@ -1164,15 +1159,28 @@ export function ChoresPage() {
                   type="button"
                   onClick={() => setSpendMemberId(k.id)}
                   className={cn(
-                    'flex items-center gap-2 px-2.5 py-1.5 rounded-2xl border text-sm transition-colors',
+                    'flex flex-col items-center justify-center gap-1.5 p-3 rounded-2xl border text-center transition-colors aspect-square min-h-[5.5rem]',
                     selected
-                      ? 'border-accent bg-accent/15 text-fg'
-                      : 'border-border bg-inset text-muted hover:bg-nav-hover hover:text-fg',
+                      ? 'border-accent bg-accent/15 ring-2 ring-accent/30'
+                      : 'border-border bg-inset hover:bg-nav-hover',
                   )}
                 >
-                  <Avatar {...k} size="sm" className="!w-7 !h-7 !text-sm" />
-                  <span className="font-medium text-fg">{k.name}</span>
-                  <span className={cn('text-xs tabular-nums', bal > 0 ? 'text-sky-600' : 'text-faint')}>
+                  <Avatar
+                    name={look.name}
+                    emoji={look.emoji}
+                    color={look.color}
+                    initials={look.initials}
+                    size="md"
+                  />
+                  <span className="text-xs font-semibold text-fg truncate max-w-full px-0.5">
+                    {look.name}
+                  </span>
+                  <span
+                    className={cn(
+                      'text-[11px] tabular-nums font-medium',
+                      bal > 0 ? 'text-sky-600' : 'text-faint',
+                    )}
+                  >
                     {bal}m
                   </span>
                 </button>
