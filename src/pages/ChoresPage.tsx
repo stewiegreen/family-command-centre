@@ -102,6 +102,7 @@ export function ChoresPage() {
   const [customRewards, setCustomRewards] = useState(false);
   const [customXp, setCustomXp] = useState(25);
   const [customCoins, setCustomCoins] = useState(12);
+  const [repeatable, setRepeatable] = useState(true);
   const [alsoSaveToCatalog, setAlsoSaveToCatalog] = useState(false);
   const [levelUp, setLevelUp] = useState<{ name: string; level: number } | null>(null);
   const [ratesDraft, setRatesDraft] = useState<ChoreQuestConfig | null>(null);
@@ -158,7 +159,7 @@ export function ChoresPage() {
   const doneQuests = useMemo(
     () =>
       chores
-        .filter((c) => c.status === 'done')
+        .filter((c) => c.status === 'done' && c.repeatable === false)
         .sort((a, b) => (b.approvedAt || '').localeCompare(a.approvedAt || ''))
         .slice(0, 40),
     [chores],
@@ -238,6 +239,7 @@ export function ChoresPage() {
     const r = rewardsForDifficultyWithConfig('medium', cq);
     setCustomXp(r.xp);
     setCustomCoins(r.coins);
+    setRepeatable(true);
     setCreateOpen(true);
   };
 
@@ -250,6 +252,7 @@ export function ChoresPage() {
     setCustomRewards(isCustom);
     setCustomXp(q.xp ?? base.xp);
     setCustomCoins(q.coins ?? base.coins);
+    setRepeatable(q.repeatable !== false);
     setCreateOpen(true);
   };
 
@@ -270,6 +273,7 @@ export function ChoresPage() {
                 xp: Math.max(0, Math.floor(xp)),
                 coins: Math.max(0, Math.floor(coins)),
                 rewardMinutes: 0,
+                repeatable,
               }
             : c,
         ),
@@ -282,6 +286,7 @@ export function ChoresPage() {
         xp: customRewards ? xp : undefined,
         coins: customRewards ? coins : undefined,
         config: cq,
+        repeatable,
       });
       update((d) => {
         let next: FamilyData = {
@@ -306,6 +311,7 @@ export function ChoresPage() {
     setTitle('');
     setDifficulty('medium');
     setCustomRewards(false);
+    setRepeatable(true);
     setAlsoSaveToCatalog(false);
     setEditQuest(null);
     setCreateOpen(false);
@@ -509,11 +515,15 @@ export function ChoresPage() {
           c.id === quest.id
             ? {
                 ...c,
-                status: 'done' as const,
+                status: c.repeatable !== false ? ('open' as const) : ('done' as const),
+                submittedById: undefined,
+                submittedAt: undefined,
                 approvedForId: forId,
                 approvedById: me.id,
                 approvedAt: at,
                 rewardMinutes: 0,
+                lastCompletedAt: at,
+                lastCompletedById: forId,
               }
             : c,
         ),
@@ -939,6 +949,9 @@ export function ChoresPage() {
                 <Coins className="w-3 h-3 text-amber-500" />
                 +{quest.coins ?? meta.coins}
               </span>
+              {quest.repeatable !== false && (
+                <span className="text-xs text-muted">♻ Repeatable</span>
+              )}
             </div>
           </div>
         </div>
@@ -1915,6 +1928,14 @@ export function ChoresPage() {
               })}
             </div>
           </div>
+          <label className="flex items-center gap-2 text-sm text-fg">
+            <input
+              type="checkbox"
+              checked={repeatable}
+              onChange={(e) => setRepeatable(e.target.checked)}
+            />
+            Repeatable quest — stays available after approval
+          </label>
           <label className="flex items-center gap-2 text-sm text-fg">
             <input
               type="checkbox"

@@ -600,11 +600,15 @@ export function Dashboard() {
           c.id === quest.id
             ? {
                 ...c,
-                status: 'done' as const,
+                status: c.repeatable !== false ? ('open' as const) : ('done' as const),
+                submittedById: undefined,
+                submittedAt: undefined,
                 approvedForId: forId,
                 approvedById: currentUser.id,
                 approvedAt: at,
                 rewardMinutes: 0,
+                lastCompletedAt: at,
+                lastCompletedById: forId,
               }
             : c,
         ),

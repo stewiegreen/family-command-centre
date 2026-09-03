@@ -7,6 +7,7 @@ import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
 import type { Priority, Todo, TodoStatus } from '../types';
 import { applyTodoStatus, findQuestForTodo, todoStatusOf } from '../lib/todoQuest';
+
 import { cn } from '../lib/cn';
 
 /** Soft tint of a hex colour for card backgrounds. */
@@ -63,7 +64,7 @@ export function TodosPage() {
   const [dueAt, setDueAt] = useState('');
   const [assignId, setAssignId] = useState(myId);
   const [composerOpen, setComposerOpen] = useState(false);
-  /** Link this task to an existing open ChoreQuest. The quest itself is never duplicated. */
+  /** Optional reusable ChoreQuest linked to this task. Completing the todo submits it. */
   const [questId, setQuestId] = useState('');
 
   // Drag state
@@ -82,6 +83,11 @@ export function TodosPage() {
   const list = useMemo(
     () => data.todos.filter((t) => t.memberId === listId),
     [data.todos, listId],
+  );
+
+  const openQuests = useMemo(
+    () => (data.chores || []).filter((q) => q.status === 'open'),
+    [data.chores],
   );
 
   const byStatus = useMemo(() => {
@@ -144,7 +150,8 @@ export function TodosPage() {
     const memberId = isParent ? assignId : myId;
     const todoId = crypto.randomUUID();
     const due = dueAt ? new Date(dueAt).toISOString() : undefined;
-    update((d) => ({
+    update((d) => {
+      return {
         ...d,
         todos: [
           {
@@ -161,7 +168,8 @@ export function TodosPage() {
           },
           ...d.todos,
         ],
-      }));
+      };
+    });
     setText('');
     setDueAt('');
     setQuestId('');
@@ -338,18 +346,14 @@ export function TodosPage() {
               onChange={(e) => setQuestId(e.target.value)}
               className="w-full bg-input border border-border-strong rounded-xl px-3 py-2.5 text-sm text-fg"
             >
-              <option value="">No quest</option>
-              {(data.chores || [])
-                .filter((q) => q.status === 'open')
-                .slice()
-                .sort((a, b) => a.title.localeCompare(b.title))
-                .map((q) => (
-                  <option key={q.id} value={q.id}>
-                    ⚔️ {q.title} · +{q.xp} XP · +{q.coins}c
-                  </option>
-                ))}
+              <option value="">No ChoreQuest</option>
+              {openQuests.map((q) => (
+                <option key={q.id} value={q.id}>
+                  ⚔️ {q.title} · +{q.xp} XP · +{q.coins}c
+                </option>
+              ))}
             </select>
-            <p className="text-[11px] text-muted mt-1">Link an existing open quest — creating a task will not create another quest.</p>
+            <p className="text-[11px] text-muted mt-1">Select an existing open quest. Completing this task will submit it for approval.</p>
           </div>
           {isParent && (
             <Button onClick={addTodo} className="w-full sm:w-auto">

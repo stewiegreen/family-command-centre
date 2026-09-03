@@ -100,6 +100,7 @@ export function buildQuest(opts: {
   config?: ChoreQuestConfig | null;
   templateId?: string;
   todoId?: string;
+  repeatable?: boolean;
 }): Quest {
   const r = rewardsForDifficultyWithConfig(opts.difficulty, opts.config);
   return {
@@ -114,6 +115,7 @@ export function buildQuest(opts: {
     createdAt: new Date().toISOString(),
     templateId: opts.templateId,
     todoId: opts.todoId,
+    repeatable: opts.repeatable ?? true,
   };
 }
 
@@ -217,6 +219,7 @@ export function migrateChoreToQuest(c: {
     cadence: c.cadence as Quest['cadence'],
     lastCompletedAt: c.lastCompletedAt,
     lastCompletedById: c.lastCompletedById,
+    repeatable: (c as { repeatable?: boolean }).repeatable ?? true,
   };
 }
 

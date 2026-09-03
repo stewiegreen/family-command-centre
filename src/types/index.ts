@@ -133,6 +133,8 @@ export interface Quest {
   createdAt: string;
   /** Optional link back to catalog template this was posted from. */
   templateId?: string;
+  /** Whether this quest returns to open after approval and can be completed again. Defaults true. */
+  repeatable?: boolean;
   /** Optional link to a Todo that drives this quest. */
   todoId?: string;
   /** @deprecated rotation model */
