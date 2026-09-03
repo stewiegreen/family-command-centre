@@ -17,6 +17,9 @@ import {
   Sword,
   Trophy,
   X,
+  Eye,
+  EyeOff,
+  LayoutGrid,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Avatar } from '../components/ui/Avatar';
@@ -31,6 +34,8 @@ import {
   pairOrReorder,
   popOutToFullRow,
   isPaired,
+  visibleHomescreenRows,
+  HOMESCREEN_WIDGETS,
   type HomescreenWidgetId,
 } from '../lib/homescreen';
 import {
@@ -90,6 +95,7 @@ function SectionChrome({
   onDrop,
   onDragEnd,
   onPopOut,
+  onHide,
   partnerOptions,
   onChoosePartner,
   children,
@@ -103,6 +109,7 @@ function SectionChrome({
   onDrop: (id: SectionId) => void;
   onDragEnd: () => void;
   onPopOut: (id: SectionId) => void;
+  onHide: (id: SectionId) => void;
   partnerOptions: { id: SectionId; label: string }[];
   onChoosePartner: (fromId: SectionId, toId: SectionId) => void;
   children: ReactNode;
@@ -185,6 +192,17 @@ function SectionChrome({
         >
           <GripVertical className="w-3.5 h-3.5" />
         </span>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onHide(id);
+          }}
+          className="p-1 rounded-md text-faint hover:text-fg hover:bg-nav-hover"
+          title="Hide this card"
+        >
+          <EyeOff className="w-3.5 h-3.5" />
+        </button>
       </div>
       <div
         className={cn(
@@ -208,6 +226,8 @@ export function Dashboard() {
     isParent,
     myHomescreenRows,
     setMyHomescreenRows,
+    myHiddenWidgets,
+    setMyHiddenWidgets,
   } = useApp();
   const { events, todos, notes, messages, members, settings } = data;
   const chores = data.chores || [];
@@ -218,6 +238,14 @@ export function Dashboard() {
 
   // Per-user layout: rows of 1 (full width) or 2 (shared) card ids.
   const rows = myHomescreenRows;
+  const hiddenSet = useMemo(() => new Set(myHiddenWidgets), [myHiddenWidgets]);
+  // What actually renders — hidden cards are dropped, but their spot in
+  // `rows` (position + pairing) is preserved so unhiding restores it.
+  const visibleRows = useMemo(
+    () => visibleHomescreenRows(rows, myHiddenWidgets),
+    [rows, myHiddenWidgets],
+  );
+  const [manageOpen, setManageOpen] = useState(false);
 
   const [dragId, setDragId] = useState<SectionId | null>(null);
   const [overId, setOverId] = useState<SectionId | null>(null);
@@ -247,10 +275,17 @@ export function Dashboard() {
   const onPopOut = (id: SectionId) => {
     setMyHomescreenRows(popOutToFullRow(rows, id));
   };
-  /** Other cards currently alone in their row — valid drop/pick targets to share a row with. */
+  const hideWidget = (id: SectionId) => {
+    if (hiddenSet.has(id)) return;
+    setMyHiddenWidgets([...myHiddenWidgets, id]);
+  };
+  const showWidget = (id: SectionId) => {
+    setMyHiddenWidgets(myHiddenWidgets.filter((x) => x !== id));
+  };
+  /** Other visible cards currently alone in their row — valid drop/pick targets to share a row with. */
   const soloPartnersFor = (id: SectionId): { id: SectionId; label: string }[] =>
     rows
-      .filter((row) => row.length === 1 && row[0] !== id)
+      .filter((row) => row.length === 1 && row[0] !== id && !hiddenSet.has(row[0]!))
       .map((row) => ({ id: row[0]!, label: SECTION_LABELS[row[0]!] }));
 
   const progressMap = data.memberProgress || {};
@@ -1164,15 +1199,29 @@ export function Dashboard() {
             Drag cards to reorder · use the width icon to full / half
           </p>
         </div>
-        {!heroOpen && announcement && (
+        <div className="flex items-center gap-3 shrink-0">
           <button
             type="button"
-            onClick={() => setHeroOpen(true)}
-            className="text-xs text-accent hover:underline"
+            onClick={() => setManageOpen(true)}
+            className="inline-flex items-center gap-1.5 text-xs text-muted hover:text-fg"
+            title="Show or hide homescreen cards"
           >
-            Show message
+            <LayoutGrid className="w-3.5 h-3.5" />
+            Manage cards
+            {myHiddenWidgets.length > 0 && (
+              <span className="text-faint">({myHiddenWidgets.length} hidden)</span>
+            )}
           </button>
-        )}
+          {!heroOpen && announcement && (
+            <button
+              type="button"
+              onClick={() => setHeroOpen(true)}
+              className="text-xs text-accent hover:underline"
+            >
+              Show message
+            </button>
+          )}
+        </div>
       </div>
 
       {heroOpen && (
@@ -1202,7 +1251,7 @@ export function Dashboard() {
       )}
 
       <div className="space-y-2">
-        {rows.map((row, ri) => (
+        {visibleRows.map((row, ri) => (
           <div
             key={`row-${ri}-${row.join('-')}`}
             className={cn(
@@ -1222,6 +1271,7 @@ export function Dashboard() {
                 onDrop={onSectionDrop}
                 onDragEnd={onSectionDragEnd}
                 onPopOut={onPopOut}
+                onHide={hideWidget}
                 partnerOptions={soloPartnersFor(id)}
                 onChoosePartner={pairSections}
               >
@@ -1230,7 +1280,49 @@ export function Dashboard() {
             ))}
           </div>
         ))}
+        {visibleRows.length === 0 && (
+          <div className="text-center py-10 text-sm text-muted">
+            All cards are hidden.{' '}
+            <button type="button" onClick={() => setManageOpen(true)} className="text-accent hover:underline">
+              Manage cards
+            </button>{' '}
+            to bring some back.
+          </div>
+        )}
       </div>
+
+      <Modal open={manageOpen} onClose={() => setManageOpen(false)} title="Manage cards">
+        <div className="space-y-1">
+          <p className="text-xs text-muted mb-3">
+            Choose which cards show on your homescreen. Hiding a card here doesn't delete anything —
+            you can bring it back any time.
+          </p>
+          {HOMESCREEN_WIDGETS.map((id) => {
+            const hidden = hiddenSet.has(id);
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => (hidden ? showWidget(id) : hideWidget(id))}
+                className="w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl hover:bg-nav-hover/50 text-left"
+              >
+                <span className={cn('text-sm', hidden ? 'text-muted' : 'text-fg')}>
+                  {SECTION_LABELS[id]}
+                </span>
+                {hidden ? (
+                  <span className="inline-flex items-center gap-1.5 text-xs text-faint">
+                    <EyeOff className="w-3.5 h-3.5" /> Hidden
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 text-xs text-accent">
+                    <Eye className="w-3.5 h-3.5" /> Showing
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </Modal>
       {/* Quick event edit from home */}
       <Modal
         open={!!editEvent}

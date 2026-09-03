@@ -219,3 +219,19 @@ export function isPaired(rows: HomescreenRow[], id: string): boolean {
   const at = isWidgetId(id) ? locate(rows, id) : null;
   return !!at && rows[at.row]!.length === 2;
 }
+
+/**
+ * Rows with any hidden widget ids removed, and any row left empty as a
+ * result dropped entirely. Positions/pairings of the visible cards are
+ * otherwise preserved exactly as stored.
+ */
+export function visibleHomescreenRows(
+  rows: HomescreenRow[],
+  hidden: readonly string[],
+): HomescreenRow[] {
+  if (!hidden.length) return rows;
+  const hiddenSet = new Set(hidden);
+  return rows
+    .map((row) => row.filter((id) => !hiddenSet.has(id)))
+    .filter((row) => row.length > 0);
+}

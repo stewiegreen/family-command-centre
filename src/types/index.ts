@@ -313,8 +313,23 @@ export interface FamilyData {
       emoji?: string;
       color?: string;
       theme?: ThemeId;
-      /** Ordered list of dashboard widget ids for this member only. */
+      /** Ordered list of dashboard widget ids for this member only (legacy). */
       homescreenOrder?: string[];
+      /**
+       * @deprecated legacy order + full/half width per widget.
+       * Migrated into homescreenRows on first load; kept only so old
+       * saved data still parses.
+       */
+      homescreenLayout?: { id: string; span: 'full' | 'half' }[];
+      /**
+       * Preferred layout: explicit rows of 1 (full width) or 2 (shared
+       * row) widget ids. Source of truth when present. Stored as
+       * { ids: string[] }[] (not string[][]) because Firestore rejects
+       * arrays nested directly inside arrays.
+       */
+      homescreenRows?: { ids: string[] }[];
+      /** Dashboard widget ids this member has chosen to hide from their homescreen. */
+      hiddenWidgets?: string[];
     }
   >;
   /** memberId → earned screen-time minutes balance. */

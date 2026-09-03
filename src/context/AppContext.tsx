@@ -86,6 +86,10 @@ interface AppContextValue {
   myHomescreenRows: HomescreenRow[];
   /** Persist homescreen layout for the current member only. */
   setMyHomescreenRows: (rows: HomescreenRow[]) => void;
+  /** Widget ids the current member has hidden from their homescreen. */
+  myHiddenWidgets: string[];
+  /** Persist the hidden-widget list for the current member only. */
+  setMyHiddenWidgets: (ids: string[]) => void;
   connectCloud: (cfg: FirebaseConfig) => Promise<boolean>;
   createFamily: (displayName: string) => Promise<string>;
   joinFamily: (inviteCode: string, displayName: string) => Promise<string>;
@@ -772,6 +776,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [update],
   );
 
+  const myHiddenWidgets = data.appearance?.[data.settings.currentUserId]?.hiddenWidgets || [];
+
+  const setMyHiddenWidgets = useCallback(
+    (ids: string[]) => {
+      update((d) => {
+        const id = d.settings.currentUserId;
+        if (!id) return d;
+        const prev = d.appearance?.[id] || {};
+        return {
+          ...d,
+          appearance: {
+            ...(d.appearance || {}),
+            [id]: {
+              ...prev,
+              hiddenWidgets: ids,
+            },
+          },
+        };
+      });
+    },
+    [update],
+  );
+
   const value: AppContextValue = {
     data,
     update,
@@ -799,6 +826,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setMyTheme,
     myHomescreenRows,
     setMyHomescreenRows,
+    myHiddenWidgets,
+    setMyHiddenWidgets,
     connectCloud,
     createFamily,
     joinFamily,
