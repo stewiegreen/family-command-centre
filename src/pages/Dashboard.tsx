@@ -112,7 +112,8 @@ function SectionChrome({
   return (
     <div
       className={cn(
-        'relative group/section transition-opacity h-full min-h-0 flex flex-col',
+        'relative group/section transition-opacity min-h-0 flex flex-col',
+        paired && 'h-full',
         dragging && 'opacity-40',
         dragOver && 'ring-2 ring-accent/50 rounded-2xl',
       )}
@@ -185,7 +186,14 @@ function SectionChrome({
           <GripVertical className="w-3.5 h-3.5" />
         </span>
       </div>
-      <div className="min-w-0 flex-1 flex flex-col [&>*]:h-full">{children}</div>
+      <div
+        className={cn(
+          'min-w-0 flex flex-col',
+          paired && 'flex-1 [&>*]:h-full',
+        )}
+      >
+        {children}
+      </div>
     </div>
   );
 }
@@ -584,9 +592,9 @@ export function Dashboard() {
       </div>
     ),
     presence: (
-      <Card className="!p-4 lg:!p-5">
-        <div className="flex flex-col lg:flex-row lg:items-center gap-4 lg:gap-8">
-          <div className="shrink-0">
+      <Card className="!p-4">
+        <div className="flex flex-col lg:flex-row lg:items-start gap-3 lg:gap-6">
+          <div className="min-w-0 shrink-0">
             <h2 className="font-semibold text-fg text-sm mb-2">Where is everyone?</h2>
             <div className="flex flex-wrap gap-2">
               {household.map((m) => {
@@ -607,7 +615,7 @@ export function Dashboard() {
               })}
             </div>
           </div>
-          <div className="lg:border-l lg:border-border lg:pl-8 flex-1">
+          <div className="lg:border-l lg:border-border lg:pl-6 min-w-0">
             <p className="text-xs text-muted mb-2">Your status</p>
             <div className="flex flex-wrap gap-2">
               {PRESENCE_OPTIONS.map((o) => (
