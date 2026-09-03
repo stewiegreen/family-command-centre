@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
+  BookMarked,
   Check,
   Coins,
   MonitorPlay,
@@ -22,6 +23,7 @@ import type {
   FamilyData,
   Quest,
   QuestDifficulty,
+  QuestTemplate,
   RedemptionRecord,
   RewardItem,
   RewardKind,
@@ -30,7 +32,10 @@ import {
   DIFFICULTY_ORDER,
   DIFFICULTY_REWARDS,
   buildQuest,
+  buildQuestFromTemplate,
+  buildQuestTemplate,
   ensureProgress,
+  ensureQuestCatalog,
   ensureRewardCatalog,
   getChoreQuestConfig,
   isoWeekId,
@@ -53,7 +58,7 @@ function newId() {
   return crypto.randomUUID();
 }
 
-type TabId = 'quests' | 'shop' | 'vault' | 'board' | 'rates';
+type TabId = 'quests' | 'catalog' | 'shop' | 'vault' | 'board' | 'rates';
 
 const KIND_LABEL: Record<RewardKind, string> = {
   screen_time: 'Screen time',
@@ -65,29 +70,26 @@ const KIND_LABEL: Record<RewardKind, string> = {
 };
 
 export function ChoresPage() {
-  const { data, update, currentUser, isParent, getMember, syncStatus } = useApp();
+  const { data, update, currentUser, isParent, getMember } = useApp();
   const me = currentUser;
   const myId = me?.id || data.settings.currentUserId;
   const chores = data.chores || [];
   const progressMap = data.memberProgress || {};
   const coinBalances = data.coinBalances || {};
   const catalog = ensureRewardCatalog(data.rewardCatalog);
+  const questCatalog = ensureQuestCatalog(data.questCatalog);
   const redemptions = data.redemptions || [];
 
-  // Seed catalog only after we have real family data (never while still connecting).
-  // Writing too early with empty local defaults can overwrite cloud XP/coins.
+  // Seed shop catalog into family data once if empty
   useEffect(() => {
-    if (syncStatus === 'connecting' || syncStatus === 'auth') return;
-    if (data.rewardCatalog && data.rewardCatalog.length > 0) return;
-    // No members yet → not a real family document; skip
-    if (!data.members?.length) return;
-    update((d) => {
-      if (d.rewardCatalog && d.rewardCatalog.length > 0) return d;
-      // Only touch rewardCatalog — spread full d so progress fields stay intact
-      return { ...d, rewardCatalog: ensureRewardCatalog(d.rewardCatalog) };
-    });
+    if (!data.rewardCatalog || data.rewardCatalog.length === 0) {
+      update((d) => {
+        if (d.rewardCatalog && d.rewardCatalog.length > 0) return d;
+        return { ...d, rewardCatalog: ensureRewardCatalog(d.rewardCatalog) };
+      });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [syncStatus, data.members?.length, data.rewardCatalog?.length]);
+  }, []);
 
   const [tab, setTab] = useState<TabId>('quests');
   const [createOpen, setCreateOpen] = useState(false);
@@ -97,21 +99,26 @@ export function ChoresPage() {
   const [customRewards, setCustomRewards] = useState(false);
   const [customXp, setCustomXp] = useState(25);
   const [customCoins, setCustomCoins] = useState(12);
+  const [alsoSaveToCatalog, setAlsoSaveToCatalog] = useState(false);
   const [levelUp, setLevelUp] = useState<{ name: string; level: number } | null>(null);
   const [ratesDraft, setRatesDraft] = useState<ChoreQuestConfig | null>(null);
   const [shopEditOpen, setShopEditOpen] = useState(false);
+  const [catalogEditOpen, setCatalogEditOpen] = useState(false);
+  const [editTemplate, setEditTemplate] = useState<QuestTemplate | null>(null);
+  const [tplTitle, setTplTitle] = useState('');
+  const [tplDifficulty, setTplDifficulty] = useState<QuestDifficulty>('medium');
+  const [tplCustom, setTplCustom] = useState(false);
+  const [tplXp, setTplXp] = useState(25);
+  const [tplCoins, setTplCoins] = useState(12);
+  const [showArchivedTemplates, setShowArchivedTemplates] = useState(false);
   const [chestMsg, setChestMsg] = useState<string | null>(null);
 
-  // Idempotent weekly rollover (safe if app wasn't opened all weekend).
-  // Only after cloud hydrate — otherwise empty local state would close a week
-  // and push blank progress/settings upstream.
+  // Idempotent weekly rollover (safe if app wasn't opened all weekend)
   useEffect(() => {
     if (!me) return;
-    if (syncStatus === 'connecting' || syncStatus === 'auth') return;
-    if (syncStatus !== 'live' && syncStatus !== 'local') return;
     update((d) => ensureWeekRollover(d, me.id));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [me?.id, syncStatus]);
+  }, [me?.id]);
 
   useEffect(() => {
     if (tab === 'rates' && isParent) {
@@ -138,15 +145,7 @@ export function ChoresPage() {
   });
 
   const openQuests = useMemo(
-    () =>
-      chores
-        .filter((c) => c.status === 'open' || !c.status)
-        .slice()
-        .sort(
-          (a, b) =>
-            DIFFICULTY_ORDER.indexOf(a.difficulty ?? 'medium') -
-            DIFFICULTY_ORDER.indexOf(b.difficulty ?? 'medium'),
-        ),
+    () => chores.filter((c) => c.status === 'open' || !c.status),
     [chores],
   );
   const pendingQuests = useMemo(
@@ -222,10 +221,7 @@ export function ChoresPage() {
       catalog
         .filter((r) => r.active)
         .slice()
-        .sort(
-          (a, b) =>
-            Number(!!b.featured) - Number(!!a.featured) || a.coinCost - b.coinCost,
-        ),
+        .sort((a, b) => a.sort - b.sort || a.coinCost - b.coinCost),
     [catalog],
   );
 
@@ -284,16 +280,152 @@ export function ChoresPage() {
         coins: customRewards ? coins : undefined,
         config: cq,
       });
-      update((d) => ({
-        ...d,
-        chores: [q, ...(d.chores || [])],
-      }));
+      update((d) => {
+        let next: FamilyData = {
+          ...d,
+          chores: [q, ...(d.chores || [])],
+        };
+        // Optionally also add a reusable template to the master catalog
+        if (alsoSaveToCatalog && isParent) {
+          const list = ensureQuestCatalog(d.questCatalog);
+          const tpl = buildQuestTemplate({
+            title,
+            difficulty,
+            xp: customRewards ? xp : undefined,
+            coins: customRewards ? coins : undefined,
+            sort: list.length * 10 + 10,
+          });
+          next = { ...next, questCatalog: [...list, tpl] };
+        }
+        return next;
+      });
     }
     setTitle('');
     setDifficulty('medium');
     setCustomRewards(false);
+    setAlsoSaveToCatalog(false);
     setEditQuest(null);
     setCreateOpen(false);
+  };
+
+  /* ─── Quest catalog (templates) ─────────────────────────── */
+
+  const activeTemplates = useMemo(
+    () =>
+      questCatalog
+        .filter((t) => t.active)
+        .slice()
+        .sort((a, b) => a.sort - b.sort || a.title.localeCompare(b.title)),
+    [questCatalog],
+  );
+  const archivedTemplates = useMemo(
+    () =>
+      questCatalog
+        .filter((t) => !t.active)
+        .slice()
+        .sort((a, b) => a.title.localeCompare(b.title)),
+    [questCatalog],
+  );
+
+  const openCatalogCreate = () => {
+    setEditTemplate(null);
+    setTplTitle('');
+    setTplDifficulty('medium');
+    setTplCustom(false);
+    const r = rewardsForDifficultyWithConfig('medium', cq);
+    setTplXp(r.xp);
+    setTplCoins(r.coins);
+    setCatalogEditOpen(true);
+  };
+
+  const openCatalogEdit = (t: QuestTemplate) => {
+    setEditTemplate(t);
+    setTplTitle(t.title);
+    setTplDifficulty(t.difficulty || 'medium');
+    const base = rewardsForDifficultyWithConfig(t.difficulty || 'medium', cq);
+    const isCustom =
+      (t.xp != null && t.xp !== base.xp) || (t.coins != null && t.coins !== base.coins);
+    setTplCustom(isCustom);
+    setTplXp(t.xp ?? base.xp);
+    setTplCoins(t.coins ?? base.coins);
+    setCatalogEditOpen(true);
+  };
+
+  const saveTemplate = () => {
+    if (!tplTitle.trim() || !isParent) return;
+    const now = new Date().toISOString();
+    update((d) => {
+      const list = ensureQuestCatalog(d.questCatalog);
+      if (editTemplate) {
+        return {
+          ...d,
+          questCatalog: list.map((t) =>
+            t.id === editTemplate.id
+              ? {
+                  ...t,
+                  title: tplTitle.trim(),
+                  difficulty: tplDifficulty,
+                  xp: tplCustom ? Math.max(0, Math.floor(tplXp)) : undefined,
+                  coins: tplCustom ? Math.max(0, Math.floor(tplCoins)) : undefined,
+                  updatedAt: now,
+                }
+              : t,
+          ),
+        };
+      }
+      const tpl = buildQuestTemplate({
+        title: tplTitle,
+        difficulty: tplDifficulty,
+        xp: tplCustom ? tplXp : undefined,
+        coins: tplCustom ? tplCoins : undefined,
+        sort: list.length * 10 + 10,
+      });
+      return { ...d, questCatalog: [...list, tpl] };
+    });
+    setCatalogEditOpen(false);
+    setEditTemplate(null);
+  };
+
+  const archiveTemplate = (t: QuestTemplate) => {
+    if (!isParent) return;
+    if (!confirm(`Archive “${t.title}” from the catalog? (You can restore it later.)`)) return;
+    update((d) => ({
+      ...d,
+      questCatalog: ensureQuestCatalog(d.questCatalog).map((x) =>
+        x.id === t.id ? { ...x, active: false, updatedAt: new Date().toISOString() } : x,
+      ),
+    }));
+  };
+
+  const restoreTemplate = (t: QuestTemplate) => {
+    if (!isParent) return;
+    update((d) => ({
+      ...d,
+      questCatalog: ensureQuestCatalog(d.questCatalog).map((x) =>
+        x.id === t.id ? { ...x, active: true, updatedAt: new Date().toISOString() } : x,
+      ),
+    }));
+  };
+
+  const deleteTemplateForever = (t: QuestTemplate) => {
+    if (!isParent) return;
+    if (!confirm(`Permanently delete “${t.title}”? This cannot be undone.`)) return;
+    update((d) => ({
+      ...d,
+      questCatalog: ensureQuestCatalog(d.questCatalog).filter((x) => x.id !== t.id),
+    }));
+  };
+
+  /** Post a template onto the live quest board (does not remove from catalog). */
+  const postTemplate = (t: QuestTemplate) => {
+    if (!isParent || !me) return;
+    const q = buildQuestFromTemplate(t, me.id, cq);
+    update((d) => ({
+      ...d,
+      chores: [q, ...(d.chores || [])],
+    }));
+    // Switch to quests so they see it appear
+    setTab('quests');
   };
 
   const deleteQuest = (quest: Quest) => {
@@ -845,6 +977,9 @@ export function ChoresPage() {
 
   const tabs: { id: TabId; label: string; count?: number }[] = [
     { id: 'quests', label: 'Quests' },
+    ...(isParent
+      ? [{ id: 'catalog' as const, label: 'Catalog', count: activeTemplates.length }]
+      : []),
     { id: 'shop', label: 'Shop' },
     {
       id: 'vault',
@@ -873,6 +1008,12 @@ export function ChoresPage() {
           <Button onClick={openCreate}>
             <Plus className="w-4 h-4 mr-1.5" />
             New quest
+          </Button>
+        )}
+        {isParent && tab === 'catalog' && (
+          <Button onClick={openCatalogCreate}>
+            <Plus className="w-4 h-4 mr-1.5" />
+            Add template
           </Button>
         )}
         {isParent && tab === 'shop' && (
@@ -1151,6 +1292,101 @@ export function ChoresPage() {
             </section>
           )}
         </>
+      )}
+
+      {/* ── CATALOG TAB (parents) ───────────────────────────── */}
+      {tab === 'catalog' && isParent && (
+        <section className="space-y-4">
+          <div>
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted mb-1 flex items-center gap-2">
+              <BookMarked className="w-4 h-4" />
+              Quest catalog
+            </h2>
+            <p className="text-xs text-muted">
+              Your master chore list. Templates stay here until you post them to the live board.
+              Archive to hide without deleting.
+            </p>
+          </div>
+
+          {activeTemplates.length === 0 ? (
+            <Card className="!p-6 text-center">
+              <p className="text-muted text-sm">No templates yet. Build your master list once, post when needed.</p>
+              <Button className="mt-4" onClick={openCatalogCreate}>
+                <Plus className="w-4 h-4 mr-1.5" />
+                Add template
+              </Button>
+            </Card>
+          ) : (
+            <div className="grid sm:grid-cols-2 gap-3">
+              {activeTemplates.map((t) => {
+                const meta = rewardsForDifficultyWithConfig(t.difficulty, cq);
+                const xp = t.xp ?? meta.xp;
+                const coins = t.coins ?? meta.coins;
+                return (
+                  <Card key={t.id} className="!p-4 space-y-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-fg leading-snug">{t.title}</p>
+                        <p className="text-xs text-muted mt-1">
+                          {meta.emoji} {meta.label} · +{xp} XP · +{coins}c
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button size="sm" onClick={() => postTemplate(t)}>
+                        <Plus className="w-3.5 h-3.5 mr-1" />
+                        Post to board
+                      </Button>
+                      <Button size="sm" variant="secondary" onClick={() => openCatalogEdit(t)}>
+                        <Pencil className="w-3.5 h-3.5 mr-1" />
+                        Edit
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => archiveTemplate(t)}>
+                        Archive
+                      </Button>
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+
+          {archivedTemplates.length > 0 && (
+            <div className="pt-2">
+              <button
+                type="button"
+                className="text-xs text-muted hover:text-fg underline-offset-2 hover:underline"
+                onClick={() => setShowArchivedTemplates((v) => !v)}
+              >
+                {showArchivedTemplates ? 'Hide' : 'Show'} archived ({archivedTemplates.length})
+              </button>
+              {showArchivedTemplates && (
+                <div className="mt-3 grid sm:grid-cols-2 gap-3">
+                  {archivedTemplates.map((t) => {
+                    const meta = rewardsForDifficultyWithConfig(t.difficulty, cq);
+                    return (
+                      <Card key={t.id} className="!p-4 opacity-80 space-y-2">
+                        <p className="font-medium text-fg text-sm">{t.title}</p>
+                        <p className="text-[11px] text-muted">
+                          {meta.emoji} {meta.label} · archived
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          <Button size="sm" variant="secondary" onClick={() => restoreTemplate(t)}>
+                            Restore
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => deleteTemplateForever(t)}>
+                            <Trash2 className="w-3.5 h-3.5 mr-1" />
+                            Delete
+                          </Button>
+                        </div>
+                      </Card>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </section>
       )}
 
       {/* ── SHOP TAB ───────────────────────────────────────── */}
@@ -1480,15 +1716,11 @@ export function ChoresPage() {
                 <div className="flex flex-wrap gap-2 pt-2">
                   <Button
                     onClick={() => {
-                      const clean: Record<string, number> = {};
-                      for (const [k, v] of Object.entries(draft)) {
-                        if (typeof v === 'number' && !Number.isNaN(v)) clean[k] = v;
-                      }
                       update((d) => ({
                         ...d,
                         choreQuest: {
                           ...getChoreQuestConfig(d),
-                          ...clean,
+                          ...draft,
                         },
                       }));
                       setRatesDraft(null);
@@ -1608,6 +1840,16 @@ export function ChoresPage() {
               </div>
             </div>
           )}
+          {!editQuest && isParent && (
+            <label className="flex items-center gap-2 text-sm text-fg">
+              <input
+                type="checkbox"
+                checked={alsoSaveToCatalog}
+                onChange={(e) => setAlsoSaveToCatalog(e.target.checked)}
+              />
+              Also save to catalog (reusable template)
+            </label>
+          )}
           <div className="flex justify-end gap-2 pt-2">
             <Button
               variant="ghost"
@@ -1620,6 +1862,120 @@ export function ChoresPage() {
             </Button>
             <Button onClick={saveQuest} disabled={!title.trim()}>
               {editQuest ? 'Save changes' : 'Post quest'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Catalog template modal */}
+      <Modal
+        open={catalogEditOpen}
+        onClose={() => {
+          setCatalogEditOpen(false);
+          setEditTemplate(null);
+        }}
+        title={editTemplate ? 'Edit template' : 'New template'}
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="text-xs text-muted mb-1 block">Chore name</label>
+            <input
+              className="w-full rounded-xl border border-border bg-inset px-3 py-2 text-fg text-sm outline-none focus:border-accent"
+              value={tplTitle}
+              onChange={(e) => setTplTitle(e.target.value)}
+              placeholder="e.g. Empty the dishwasher"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') saveTemplate();
+              }}
+            />
+          </div>
+          <div>
+            <label className="text-xs text-muted mb-2 block">Difficulty</label>
+            <div className="grid grid-cols-3 gap-2">
+              {DIFFICULTY_ORDER.map((d) => {
+                const meta = rewardsForDifficultyWithConfig(d, cq);
+                const selected = tplDifficulty === d;
+                return (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => {
+                      setTplDifficulty(d);
+                      if (!tplCustom) {
+                        const r = rewardsForDifficultyWithConfig(d, cq);
+                        setTplXp(r.xp);
+                        setTplCoins(r.coins);
+                      }
+                    }}
+                    className={cn(
+                      'rounded-xl border p-3 text-left transition-colors',
+                      selected ? 'border-accent bg-accent/10' : 'border-border hover:bg-nav-hover',
+                    )}
+                  >
+                    <p className="text-sm font-semibold text-fg">
+                      {meta.emoji} {meta.label}
+                    </p>
+                    <p className="text-[11px] text-muted mt-1">
+                      +{meta.xp} XP · +{meta.coins} coins
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <label className="flex items-center gap-2 text-sm text-fg">
+            <input
+              type="checkbox"
+              checked={tplCustom}
+              onChange={(e) => {
+                const on = e.target.checked;
+                setTplCustom(on);
+                if (!on) {
+                  const r = rewardsForDifficultyWithConfig(tplDifficulty, cq);
+                  setTplXp(r.xp);
+                  setTplCoins(r.coins);
+                }
+              }}
+            />
+            Custom XP / coins (advanced)
+          </label>
+          {tplCustom && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-muted mb-1 block">XP</label>
+                <input
+                  type="number"
+                  min={0}
+                  className="w-full rounded-xl border border-border bg-inset px-3 py-2 text-fg text-sm outline-none focus:border-accent"
+                  value={tplXp}
+                  onChange={(e) => setTplXp(Number(e.target.value) || 0)}
+                />
+              </div>
+              <div>
+                <label className="text-xs text-muted mb-1 block">Coins</label>
+                <input
+                  type="number"
+                  min={0}
+                  className="w-full rounded-xl border border-border bg-inset px-3 py-2 text-fg text-sm outline-none focus:border-accent"
+                  value={tplCoins}
+                  onChange={(e) => setTplCoins(Number(e.target.value) || 0)}
+                />
+              </div>
+            </div>
+          )}
+          <div className="flex justify-end gap-2 pt-2">
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setCatalogEditOpen(false);
+                setEditTemplate(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button onClick={saveTemplate} disabled={!tplTitle.trim()}>
+              {editTemplate ? 'Save changes' : 'Add to catalog'}
             </Button>
           </div>
         </div>

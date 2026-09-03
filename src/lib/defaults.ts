@@ -1,21 +1,5 @@
 import type { FamilyData, Member, Settings } from '../types';
-import { migrateChoreToQuest, ensureProgress, ensureRewardCatalog } from './quest';
-import type { CoinLedgerEntry } from '../types';
-
-/** Rebuild coin balances from ledger (oldest → newest). Used if balances were wiped but history remains. */
-function rebuildCoinBalancesFromLedger(ledger: CoinLedgerEntry[]): Record<string, number> {
-  const bal: Record<string, number> = {};
-  for (const e of [...ledger].reverse()) {
-    if (!e?.memberId || typeof e.delta !== 'number') continue;
-    bal[e.memberId] = (bal[e.memberId] ?? 0) + e.delta;
-  }
-  return bal;
-}
-
-function hasAnyBalance(map?: Record<string, number> | null): boolean {
-  if (!map) return false;
-  return Object.values(map).some((v) => typeof v === 'number' && v !== 0);
-}
+import { migrateChoreToQuest, ensureProgress, ensureRewardCatalog, ensureQuestCatalog } from './quest';
 
 export const DEFAULT_MEMBERS: Member[] = [
   { id: '1', name: 'Alex', color: '#6366f1', emoji: '👨', initials: 'A', role: 'parent' },
@@ -52,6 +36,7 @@ export const DEFAULT_DATA: FamilyData = {
   coinBalances: {},
   coinLedger: [],
   rewardCatalog: [],
+  questCatalog: [],
   redemptions: [],
   settings: DEFAULT_SETTINGS,
 };
@@ -76,20 +61,10 @@ export function migratePayload(p: Partial<FamilyData>): FamilyData {
       : (i < 2 ? 'parent' as const : 'kid' as const);
     return { ...m, role };
   });
-  const todos = (p.todos || []).map((t) => {
-    const status =
-      t.status === 'todo' || t.status === 'doing' || t.status === 'done'
-        ? t.status
-        : t.completed
-          ? ('done' as const)
-          : ('todo' as const);
-    return {
-      ...t,
-      createdById: t.createdById || t.memberId,
-      status,
-      completed: status === 'done',
-    };
-  });
+  const todos = (p.todos || []).map((t) => ({
+    ...t,
+    createdById: t.createdById || t.memberId,
+  }));
   return {
     ...DEFAULT_DATA,
     ...p,
@@ -152,23 +127,13 @@ export function migratePayload(p: Partial<FamilyData>): FamilyData {
     appearance: p.appearance || {},
     screenTime: p.screenTime || {},
     screenTimeLog: p.screenTimeLog || [],
-    // Progress & economy — never invent empties over recoverable data
-    coinLedger: p.coinLedger || [],
     memberProgress: Object.fromEntries(
       Object.entries(p.memberProgress || {}).map(([id, prog]) => [id, ensureProgress(prog)]),
     ),
-    coinBalances: (() => {
-      const existing = p.coinBalances || {};
-      if (hasAnyBalance(existing)) return existing;
-      const ledger = p.coinLedger || [];
-      if (ledger.length > 0) return rebuildCoinBalancesFromLedger(ledger);
-      return existing;
-    })(),
-    // Catalog: only seed defaults when truly missing — do not clobber parent edits
-    rewardCatalog:
-      p.rewardCatalog && p.rewardCatalog.length > 0
-        ? p.rewardCatalog
-        : ensureRewardCatalog(p.rewardCatalog),
+    coinBalances: p.coinBalances || {},
+    coinLedger: p.coinLedger || [],
+    rewardCatalog: ensureRewardCatalog(p.rewardCatalog),
+    questCatalog: ensureQuestCatalog(p.questCatalog),
     redemptions: p.redemptions || [],
     weekState: p.weekState,
     choreQuest: p.choreQuest,

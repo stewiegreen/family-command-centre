@@ -1,6 +1,5 @@
 export type Role = 'parent' | 'kid' | 'media';
 export type Priority = 'low' | 'medium' | 'high';
-export type TodoStatus = 'todo' | 'doing' | 'done';
 export type ViewId = 'dashboard' | 'calendar' | 'todos' | 'chores' | 'shopping' | 'notes' | 'messages' | 'media' | 'settings';
 export type SyncStatus = 'local' | 'connecting' | 'live' | 'error' | 'auth';
 export type ChoreCadence = 'daily' | 'weekly' | 'once'; // legacy
@@ -88,11 +87,6 @@ export interface Todo {
   memberId: string;
   createdById: string;
   completed: boolean;
-  /**
-   * Kanban column. Legacy todos without status: completed → done, else todo.
-   * Keep completed in sync (done ↔ true) for older digests.
-   */
-  status?: TodoStatus;
   priority: Priority;
   createdAt: string;
   /** Optional due datetime (ISO). Used for “due soon” notifications. */
@@ -125,12 +119,34 @@ export interface Quest {
   approvedAt?: string;
   createdById: string;
   createdAt: string;
+  /** Optional link back to catalog template this was posted from. */
+  templateId?: string;
   /** @deprecated rotation model */
   rotation?: string[];
   turnIndex?: number;
   cadence?: ChoreCadence;
   lastCompletedAt?: string;
   lastCompletedById?: string;
+}
+
+/**
+ * Reusable quest template (master chore list).
+ * Not on the live board until a parent posts it as a Quest.
+ * Soft-hide with active:false instead of deleting.
+ */
+export interface QuestTemplate {
+  id: string;
+  title: string;
+  difficulty: QuestDifficulty;
+  /** Optional XP override; omit to use difficulty defaults at post time. */
+  xp?: number;
+  /** Optional coins override; omit to use difficulty defaults at post time. */
+  coins?: number;
+  /** Soft-hide without deleting (like shop items). */
+  active: boolean;
+  sort: number;
+  createdAt: string;
+  updatedAt?: string;
 }
 
 /** @deprecated Use Quest */
@@ -209,14 +225,7 @@ export interface ScreenTimeLogEntry {
 export interface ShoppingItem {
   id: string;
   text: string;
-  /** e.g. "2", "500g", "1 L" — free-form for flexibility. */
-  quantity?: string;
-  /** Preferred brand or short note (e.g. "Coles brand", "organic"). */
-  brand?: string;
-  /** Store name — items with the same store form a list section. */
   store?: string;
-  /** Lower = higher in list. Used for drag-reorder. */
-  sort?: number;
   claimedById?: string | null;
   bought: boolean;
   createdById: string;
@@ -304,21 +313,8 @@ export interface FamilyData {
       emoji?: string;
       color?: string;
       theme?: ThemeId;
-      /** Ordered list of dashboard widget ids for this member only (legacy). */
+      /** Ordered list of dashboard widget ids for this member only. */
       homescreenOrder?: string[];
-      /**
-       * @deprecated legacy order + full/half width per widget.
-       * Migrated into homescreenRows on first load; kept only so old
-       * saved data still parses.
-       */
-      homescreenLayout?: { id: string; span: 'full' | 'half' }[];
-      /**
-       * Preferred layout: explicit rows of 1 (full width) or 2 (shared
-       * row) widget ids. Source of truth when present. Stored as
-       * { ids: string[] }[] (not string[][]) because Firestore rejects
-       * arrays nested directly inside arrays.
-       */
-      homescreenRows?: { ids: string[] }[];
     }
   >;
   /** memberId → earned screen-time minutes balance. */
@@ -333,6 +329,8 @@ export interface FamilyData {
   coinLedger?: CoinLedgerEntry[];
   /** Reward shop catalog (Phase 2). */
   rewardCatalog?: RewardItem[];
+  /** Reusable quest templates (master chore list). Not live until posted. */
+  questCatalog?: QuestTemplate[];
   /** Redemptions (Phase 2). */
   redemptions?: RedemptionRecord[];
   /** Current week cycle state (Phase 3). */

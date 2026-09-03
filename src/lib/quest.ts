@@ -1,4 +1,12 @@
-import type { Quest, QuestDifficulty, MemberProgress, RewardItem, ChoreQuestConfig, FamilyData } from '../types';
+import type {
+  Quest,
+  QuestDifficulty,
+  QuestTemplate,
+  MemberProgress,
+  RewardItem,
+  ChoreQuestConfig,
+  FamilyData,
+} from '../types';
 
 /** Default XP / coins by difficulty. rewardMinutes kept at 0 — screen time comes from the shop. */
 export const DIFFICULTY_REWARDS: Record<
@@ -90,6 +98,7 @@ export function buildQuest(opts: {
   xp?: number;
   coins?: number;
   config?: ChoreQuestConfig | null;
+  templateId?: string;
 }): Quest {
   const r = rewardsForDifficultyWithConfig(opts.difficulty, opts.config);
   return {
@@ -102,6 +111,52 @@ export function buildQuest(opts: {
     status: 'open',
     createdById: opts.createdById,
     createdAt: new Date().toISOString(),
+    templateId: opts.templateId,
+  };
+}
+
+/** Post a catalog template onto the live quest board. */
+export function buildQuestFromTemplate(
+  template: QuestTemplate,
+  createdById: string,
+  config?: ChoreQuestConfig | null,
+): Quest {
+  return buildQuest({
+    title: template.title,
+    difficulty: template.difficulty,
+    createdById,
+    xp: template.xp,
+    coins: template.coins,
+    config,
+    templateId: template.id,
+  });
+}
+
+/** Quest catalog — empty by default; parents build their master list. */
+export function ensureQuestCatalog(existing?: QuestTemplate[] | null): QuestTemplate[] {
+  if (existing && Array.isArray(existing)) return existing;
+  return [];
+}
+
+export function buildQuestTemplate(opts: {
+  title: string;
+  difficulty: QuestDifficulty;
+  xp?: number;
+  coins?: number;
+  sort?: number;
+  id?: string;
+}): QuestTemplate {
+  const now = new Date().toISOString();
+  return {
+    id: opts.id || crypto.randomUUID(),
+    title: opts.title.trim(),
+    difficulty: opts.difficulty,
+    xp: opts.xp != null ? Math.max(0, Math.floor(opts.xp)) : undefined,
+    coins: opts.coins != null ? Math.max(0, Math.floor(opts.coins)) : undefined,
+    active: true,
+    sort: opts.sort ?? 0,
+    createdAt: now,
+    updatedAt: now,
   };
 }
 
@@ -139,17 +194,12 @@ export function migrateChoreToQuest(c: {
   const status: Quest['status'] =
     c.status === 'pending' || c.status === 'done' || c.status === 'open' ? c.status : 'open';
 
-  // Once xp/coins are stored on a quest they are frozen — deploys / rate changes
-  // must not rewrite them. Only fill defaults when fields are missing.
-  const xp = typeof c.xp === 'number' && !Number.isNaN(c.xp) ? c.xp : defaults.xp;
-  const coins = typeof c.coins === 'number' && !Number.isNaN(c.coins) ? c.coins : defaults.coins;
-
   return {
     id: c.id,
     title: c.title,
     difficulty,
-    xp,
-    coins,
+    xp: c.xp ?? defaults.xp,
+    coins: c.coins ?? defaults.coins,
     // Screen time is shop-only; do not grant minutes on quest approval
     rewardMinutes: 0,
     status,
