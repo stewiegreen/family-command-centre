@@ -279,12 +279,35 @@ export interface JournalEntry {
   updatedAt: string;
 }
 
+/** free = text, checklist = shared checklist, notice = must-read until each kid acknowledges */
+export type NoteKind = 'free' | 'checklist' | 'notice';
+
+export interface NoteChecklistItem {
+  id: string;
+  text: string;
+  done: boolean;
+}
+
 export interface Note {
   id: string;
   title: string;
   content: string;
   tags: string[];
   pinned: boolean;
+  /**
+   * Parent-only: surface on the Home dashboard (fixed top strip).
+   * Kids cannot toggle this or dismiss non-notice home notes.
+   */
+  showOnHome?: boolean;
+  /** Defaults to 'free' when missing (legacy notes). */
+  kind?: NoteKind;
+  /** Used when kind === 'checklist'. */
+  checklist?: NoteChecklistItem[];
+  /**
+   * Member ids who tapped "I read this" on a notice.
+   * Notice stays on a kid's Home until their id is listed here.
+   */
+  readBy?: string[];
   authorId: string;
   createdAt: string;
   updatedAt: string;

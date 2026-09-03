@@ -20,6 +20,8 @@ import {
   Eye,
   EyeOff,
   LayoutGrid,
+  Megaphone,
+  Home,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Avatar } from '../components/ui/Avatar';
@@ -297,6 +299,44 @@ export function Dashboard() {
   const myScreen = screenTimeMap[myId] ?? 0;
   const openCount = chores.filter((c) => c.status === 'open' || !c.status).length;
   const kids = members.filter((m) => m.role === 'kid');
+
+  /** Parent-controlled home notes; fixed strip — not part of card layout DnD. */
+  const homeNotes = useMemo(() => {
+    const notes = data.notes || [];
+    return notes
+      .filter((n) => {
+        if (!n.showOnHome && n.kind !== 'notice') return false;
+        // notices always imply home until acknowledged (legacy safety)
+        const onHome = n.showOnHome || n.kind === 'notice';
+        if (!onHome) return false;
+        if (isParent) return true;
+        if (currentUser?.role === 'kid') {
+          if (n.kind === 'notice') {
+            return !(n.readBy || []).includes(myId);
+          }
+          return true; // kids cannot dismiss non-notice home notes
+        }
+        return false;
+      })
+      .sort(
+        (a, b) =>
+          Number(b.kind === 'notice') - Number(a.kind === 'notice') ||
+          new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+      );
+  }, [data.notes, isParent, currentUser?.role, myId]);
+
+  const acknowledgeHomeNotice = (noteId: string) => {
+    update((d) => ({
+      ...d,
+      notes: (d.notes || []).map((n) => {
+        if (n.id !== noteId) return n;
+        const readBy = n.readBy || [];
+        if (readBy.includes(myId)) return n;
+        return { ...n, readBy: [...readBy, myId], updatedAt: new Date().toISOString() };
+      }),
+    }));
+  };
+
 
   const announcement = (settings.pinnedAnnouncement || '').trim();
   const [heroOpen, setHeroOpen] = useState(() => {
@@ -1353,6 +1393,79 @@ export function Dashboard() {
             )}
           </div>
         </section>
+      )}
+
+      {/* Fixed Home notes — not draggable / not hideable by kids */}
+      {homeNotes.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted px-1 flex items-center gap-1">
+            <Home className="w-3.5 h-3.5" />
+            Family notes
+          </p>
+          {homeNotes.map((n) => {
+            const isNotice = n.kind === 'notice';
+            const needsAck =
+              isNotice &&
+              currentUser?.role === 'kid' &&
+              !(n.readBy || []).includes(myId);
+            return (
+              <Card
+                key={n.id}
+                className={cn(
+                  '!p-3 sm:!p-4 border-l-4',
+                  isNotice ? 'border-l-amber-500' : 'border-l-accent',
+                )}
+              >
+                <div className="flex items-start gap-3">
+                  <div className="flex-1 min-w-0 space-y-1">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {isNotice && (
+                        <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-600">
+                          <Megaphone className="w-3 h-3" /> Must-read
+                        </span>
+                      )}
+                      <h3 className="text-sm font-semibold text-fg">{n.title}</h3>
+                    </div>
+                    {n.kind === 'checklist' ? (
+                      <ul className="space-y-0.5">
+                        {(n.checklist || []).slice(0, 4).map((c) => (
+                          <li
+                            key={c.id}
+                            className={cn(
+                              'text-xs',
+                              c.done ? 'line-through text-muted' : 'text-fg',
+                            )}
+                          >
+                            {c.done ? '✓' : '○'} {c.text}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-sm text-muted whitespace-pre-wrap line-clamp-4">
+                        {n.content}
+                      </p>
+                    )}
+                    {isParent && isNotice && (
+                      <p className="text-[11px] text-faint">
+                        Read by {(n.readBy || []).length}/
+                        {kids.length} kids
+                      </p>
+                    )}
+                  </div>
+                  {needsAck && (
+                    <Button
+                      size="sm"
+                      className="shrink-0"
+                      onClick={() => acknowledgeHomeNotice(n.id)}
+                    >
+                      I read this
+                    </Button>
+                  )}
+                </div>
+              </Card>
+            );
+          })}
+        </div>
       )}
 
       <div className="space-y-2">
