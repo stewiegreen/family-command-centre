@@ -98,6 +98,11 @@ export interface Todo {
    * Keep completed in sync (done ↔ true) for older digests.
    */
   status?: TodoStatus;
+  /**
+   * Optional link to a ChoreQuest quest (FamilyData.chores).
+   * When set, the task shows XP/Treasure and completing the todo can submit the quest.
+   */
+  questId?: string;
 }
 
 /**
@@ -128,6 +133,8 @@ export interface Quest {
   createdAt: string;
   /** Optional link back to catalog template this was posted from. */
   templateId?: string;
+  /** Optional link to a Todo that drives this quest. */
+  todoId?: string;
   /** @deprecated rotation model */
   rotation?: string[];
   turnIndex?: number;

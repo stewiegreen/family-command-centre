@@ -25,6 +25,7 @@ import { uid } from '../lib/uid';
 import { eventOverlapsDay, expandEvents, packOverlapping } from '../lib/recurrence';
 import { downloadIcs, exportEventsToIcs, importEventsFromIcs, type ImportResult } from '../lib/ical';
 import type { CalendarEvent, ExpandedEvent, Todo } from '../types';
+import { applyTodoStatus } from '../lib/todoQuest';
 import { cn } from '../lib/cn';
 
 type CalView = 'month' | 'week' | 'day';
@@ -139,7 +140,7 @@ function emptyForm(memberId: string, day?: Date): FormState {
 }
 
 export function CalendarPage() {
-  const { data, update, getMember } = useApp();
+  const { data, update, currentUser, getMember } = useApp();
   const [cursor, setCursor] = useState(new Date());
   const [view, setViewState] = useState<CalView>(loadView);
   const [showTasks, setShowTasksState] = useState(loadShowTasks);
@@ -170,17 +171,25 @@ export function CalendarPage() {
   };
 
   const openTodos = data.todos.filter((t) => !t.completed && t.dueAt);
-
   const tasksOnDay = (day: Date): Todo[] => {
     if (!showTasks) return [];
     return openTodos.filter((t) => isSameDay(new Date(t.dueAt!), day));
   };
+  const taskExtra = (t: Todo) => {
+    if (!t.questId) return '';
+    const q = (data.chores || []).find((c) => c.id === t.questId);
+    return q ? ` · +${q.xp} XP / +${q.coins}c` : '';
+  };
 
   const toggleTodo = (id: string) => {
-    update((d) => ({
-      ...d,
-      todos: d.todos.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t)),
-    }));
+    update((d) => {
+      const t = d.todos.find((x) => x.id === id);
+      if (!t) return d;
+      const nextDone = !t.completed;
+      return applyTodoStatus(d, id, nextDone ? 'done' : 'todo', {
+        submittedById: currentUser?.id,
+      });
+    });
   };
 
   const handleExport = async () => {
@@ -613,6 +622,7 @@ export function CalendarPage() {
             weeks={monthWeeks}
             expanded={expanded}
             tasksOnDay={tasksOnDay}
+            taskExtra={taskExtra}
             getMember={getMember}
             memberColor={memberColor}
             onDayClick={(d) => openNew(d)}
@@ -627,6 +637,7 @@ export function CalendarPage() {
               days={daysInRange}
               expanded={expanded}
               tasksOnDay={tasksOnDay}
+              taskExtra={taskExtra}
               getMember={getMember}
               memberColor={memberColor}
               onSlotClick={(d, hour) => openNew(d, hour)}
@@ -644,6 +655,7 @@ export function CalendarPage() {
               days={[startOfDay(cursor)]}
               expanded={expanded}
               tasksOnDay={tasksOnDay}
+              taskExtra={taskExtra}
               getMember={getMember}
               memberColor={memberColor}
               onSlotClick={(d, hour) => openNew(d, hour)}
@@ -911,6 +923,7 @@ function MonthView({
   weeks,
   expanded,
   tasksOnDay,
+  taskExtra,
   getMember,
   memberColor,
   onDayClick,
@@ -922,6 +935,7 @@ function MonthView({
   weeks: Date[][];
   expanded: ExpandedEvent[];
   tasksOnDay: (day: Date) => Todo[];
+  taskExtra: (t: Todo) => string;
   getMember: (id: string) => { emoji?: string; name: string; color: string } | undefined;
   memberColor: (id: string) => string;
   onDayClick: (d: Date) => void;
@@ -950,6 +964,7 @@ function MonthView({
               cursor={cursor}
               expanded={expanded}
               tasksOnDay={tasksOnDay}
+              taskExtra={taskExtra}
               getMember={getMember}
               memberColor={memberColor}
               onDayClick={onDayClick}
@@ -969,6 +984,7 @@ function MonthWeekRow({
   cursor,
   expanded,
   tasksOnDay,
+  taskExtra,
   getMember,
   memberColor,
   onDayClick,
@@ -980,6 +996,7 @@ function MonthWeekRow({
   cursor: Date;
   expanded: ExpandedEvent[];
   tasksOnDay: (day: Date) => Todo[];
+  taskExtra: (t: Todo) => string;
   getMember: (id: string) => { emoji?: string; name: string; color: string } | undefined;
   memberColor: (id: string) => string;
   onDayClick: (d: Date) => void;
@@ -1133,10 +1150,10 @@ function MonthWeekRow({
                       onToggleTodo(t.id);
                     }}
                     className="text-[11px] sm:text-xs truncate px-1 py-0.5 rounded flex items-center gap-0.5 border border-dashed border-warn/50 bg-warn-tint text-warn leading-tight"
-                    title={`Task: ${t.text} (tap to complete)`}
+                    title={`Task: ${t.text}${taskExtra(t)} (tap to complete)`}
                   >
                     <Square className="w-2.5 h-2.5 shrink-0" />
-                    <span className="truncate">{t.text}</span>
+                    <span className="truncate">{t.text}{taskExtra(t)}</span>
                   </div>
                 ))}
                 {(list.length > 3 || tasksOnDay(day).length > 2) && (
@@ -1213,6 +1230,7 @@ function TimeGridView({
   days,
   expanded,
   tasksOnDay,
+  taskExtra,
   getMember,
   memberColor,
   onSlotClick,
@@ -1225,6 +1243,7 @@ function TimeGridView({
   days: Date[];
   expanded: ExpandedEvent[];
   tasksOnDay: (day: Date) => Todo[];
+  taskExtra: (t: Todo) => string;
   getMember: (id: string) => { emoji?: string; name: string; color: string } | undefined;
   memberColor: (id: string) => string;
   onSlotClick: (d: Date, hour: number) => void;
@@ -1544,10 +1563,10 @@ function TimeGridView({
                     type="button"
                     onClick={() => onToggleTodo(t.id)}
                     className="w-full text-left text-xs sm:text-sm truncate px-1.5 py-1 rounded flex items-center gap-1 border border-dashed border-warn/50 bg-warn-tint text-warn min-h-[28px]"
-                    title={`Task: ${t.text} (tap to complete)`}
+                    title={`Task: ${t.text}${taskExtra(t)} (tap to complete)`}
                   >
                     <Square className="w-3.5 h-3.5 shrink-0" />
-                    <span className="truncate">{t.text}</span>
+                    <span className="truncate">{t.text}{taskExtra(t)}</span>
                   </button>
                 ))}
               </div>

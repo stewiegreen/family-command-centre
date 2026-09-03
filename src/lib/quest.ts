@@ -99,6 +99,7 @@ export function buildQuest(opts: {
   coins?: number;
   config?: ChoreQuestConfig | null;
   templateId?: string;
+  todoId?: string;
 }): Quest {
   const r = rewardsForDifficultyWithConfig(opts.difficulty, opts.config);
   return {
@@ -112,6 +113,7 @@ export function buildQuest(opts: {
     createdById: opts.createdById,
     createdAt: new Date().toISOString(),
     templateId: opts.templateId,
+    todoId: opts.todoId,
   };
 }
 

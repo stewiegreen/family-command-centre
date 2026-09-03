@@ -5,8 +5,9 @@ import { Avatar } from '../components/ui/Avatar';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
-import { uid } from '../lib/uid';
-import type { Priority, Todo, TodoStatus } from '../types';
+import type { Priority, QuestDifficulty, Todo, TodoStatus } from '../types';
+import { applyTodoStatus, findQuestForTodo, todoStatusOf } from '../lib/todoQuest';
+import { DIFFICULTY_ORDER, DIFFICULTY_REWARDS, buildQuest, getChoreQuestConfig } from '../lib/quest';
 import { cn } from '../lib/cn';
 
 /** Soft tint of a hex colour for card backgrounds. */
@@ -21,8 +22,7 @@ function tint(hex: string, alpha = 0.14): string {
 
 /** Normalize legacy completed → status. */
 export function todoStatus(t: Todo): TodoStatus {
-  if (t.status === 'todo' || t.status === 'doing' || t.status === 'done') return t.status;
-  return t.completed ? 'done' : 'todo';
+  return todoStatusOf(t);
 }
 
 /** datetime-local value from ISO (local). */
@@ -64,6 +64,9 @@ export function TodosPage() {
   const [dueAt, setDueAt] = useState('');
   const [assignId, setAssignId] = useState(myId);
   const [composerOpen, setComposerOpen] = useState(false);
+  /** Attach a ChoreQuest so kids see XP/Treasure; completing the todo submits the quest. */
+  const [asQuest, setAsQuest] = useState(false);
+  const [questDiff, setQuestDiff] = useState<QuestDifficulty>('medium');
 
   // Drag state
   const [dragId, setDragId] = useState<string | null>(null);
@@ -134,42 +137,54 @@ export function TodosPage() {
   };
 
   const setTodoStatus = (id: string, status: TodoStatus) => {
-    update((d) => ({
-      ...d,
-      todos: d.todos.map((t) =>
-        t.id === id
-          ? {
-              ...t,
-              status,
-              completed: status === 'done',
-            }
-          : t,
-      ),
-    }));
+    update((d) => applyTodoStatus(d, id, status, { submittedById: myId }));
   };
 
   const addTodo = () => {
-    if (!text.trim()) return;
+    const trimmed = text.trim();
+    if (!trimmed) return;
     const memberId = isParent ? assignId : myId;
-    update((d) => ({
-      ...d,
-      todos: [
-        {
-          id: uid(),
-          text: text.trim(),
-          memberId,
+    const todoId = crypto.randomUUID();
+    const due = dueAt ? new Date(dueAt).toISOString() : undefined;
+    update((d) => {
+      const cq = getChoreQuestConfig(d);
+      let chores = d.chores || [];
+      let questId: string | undefined;
+      if (asQuest) {
+        const q = buildQuest({
+          title: trimmed,
+          difficulty: questDiff,
           createdById: myId,
-          completed: false,
-          status: 'todo' as TodoStatus,
-          priority,
-          createdAt: new Date().toISOString(),
-          dueAt: dueAt ? new Date(dueAt).toISOString() : undefined,
-        },
-        ...d.todos,
-      ],
-    }));
+          config: cq,
+          todoId,
+        });
+        questId = q.id;
+        chores = [...chores, q];
+      }
+      return {
+        ...d,
+        chores,
+        todos: [
+          {
+            id: todoId,
+            text: trimmed,
+            memberId,
+            createdById: myId,
+            completed: false,
+            status: 'todo' as const,
+            priority,
+            createdAt: new Date().toISOString(),
+            dueAt: due,
+            questId,
+          },
+          ...d.todos,
+        ],
+      };
+    });
     setText('');
     setDueAt('');
+    setAsQuest(false);
+    setQuestDiff('medium');
     setComposerOpen(false);
   };
 
@@ -336,6 +351,35 @@ export function TodosPage() {
               </div>
             )}
           </div>
+          <label className="flex items-center gap-2 text-sm text-muted">
+            <input
+              type="checkbox"
+              checked={asQuest}
+              onChange={(e) => setAsQuest(e.target.checked)}
+            />
+            Also post as ChoreQuest — kids see XP & Treasure
+          </label>
+          {asQuest && (
+            <div className="flex flex-wrap gap-2">
+              {DIFFICULTY_ORDER.map((d) => {
+                const meta = DIFFICULTY_REWARDS[d];
+                return (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => setQuestDiff(d)}
+                    className={
+                      questDiff === d
+                        ? 'px-3 py-1.5 rounded-full text-xs border border-accent bg-accent/15 text-accent'
+                        : 'px-3 py-1.5 rounded-full text-xs border border-border text-muted hover:bg-nav-hover'
+                    }
+                  >
+                    {meta.emoji} {meta.label} · +{meta.xp} XP · +{meta.coins}c
+                  </button>
+                );
+              })}
+            </div>
+          )}
           {isParent && (
             <Button onClick={addTodo} className="w-full sm:w-auto">
               <Plus className="w-4 h-4" /> Add to board
@@ -507,6 +551,17 @@ export function TodosPage() {
                                   })}
                                 </span>
                               )}
+                              {(() => {
+                                const q = findQuestForTodo(data, t);
+                                if (!q) return null;
+                                return (
+                                  <span className="text-[11px] font-medium text-accent">
+                                    ⚔ +{q.xp} XP · +{q.coins}c
+                                    {q.status === 'pending' ? ' · pending' : ''}
+                                    {q.status === 'done' ? ' · claimed' : ''}
+                                  </span>
+                                );
+                              })()}
                             </div>
                             {/* Mobile-friendly status chips */}
                             <div className="flex flex-wrap gap-1 mt-2 lg:hidden">

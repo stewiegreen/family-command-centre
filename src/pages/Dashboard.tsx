@@ -30,6 +30,7 @@ import { Card } from '../components/ui/Card';
 import { Modal } from '../components/ui/Modal';
 import { ProfileLookCard } from '../components/ProfileLookEditor';
 import type { CalendarEvent, ExpandedEvent, FamilyData, PresenceStatus, Quest, ViewId } from '../types';
+import { applyTodoStatus } from '../lib/todoQuest';
 import { FAMILY_LIST_ID, PRESENCE_OPTIONS } from '../types';
 import { upcomingExpanded } from '../lib/recurrence';
 import {
@@ -457,14 +458,14 @@ export function Dashboard() {
   };
 
   const toggleTodo = (id: string) => {
-    update((d) => ({
-      ...d,
-      todos: d.todos.map((td) => {
-        if (td.id !== id) return td;
-        const next = !td.completed;
-        return { ...td, completed: next, status: next ? ('done' as const) : ('todo' as const) };
-      }),
-    }));
+    update((d) => {
+      const t = d.todos.find((x) => x.id === id);
+      if (!t) return d;
+      const nextDone = !t.completed;
+      return applyTodoStatus(d, id, nextDone ? 'done' : 'todo', {
+        submittedById: myId,
+      });
+    });
   };
 
   const addMyTodo = () => {
