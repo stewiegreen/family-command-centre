@@ -24,14 +24,18 @@ import {
   Home,
   ChevronDown,
   Users,
+  BookOpen,
+  Lock,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { cloudCreateJournalEntry } from '../lib/firebase';
+import { uid } from '../lib/uid';
 import { Avatar } from '../components/ui/Avatar';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Modal } from '../components/ui/Modal';
 import { ProfileLookCard } from '../components/ProfileLookEditor';
-import type { CalendarEvent, ExpandedEvent, FamilyData, PresenceStatus, Quest, ViewId } from '../types';
+import type { CalendarEvent, ExpandedEvent, FamilyData, JournalVisibility, PresenceStatus, Quest, ViewId } from '../types';
 import { applyTodoStatus, creditMemberForQuest } from '../lib/todoQuest';
 import { FAMILY_LIST_ID, PRESENCE_OPTIONS } from '../types';
 import { upcomingExpanded } from '../lib/recurrence';
@@ -90,8 +94,24 @@ const SECTION_LABELS: Record<SectionId, string> = {
   todos: 'My to-dos',
   chores: 'Chores',
   shopping: 'Shopping',
+  journal: 'Journal',
   look: 'Profile look',
 };
+
+const HOME_JOURNAL_MOODS = ['😊', '😌', '😐', '😔', '😤', '🤩', '😴', '🙏'] as const;
+const HOME_JOURNAL_PROMPTS = [
+  'What made you smile today?',
+  'One thing you’re grateful for…',
+  'What felt hard — and what helped?',
+  'A small win from today…',
+  'What do you want more of in your days?',
+  'If today had a title, what would it be?',
+  'What’s one kindness you noticed?',
+];
+function homeJournalPrompt(): string {
+  const day = Math.floor(Date.now() / 86_400_000) % HOME_JOURNAL_PROMPTS.length;
+  return HOME_JOURNAL_PROMPTS[day]!;
+}
 
 function startOfWeekMonday(d: Date) {
   const x = new Date(d);
@@ -247,6 +267,9 @@ export function Dashboard() {
     setMyHomescreenRows,
     myHiddenWidgets,
     setMyHiddenWidgets,
+    familyId,
+    authUser,
+    cloudReady,
   } = useApp();
   const { events, todos, notes, messages, members, settings } = data;
   const chores = data.chores || [];
@@ -254,6 +277,52 @@ export function Dashboard() {
   const presence = data.presence || {};
   const now = new Date();
   const myId = currentUser?.id || settings.currentUserId;
+  const myUid = authUser?.uid || '';
+  const journalHasOwnAuth = !!(currentUser?.uid && currentUser.uid === authUser?.uid);
+  const [journalDraft, setJournalDraft] = useState('');
+  const [journalMood, setJournalMood] = useState<string | undefined>();
+  const [journalVis, setJournalVis] = useState<JournalVisibility>('private');
+  const [journalSaving, setJournalSaving] = useState(false);
+  const [journalMsg, setJournalMsg] = useState<string | null>(null);
+  const journalPrompt = useMemo(() => homeJournalPrompt(), []);
+
+  const saveJournalFromHome = async () => {
+    const text = journalDraft.trim();
+    if (!text || !currentUser || !familyId || !myUid) return;
+    if (!cloudReady) {
+      setJournalMsg('Connect to the cloud to save journal entries.');
+      return;
+    }
+    if (journalVis === 'family') {
+      const ok = window.confirm('This will be visible to your whole family — share it?');
+      if (!ok) return;
+    }
+    setJournalSaving(true);
+    setJournalMsg(null);
+    try {
+      const ts = new Date().toISOString();
+      await cloudCreateJournalEntry(familyId, {
+        id: uid(),
+        authorId: currentUser.id,
+        authorUid: myUid,
+        visibility: journalVis,
+        text,
+        mood: journalMood || undefined,
+        promptId: `home-${Math.floor(Date.now() / 86_400_000)}`,
+        createdAt: ts,
+        updatedAt: ts,
+      });
+      setJournalDraft('');
+      setJournalMood(undefined);
+      setJournalVis('private');
+      setJournalMsg('Saved to your journal.');
+      window.setTimeout(() => setJournalMsg(null), 2500);
+    } catch (e) {
+      setJournalMsg(e instanceof Error ? e.message : 'Could not save');
+    } finally {
+      setJournalSaving(false);
+    }
+  };
 
   const [eventsFilterMemberId, setEventsFilterMemberIdState] = useState(loadHomeEventsFilter);
   const [eventsFilterOpen, setEventsFilterOpen] = useState(false);
@@ -1460,6 +1529,83 @@ export function Dashboard() {
             ))}
           </div>
         )}
+      </Card>
+    ),
+
+    journal: (
+      <Card>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-semibold text-fg flex items-center gap-2">
+            <BookOpen className="w-4 h-4 text-accent" />
+            Journal
+          </h2>
+          <button type="button" onClick={() => setView('journal')} className="text-xs text-accent">
+            Open →
+          </button>
+        </div>
+        <p className="text-xs text-muted italic mb-2">{journalPrompt}</p>
+        {!journalHasOwnAuth && currentUser && (
+          <p className="text-[11px] text-muted mb-2 leading-relaxed">
+            <Lock className="w-3 h-3 inline relative -top-px mr-0.5" />
+            PIN profiles share a login — Private is app-hidden only. Own accounts get stronger privacy.
+          </p>
+        )}
+        <textarea
+          value={journalDraft}
+          onChange={(e) => setJournalDraft(e.target.value)}
+          placeholder="Write a few lines…"
+          rows={3}
+          maxLength={5000}
+          className="w-full rounded-xl border border-border bg-inset px-3 py-2 text-sm text-fg outline-none focus:border-accent resize-y min-h-[4.5rem] mb-2"
+        />
+        <div className="flex flex-wrap gap-1 mb-2">
+          {HOME_JOURNAL_MOODS.map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => setJournalMood((cur) => (cur === m ? undefined : m))}
+              className={cn(
+                'w-8 h-8 rounded-lg text-base flex items-center justify-center border transition-colors',
+                journalMood === m
+                  ? 'border-accent bg-accent/15'
+                  : 'border-border bg-surface-2 hover:bg-surface-3',
+              )}
+            >
+              {m}
+            </button>
+          ))}
+        </div>
+        <div className="flex flex-wrap gap-1.5 mb-3">
+          {([
+            ['private', 'Private'],
+            ['parents', 'Parents'],
+            ['family', 'Everyone'],
+          ] as const).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setJournalVis(id)}
+              className={cn(
+                'px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors',
+                journalVis === id
+                  ? 'border-accent bg-accent/15 text-accent'
+                  : 'border-border bg-surface-2 text-muted hover:text-fg',
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            onClick={() => void saveJournalFromHome()}
+            disabled={!journalDraft.trim() || journalSaving || !cloudReady}
+          >
+            {journalSaving ? 'Saving…' : 'Save entry'}
+          </Button>
+          {journalMsg && <p className="text-xs text-muted">{journalMsg}</p>}
+        </div>
       </Card>
     ),
 
