@@ -5,8 +5,9 @@ import { Avatar } from '../components/ui/Avatar';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
-import type { Priority, Todo, TodoStatus } from '../types';
+import type { Priority, Todo, TodoRecurrence, TodoStatus } from '../types';
 import { applyTodoStatus, findQuestForTodo, todoStatusOf } from '../lib/todoQuest';
+import { isRecurringTodo, recurrenceLabel, TODO_RECURRENCE_OPTIONS } from '../lib/todoRecurrence';
 import { cn } from '../lib/cn';
 
 /** Soft tint of a hex colour for card backgrounds. */
@@ -51,6 +52,8 @@ type EditDraft = {
   priority: Priority;
   dueAt: string;
   memberId: string;
+  recurrence: TodoRecurrence;
+  recurrenceInterval: number;
 };
 
 export function TodosPage() {
@@ -65,6 +68,8 @@ export function TodosPage() {
   const [composerOpen, setComposerOpen] = useState(false);
   /** Optional reusable ChoreQuest linked to this task. Completing the todo submits it. */
   const [questId, setQuestId] = useState('');
+  const [recurrence, setRecurrence] = useState<TodoRecurrence>('none');
+  const [recurrenceInterval, setRecurrenceInterval] = useState(2);
 
   // Drag state
   const [dragId, setDragId] = useState<string | null>(null);
@@ -113,6 +118,8 @@ export function TodosPage() {
       priority: t.priority,
       dueAt: toLocalInput(t.dueAt),
       memberId: t.memberId,
+      recurrence: t.recurrence || 'none',
+      recurrenceInterval: t.recurrenceInterval || 2,
     });
   };
 
@@ -132,6 +139,11 @@ export function TodosPage() {
           priority: edit.priority,
           dueAt: edit.dueAt ? new Date(edit.dueAt).toISOString() : undefined,
           memberId: isParent ? edit.memberId : t.memberId,
+          recurrence: edit.recurrence,
+          recurrenceInterval:
+            edit.recurrence === 'every_n_days'
+              ? Math.max(1, edit.recurrenceInterval || 2)
+              : undefined,
         };
       }),
     }));
@@ -171,6 +183,9 @@ export function TodosPage() {
             createdAt: new Date().toISOString(),
             dueAt: due,
             questId: linkedQuestId,
+            recurrence: recurrence === 'none' ? undefined : recurrence,
+            recurrenceInterval:
+              recurrence === 'every_n_days' ? Math.max(1, recurrenceInterval) : undefined,
           },
           ...d.todos,
         ],
@@ -179,6 +194,8 @@ export function TodosPage() {
     setText('');
     setDueAt('');
     setQuestId('');
+    setRecurrence('none');
+    setRecurrenceInterval(2);
     setComposerOpen(false);
   };
 
@@ -368,6 +385,41 @@ export function TodosPage() {
               </div>
             )}
           </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-muted mb-1 block">Repeat</label>
+              <select
+                value={recurrence}
+                onChange={(e) => setRecurrence(e.target.value as TodoRecurrence)}
+                className="w-full bg-input border border-border-strong rounded-xl px-3 py-2.5 text-sm text-fg"
+              >
+                {TODO_RECURRENCE_OPTIONS.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {recurrence === 'every_n_days' && (
+              <div>
+                <label className="text-xs text-muted mb-1 block">Every N days</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={365}
+                  value={recurrenceInterval}
+                  onChange={(e) => setRecurrenceInterval(Math.max(1, Number(e.target.value) || 1))}
+                  className="w-full bg-input border border-border-strong rounded-xl px-3 py-2.5 text-sm text-fg"
+                />
+              </div>
+            )}
+          </div>
+          {recurrence !== 'none' && !dueAt && (
+            <p className="text-[11px] text-muted">
+              Tip: set a due date so the first occurrence shows on the calendar. Completing the task
+              schedules the next one automatically.
+            </p>
+          )}
           {isParent && (
             <Button onClick={addTodo} className="w-full sm:w-auto">
               <Plus className="w-4 h-4" /> Add to board
@@ -537,6 +589,11 @@ export function TodosPage() {
                                     hour: 'numeric',
                                     minute: '2-digit',
                                   })}
+                                </span>
+                              )}
+                              {isRecurringTodo(t) && (
+                                <span className="text-[11px] text-sky-600 font-medium">
+                                  ↻ {recurrenceLabel(t)}
                                 </span>
                               )}
                               {(() => {

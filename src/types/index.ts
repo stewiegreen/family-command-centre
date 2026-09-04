@@ -82,6 +82,9 @@ export interface ExpandedEvent extends CalendarEvent {
 
 export type TodoStatus = 'todo' | 'doing' | 'done';
 
+/** How a todo repeats after completion (independent of ChoreQuest). */
+export type TodoRecurrence = 'none' | 'daily' | 'weekly' | 'monthly' | 'every_n_days';
+
 export interface Todo {
   id: string;
   text: string;
@@ -91,7 +94,7 @@ export interface Todo {
   completed: boolean;
   priority: Priority;
   createdAt: string;
-  /** Optional due datetime (ISO). Used for “due soon” notifications. */
+  /** Optional due datetime (ISO). Used for calendar chips and “due soon”. */
   dueAt?: string;
   /**
    * Kanban column. Legacy todos without status: completed → done, else todo.
@@ -103,6 +106,12 @@ export interface Todo {
    * When set, the task shows XP/Treasure and completing the todo can submit the quest.
    */
   questId?: string;
+  /** Repeat rule. Omitted / 'none' = one-shot. */
+  recurrence?: TodoRecurrence;
+  /** For every_n_days — default 2 when that rule is selected. */
+  recurrenceInterval?: number;
+  /** Last time this recurring todo was completed (ISO). */
+  lastCompletedAt?: string;
 }
 
 /**

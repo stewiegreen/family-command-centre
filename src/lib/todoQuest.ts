@@ -1,5 +1,6 @@
 import type { FamilyData, Quest, Todo, TodoStatus } from '../types';
 import { FAMILY_LIST_ID } from '../types';
+import { isRecurringTodo, nextDueAt } from './todoRecurrence';
 
 /** Effective kanban status for a todo. */
 export function todoStatusOf(t: Todo): TodoStatus {
@@ -46,14 +47,27 @@ export function applyTodoStatus(
 
   const prev = todoStatusOf(todo);
   const completed = status === 'done';
-  const todos = data.todos.map((t) =>
-    t.id === todoId ? { ...t, status, completed } : t,
-  );
+  const at = new Date().toISOString();
+  const rolling = completed && prev !== 'done' && isRecurringTodo(todo);
+
+  const todos = data.todos.map((t) => {
+    if (t.id !== todoId) return t;
+    if (rolling) {
+      // Complete → reschedule: stay on the board for the next occurrence
+      return {
+        ...t,
+        status: 'todo' as const,
+        completed: false,
+        dueAt: nextDueAt(t, new Date()),
+        lastCompletedAt: at,
+      };
+    }
+    return { ...t, status, completed };
+  });
 
   let chores = data.chores || [];
   if (completed && prev !== 'done' && todo.questId) {
     const submitter = resolveQuestSubmitter(data, todo, opts?.actorId);
-    const at = new Date().toISOString();
     chores = chores.map((q) => {
       if (q.id !== todo.questId) return q;
       if (q.status !== 'open') return q; // don't clobber approved/pending
