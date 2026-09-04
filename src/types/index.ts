@@ -216,7 +216,13 @@ export interface RewardItem {
 
 export interface RedemptionRecord {
   id: string;
+  /** Who paid the coins. */
   memberId: string;
+  /**
+   * Who receives screen time (screen_time items only).
+   * Defaults to memberId when omitted (self-purchase).
+   */
+  forMemberId?: string;
   rewardItemId: string;
   label: string;
   kind: RewardKind;

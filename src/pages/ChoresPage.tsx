@@ -77,6 +77,10 @@ export function ChoresPage() {
   const { data, update, currentUser, isParent, getMember } = useApp();
   const me = currentUser;
   const myId = me?.id || data.settings.currentUserId;
+  const shopRecipients = useMemo(
+    () => (data.members || []).filter((m) => m.role !== 'media'),
+    [data.members],
+  );
   const chores = data.chores || [];
   const progressMap = data.memberProgress || {};
   const coinBalances = data.coinBalances || {};
@@ -117,6 +121,8 @@ export function ChoresPage() {
   const [tplCoins, setTplCoins] = useState(12);
   const [showArchivedTemplates, setShowArchivedTemplates] = useState(false);
   const [chestMsg, setChestMsg] = useState<string | null>(null);
+  /** Shop item id → member id who receives screen time (defaults to self). */
+  const [screenGiftFor, setScreenGiftFor] = useState<Record<string, string>>({});
 
   // Idempotent weekly rollover (safe if app wasn't opened all weekend)
   useEffect(() => {
@@ -583,12 +589,24 @@ export function ChoresPage() {
     if (!me || me.role === 'media') return;
     const balance = coinBalances[myId] ?? 0;
     if (balance < item.coinCost) return;
-    if (!confirm(`Spend ${item.coinCost} coins on “${item.label}”?`)) return;
+
+    const isScreen = item.kind === 'screen_time' && (item.screenMinutes || 0) > 0;
+    const forId =
+      isScreen
+        ? screenGiftFor[item.id] || myId
+        : myId;
+    const forMember = getMember(forId);
+    const forName = forMember?.name || 'them';
+    const isGift = isScreen && forId !== myId;
+
+    const confirmMsg = isGift
+      ? `Spend ${item.coinCost} coins on “${item.label}” for ${forName}?`
+      : `Spend ${item.coinCost} coins on “${item.label}”?`;
+    if (!confirm(confirmMsg)) return;
 
     const at = new Date().toISOString();
     const weekId = isoWeekId();
     const redemptionId = newId();
-    const isScreen = item.kind === 'screen_time' && (item.screenMinutes || 0) > 0;
 
     update((d) => {
       const bal = d.coinBalances?.[myId] ?? 0;
@@ -604,7 +622,7 @@ export function ChoresPage() {
         memberId: myId,
         delta: -item.coinCost,
         reason: 'redeem' as const,
-        label: item.label,
+        label: isGift ? `${item.label} → ${forName}` : item.label,
         refId: redemptionId,
         byId: me.id,
         at,
@@ -614,6 +632,7 @@ export function ChoresPage() {
       const record: RedemptionRecord = {
         id: redemptionId,
         memberId: myId,
+        forMemberId: isScreen ? forId : undefined,
         rewardItemId: item.id,
         label: item.label,
         kind: item.kind,
@@ -629,16 +648,19 @@ export function ChoresPage() {
       let nextLog = d.screenTimeLog || [];
       if (isScreen) {
         const mins = item.screenMinutes || 0;
+        const beneficiary = forId;
         nextScreen = {
           ...nextScreen,
-          [myId]: (nextScreen[myId] || 0) + mins,
+          [beneficiary]: (nextScreen[beneficiary] || 0) + mins,
         };
         nextLog = [
           {
             id: newId(),
-            memberId: myId,
+            memberId: beneficiary,
             delta: mins,
-            reason: `Redeemed: ${item.label}`,
+            reason: isGift
+              ? `Gift from ${me.name}: ${item.label}`
+              : `Redeemed: ${item.label}`,
             byId: me.id,
             at,
           },
@@ -1563,6 +1585,28 @@ export function ChoresPage() {
                         </p>
                       </div>
                     </div>
+                    {item.kind === 'screen_time' && me && me.role !== 'media' && (
+                      <label className="block mt-2 mb-1">
+                        <span className="text-[11px] text-muted">Give screen time to</span>
+                        <select
+                          className="mt-0.5 w-full rounded-lg border border-border bg-inset px-2 py-1.5 text-sm text-fg outline-none focus:border-accent"
+                          value={screenGiftFor[item.id] || myId}
+                          onChange={(e) =>
+                            setScreenGiftFor((prev) => ({ ...prev, [item.id]: e.target.value }))
+                          }
+                        >
+                          {shopRecipients.map((m) => {
+                            const look = getMember(m.id) || m;
+                            return (
+                              <option key={m.id} value={m.id}>
+                                {(look.emoji ? `${look.emoji} ` : '') + look.name}
+                                {m.id === myId ? ' (me)' : ''}
+                              </option>
+                            );
+                          })}
+                        </select>
+                      </label>
+                    )}
                     <div className="flex items-center gap-2 mt-auto">
                       {me && me.role !== 'media' && (
                         <Button
@@ -1571,7 +1615,12 @@ export function ChoresPage() {
                           onClick={() => redeem(item)}
                           className="flex-1"
                         >
-                          {canAfford ? 'Redeem' : 'Need more coins'}
+                          {canAfford
+                            ? item.kind === 'screen_time' &&
+                              (screenGiftFor[item.id] || myId) !== myId
+                              ? 'Gift'
+                              : 'Redeem'
+                            : 'Need more coins'}
                         </Button>
                       )}
                       {isParent && (
@@ -1630,7 +1679,11 @@ export function ChoresPage() {
                         <div className="min-w-0">
                           <p className="font-medium text-fg truncate">{r.label}</p>
                           <p className="text-xs text-muted">
-                            {who?.name || 'Someone'} · {r.coinCost} coins ·{' '}
+                            {who?.name || 'Someone'}
+                            {r.forMemberId && r.forMemberId !== r.memberId
+                              ? ` → ${getMember(r.forMemberId)?.name || 'someone'}`
+                              : ''}{' '}
+                            · {r.coinCost} coins ·{' '}
                             {new Date(r.requestedAt).toLocaleDateString(undefined, {
                               month: 'short',
                               day: 'numeric',
@@ -1678,6 +1731,9 @@ export function ChoresPage() {
                             <span className="text-muted">
                               {' '}
                               · {who?.name}
+                              {r.forMemberId && r.forMemberId !== r.memberId
+                                ? ` → ${getMember(r.forMemberId)?.name || 'someone'}`
+                                : ''}
                             </span>
                           </p>
                         </div>
