@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type DragEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import {
   Calendar,
   Check,
@@ -22,6 +22,8 @@ import {
   LayoutGrid,
   Megaphone,
   Home,
+  ChevronDown,
+  Users,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Avatar } from '../components/ui/Avatar';
@@ -52,6 +54,21 @@ import {
   streakStatus,
 } from '../lib/weekCycle';
 import { cn } from '../lib/cn';
+
+const HOME_EVENTS_FILTER_KEY = 'fcc-home-events-member-filter';
+
+function eventAssigneeIds(ev: { memberId: string; memberIds?: string[] }): string[] {
+  if (ev.memberIds && ev.memberIds.length > 0) return ev.memberIds;
+  return ev.memberId ? [ev.memberId] : [];
+}
+
+function loadHomeEventsFilter(): string {
+  try {
+    return localStorage.getItem(HOME_EVENTS_FILTER_KEY) || 'all';
+  } catch {
+    return 'all';
+  }
+}
 
 const COLOR_ICON: Record<string, string> = {
   indigo: 'bg-accent/15 text-accent',
@@ -238,6 +255,29 @@ export function Dashboard() {
   const now = new Date();
   const myId = currentUser?.id || settings.currentUserId;
 
+  const [eventsFilterMemberId, setEventsFilterMemberIdState] = useState(loadHomeEventsFilter);
+  const [eventsFilterOpen, setEventsFilterOpen] = useState(false);
+  const eventsFilterRef = useRef<HTMLDivElement>(null);
+  const setEventsFilterMemberId = (id: string) => {
+    setEventsFilterMemberIdState(id);
+    try {
+      localStorage.setItem(HOME_EVENTS_FILTER_KEY, id);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  useEffect(() => {
+    if (!eventsFilterOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      if (eventsFilterRef.current && !eventsFilterRef.current.contains(e.target as Node)) {
+        setEventsFilterOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [eventsFilterOpen]);
+
   // Per-user layout: rows of 1 (full width) or 2 (shared) card ids.
   const rows = myHomescreenRows;
   const hiddenSet = useMemo(() => new Set(myHiddenWidgets), [myHiddenWidgets]);
@@ -380,7 +420,13 @@ export function Dashboard() {
     }
   };
 
-  const upcoming = upcomingExpanded(events, now, 14).slice(0, 5);
+  const upcoming = upcomingExpanded(events, now, 14)
+    .filter((ev) =>
+      eventsFilterMemberId === 'all'
+        ? true
+        : eventAssigneeIds(ev).includes(eventsFilterMemberId),
+    )
+    .slice(0, 5);
   const weekStart = startOfWeekMonday(now);
   const weekEvents = upcomingExpanded(events, weekStart, 7);
   const unread = messages.filter((m) => m.toId === settings.currentUserId && !m.read).length;
@@ -827,9 +873,86 @@ export function Dashboard() {
     ),
     events: (
       <Card>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="font-semibold text-fg">Upcoming Events</h2>
-          <button type="button" onClick={() => setView('calendar')} className="text-xs text-accent">
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <h2 className="font-semibold text-fg shrink-0">Upcoming Events</h2>
+            <div className="relative" ref={eventsFilterRef}>
+              <button
+                type="button"
+                onClick={() => setEventsFilterOpen((o) => !o)}
+                className="flex items-center gap-1.5 rounded-xl border border-border-strong bg-surface-2 pl-1 pr-2 py-1 text-sm text-fg hover:bg-surface-3 focus:outline-none focus:ring-2 focus:ring-accent/40 max-w-[10.5rem] sm:max-w-[12rem]"
+                title="Whose events to show"
+                aria-haspopup="listbox"
+                aria-expanded={eventsFilterOpen}
+              >
+                {eventsFilterMemberId === 'all' ? (
+                  <span className="w-7 h-7 rounded-full bg-surface-3 flex items-center justify-center shrink-0">
+                    <Users className="w-3.5 h-3.5 text-muted" />
+                  </span>
+                ) : (
+                  <Avatar
+                    size="sm"
+                    className="!w-7 !h-7 !text-sm"
+                    {...(getMember(eventsFilterMemberId) || { name: 'Member' })}
+                  />
+                )}
+                <span className="truncate font-medium">
+                  {eventsFilterMemberId === 'all'
+                    ? 'Everyone'
+                    : getMember(eventsFilterMemberId)?.name || 'Member'}
+                </span>
+                <ChevronDown className="w-3.5 h-3.5 text-muted shrink-0" />
+              </button>
+              {eventsFilterOpen && (
+                <div
+                  role="listbox"
+                  className="absolute left-0 top-full z-40 mt-1 min-w-[12rem] max-h-72 overflow-auto rounded-xl border border-border-strong bg-surface-1 shadow-lg py-1"
+                >
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={eventsFilterMemberId === 'all'}
+                    className={cn(
+                      'w-full flex items-center gap-2 px-2 py-1.5 text-left text-sm hover:bg-surface-2',
+                      eventsFilterMemberId === 'all' && 'bg-accent/15 text-accent',
+                    )}
+                    onClick={() => {
+                      setEventsFilterMemberId('all');
+                      setEventsFilterOpen(false);
+                    }}
+                  >
+                    <span className="w-7 h-7 rounded-full bg-surface-3 flex items-center justify-center shrink-0">
+                      <Users className="w-3.5 h-3.5 text-muted" />
+                    </span>
+                    Everyone
+                  </button>
+                  {household.map((m) => {
+                    const look = getMember(m.id) || m;
+                    return (
+                      <button
+                        key={m.id}
+                        type="button"
+                        role="option"
+                        aria-selected={eventsFilterMemberId === m.id}
+                        className={cn(
+                          'w-full flex items-center gap-2 px-2 py-1.5 text-left text-sm hover:bg-surface-2',
+                          eventsFilterMemberId === m.id && 'bg-accent/15 text-accent',
+                        )}
+                        onClick={() => {
+                          setEventsFilterMemberId(m.id);
+                          setEventsFilterOpen(false);
+                        }}
+                      >
+                        <Avatar size="sm" className="!w-7 !h-7 !text-sm" {...look} />
+                        <span className="truncate">{look.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+          <button type="button" onClick={() => setView('calendar')} className="text-xs text-accent shrink-0">
             Calendar →
           </button>
         </div>
@@ -853,7 +976,12 @@ export function Dashboard() {
         ) : (
           <div className="max-h-64 overflow-y-auto space-y-2 pr-0.5">
             {upcoming.map((ev) => {
-              const m = getMember(ev.memberId);
+              const ids = eventAssigneeIds(ev);
+              const primary = getMember(ids[0] || ev.memberId);
+              const who = ids
+                .map((id) => getMember(id)?.name)
+                .filter(Boolean)
+                .join(', ');
               const when = new Date(ev.instanceStart || ev.start);
               return (
                 <button
@@ -862,9 +990,9 @@ export function Dashboard() {
                   onClick={() => openEventEdit(ev)}
                   className="w-full text-left flex items-start gap-3 p-3 rounded-xl border border-border hover:border-accent/40 hover:bg-nav-hover/40 transition-colors"
                   style={{
-                    backgroundColor: (m?.color || '#6366f1') + '14',
+                    backgroundColor: (primary?.color || '#6366f1') + '14',
                     borderLeftWidth: 4,
-                    borderLeftColor: m?.color || '#6366f1',
+                    borderLeftColor: primary?.color || '#6366f1',
                   }}
                 >
                   <div className="min-w-0 flex-1">
@@ -877,7 +1005,7 @@ export function Dashboard() {
                         hour: ev.allDay ? undefined : 'numeric',
                         minute: ev.allDay ? undefined : '2-digit',
                       })}
-                      {m ? ` · ${m.name}` : ''}
+                      {who ? ` · ${who}` : ''}
                       {ev.location ? ` · ${ev.location}` : ''}
                     </p>
                   </div>
