@@ -5,6 +5,7 @@ import {
   Search,
   StickyNote,
   Trash2,
+  Pencil,
   Home,
   CheckSquare,
   Megaphone,
@@ -50,6 +51,8 @@ export function NotesPage() {
   const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
+  /** Read-only detail view — edit is a deliberate action at the bottom. */
+  const [viewId, setViewId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
 
   useEffect(() => {
@@ -97,6 +100,10 @@ export function NotesPage() {
     setShowForm(true);
   };
 
+  const openView = (n: Note) => {
+    setViewId(n.id);
+  };
+
   const openEdit = (n: Note) => {
     setEditId(n.id);
     setForm({
@@ -108,7 +115,34 @@ export function NotesPage() {
       kind: n.kind || 'free',
       checklistText: (n.checklist || []).map((c) => c.text).join('\n'),
     });
+    setViewId(null);
     setShowForm(true);
+  };
+
+  const canDeleteNote = (n: Note) => {
+    if (isParent) return true;
+    if (n.showOnHome || n.kind === 'notice') return false;
+    return true;
+  };
+
+  const canEditNote = (_n: Note) => {
+    // Everyone can suggest edits via the form; parents control home/notice flags in the form itself.
+    return true;
+  };
+
+  const deleteNote = (n: Note) => {
+    if (!canDeleteNote(n)) {
+      alert('Only a parent can delete Home or must-read notes.');
+      return;
+    }
+    if (!window.confirm('Delete this note?')) return;
+    update((d) => ({
+      ...d,
+      notes: d.notes.filter((x) => x.id !== n.id),
+    }));
+    setViewId(null);
+    setShowForm(false);
+    setEditId(null);
   };
 
   const toggleTag = (tag: string) => {
@@ -326,7 +360,7 @@ export function NotesPage() {
                   '!p-4 space-y-2 cursor-pointer hover:border-border-strong transition-colors',
                   n.showOnHome && 'ring-1 ring-accent/30',
                 )}
-                onClick={() => openEdit(n)}
+                onClick={() => openView(n)}
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
@@ -441,6 +475,167 @@ export function NotesPage() {
           })}
         </div>
       )}
+
+
+      {/* Read view — full text; edit/delete at the bottom */}
+      <Modal
+        open={!!viewId}
+        onClose={() => setViewId(null)}
+        title={data.notes.find((x) => x.id === viewId)?.title || 'Note'}
+        wide
+      >
+        {(() => {
+          const n = data.notes.find((x) => x.id === viewId);
+          if (!n) return <p className="text-sm text-muted">Note not found.</p>;
+          const kind = (n.kind || 'free') as NoteKind;
+          const author = getMember(n.authorId);
+          const kids = data.members.filter((m) => m.role === 'kid');
+          const stale = (n.pinned || n.showOnHome) && isNoteStale(n.updatedAt);
+
+          return (
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center gap-1.5">
+                {n.showOnHome && (
+                  <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent">
+                    <Home className="w-3 h-3" /> Home
+                  </span>
+                )}
+                {kind === 'notice' && (
+                  <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-600">
+                    <Megaphone className="w-3 h-3" /> Must-read
+                  </span>
+                )}
+                {kind === 'checklist' && (
+                  <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold uppercase tracking-wide text-sky-600">
+                    <CheckSquare className="w-3 h-3" /> Checklist
+                  </span>
+                )}
+                {n.pinned && (
+                  <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-500">
+                    <Pin className="w-3 h-3" /> Pinned
+                  </span>
+                )}
+                {stale && (
+                  <span className="inline-flex items-center gap-0.5 text-[10px] text-amber-600">
+                    <AlertTriangle className="w-3 h-3" /> Stale
+                  </span>
+                )}
+              </div>
+
+              {kind === 'checklist' ? (
+                <ul className="space-y-2">
+                  {(n.checklist || []).map((c) => (
+                    <li key={c.id}>
+                      <button
+                        type="button"
+                        className="flex items-center gap-2.5 text-sm text-left w-full"
+                        onClick={() => toggleCheckItem(n.id, c.id)}
+                      >
+                        <span
+                          className={cn(
+                            'w-5 h-5 rounded border flex items-center justify-center text-xs shrink-0',
+                            c.done
+                              ? 'bg-accent border-accent text-accent-ink'
+                              : 'border-border-strong',
+                          )}
+                        >
+                          {c.done ? '✓' : ''}
+                        </span>
+                        <span className={cn(c.done && 'line-through text-muted')}>{c.text}</span>
+                      </button>
+                    </li>
+                  ))}
+                  {(n.checklist || []).length === 0 && (
+                    <li className="text-sm text-muted">No checklist items.</li>
+                  )}
+                </ul>
+              ) : (
+                <p className="text-sm text-fg whitespace-pre-wrap leading-relaxed">
+                  {n.content || <span className="text-muted">No content.</span>}
+                </p>
+              )}
+
+              {n.tags.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {n.tags.map((t) => (
+                    <span
+                      key={t}
+                      className="text-[11px] px-2 py-0.5 rounded-full bg-surface-2 text-muted border border-border"
+                    >
+                      {t}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {kind === 'notice' && isParent && kids.length > 0 && (
+                <p className="text-xs text-muted">
+                  Read by {(n.readBy || []).length}/{kids.length} kids
+                  {(n.readBy || []).length > 0 && (
+                    <>
+                      {' '}
+                      (
+                      {(n.readBy || [])
+                        .map((id) => getMember(id)?.name || 'Kid')
+                        .join(', ')}
+                      )
+                    </>
+                  )}
+                </p>
+              )}
+
+              {kind === 'notice' &&
+                !isParent &&
+                currentUser?.role === 'kid' &&
+                !(n.readBy || []).includes(myId) && (
+                  <Button size="sm" onClick={() => acknowledgeNotice(n.id)}>
+                    I read this
+                  </Button>
+                )}
+
+              <div className="flex items-center gap-2 pt-1 border-t border-border">
+                {author && (
+                  <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                    <Avatar {...author} size="sm" className="!w-7 !h-7 !text-sm" />
+                    <span className="text-[11px] text-muted truncate">
+                      {author.name}
+                      {' · '}
+                      {new Date(n.updatedAt).toLocaleString(undefined, {
+                        month: 'short',
+                        day: 'numeric',
+                        hour: 'numeric',
+                        minute: '2-digit',
+                      })}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Actions — journal-style footer */}
+              <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
+                <Button variant="ghost" onClick={() => setViewId(null)}>
+                  Close
+                </Button>
+                {canDeleteNote(n) && (
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    onClick={() => deleteNote(n)}
+                    title="Delete"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                )}
+                {canEditNote(n) && (
+                  <Button size="sm" onClick={() => openEdit(n)}>
+                    <Pencil className="w-4 h-4" /> Edit
+                  </Button>
+                )}
+              </div>
+            </div>
+          );
+        })()}
+      </Modal>
 
       <Modal
         open={showForm}
