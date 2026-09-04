@@ -46,6 +46,11 @@ export interface Member {
   role: Role;
   /** Optional 4–6 digit unlock PIN for this profile (client-gated). */
   pin?: string;
+  /**
+   * Linked Emby user id (identifier only — not a secret).
+   * Used by Media to load that member's Continue Watching / Views via the proxy.
+   */
+  embyUserId?: string;
 }
 
 export interface CalendarEvent {
@@ -362,13 +367,26 @@ export interface ChoreQuestConfig {
   epicCoins?: number;
 }
 
+export interface EmbySettings {
+  /** Public web URL for deep links / "Open Emby". Not a secret. */
+  webUrl?: string;
+  /** Emby ServerId from /System/Info/Public — needed for deep links. Not a secret. */
+  serverId?: string;
+}
+
 export interface Settings {
   familyName: string;
-  embyUrl: string;
+  /**
+   * @deprecated Prefer settings.emby.webUrl. Kept for migrate-on-read only.
+   */
+  embyUrl?: string;
+  /** Emby public config (no API key — key lives only in Cloudflare env). */
+  emby?: EmbySettings;
   komgaUrl: string;
   /** Family default theme (used when member has no personal theme). */
   theme: ThemeId;
   currentUserId: string;
+  /** When true, Komga (and legacy embeds) may iframe; Emby Media page no longer embeds. */
   embedMedia: boolean;
   pinnedAnnouncement: string;
   /** Parent PIN required for sensitive settings actions (invites, roles, leave). */

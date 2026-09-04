@@ -10,7 +10,8 @@ export const DEFAULT_MEMBERS: Member[] = [
 
 export const DEFAULT_SETTINGS: Settings = {
   familyName: 'The Family',
-  embyUrl: 'http://emby.local:8096',
+  emby: { webUrl: '' },
+  embyUrl: '',
   komgaUrl: 'http://komga.local:25600',
   theme: 'dark',
   currentUserId: '1',

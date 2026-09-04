@@ -128,6 +128,7 @@ export async function cloudCreateFamily(
     messages: [],
     settings: {
       familyName: 'The Family',
+      emby: { webUrl: '' },
       embyUrl: '',
       komgaUrl: '',
       theme: 'dark',

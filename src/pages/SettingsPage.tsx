@@ -36,6 +36,7 @@ export function SettingsPage() {
     unlockParentPin,
     lockParentPin,
     getMember,
+    isParent,
   } = useApp();
   const [s, setS] = useState(data.settings);
   const [members, setMembers] = useState(data.members);
@@ -521,10 +522,57 @@ export function SettingsPage() {
 
       <Card>
         <h2 className="font-semibold mb-3">Media Servers</h2>
-        <label className="text-xs text-muted mb-1 block">Emby URL</label>
-        <Input value={s.embyUrl} onChange={(e) => setS({ ...s, embyUrl: e.target.value })} className="mb-3" />
+        <label className="text-xs text-muted mb-1 block">Emby web URL</label>
+        <Input
+          value={s.emby?.webUrl || s.embyUrl || ''}
+          onChange={(e) =>
+            setS({
+              ...s,
+              embyUrl: e.target.value,
+              emby: { ...s.emby, webUrl: e.target.value },
+            })
+          }
+          placeholder="https://emby.example.com:8096"
+          className="mb-1"
+        />
+        <p className="text-[11px] text-muted mb-3">
+          Public browser URL for deep links. The API key is <strong>not</strong> set here — configure{' '}
+          <code className="text-[10px]">EMBY_BASE_URL</code> and <code className="text-[10px]">EMBY_API_KEY</code>{' '}
+          in Cloudflare Pages environment variables.
+        </p>
         <label className="text-xs text-muted mb-1 block">Komga URL</label>
-        <Input value={s.komgaUrl} onChange={(e) => setS({ ...s, komgaUrl: e.target.value })} />
+        <Input value={s.komgaUrl} onChange={(e) => setS({ ...s, komgaUrl: e.target.value })} className="mb-3" />
+
+        {isParent && (
+          <div className="mt-2 pt-3 border-t border-border space-y-2">
+            <p className="text-xs font-semibold text-fg">Link Emby users to profiles</p>
+            <p className="text-[11px] text-muted">
+              Paste each person&apos;s Emby User ID (from Emby dashboard → Users). Identifier only — not a password.
+            </p>
+            {members
+              .filter((m) => m.role !== 'media')
+              .map((m) => (
+                <div key={m.id} className="flex items-center gap-2">
+                  <span className="text-sm w-28 shrink-0 truncate">
+                    {m.emoji ? `${m.emoji} ` : ''}
+                    {m.name}
+                  </span>
+                  <Input
+                    value={m.embyUserId || ''}
+                    onChange={(e) =>
+                      setMembers((prev) =>
+                        prev.map((x) =>
+                          x.id === m.id ? { ...x, embyUserId: e.target.value.trim() || undefined } : x,
+                        ),
+                      )
+                    }
+                    placeholder="Emby UserId"
+                    className="flex-1"
+                  />
+                </div>
+              ))}
+          </div>
+        )}
       </Card>
 
       <Card>
