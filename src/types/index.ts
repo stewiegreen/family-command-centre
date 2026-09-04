@@ -374,6 +374,11 @@ export interface EmbySettings {
   serverId?: string;
 }
 
+export interface KomgaSettings {
+  /** Public web URL for deep links / "Open Komga". Not a secret. */
+  webUrl?: string;
+}
+
 export interface Settings {
   familyName: string;
   /**
@@ -382,11 +387,16 @@ export interface Settings {
   embyUrl?: string;
   /** Emby public config (no API key — key lives only in Cloudflare env). */
   emby?: EmbySettings;
-  komgaUrl: string;
+  /**
+   * @deprecated Prefer settings.komga.webUrl.
+   */
+  komgaUrl?: string;
+  /** Komga public config (no API key — key lives only in Cloudflare env). */
+  komga?: KomgaSettings;
   /** Family default theme (used when member has no personal theme). */
   theme: ThemeId;
   currentUserId: string;
-  /** When true, Komga (and legacy embeds) may iframe; Emby Media page no longer embeds. */
+  /** @deprecated Emby/Komga no longer embed; kept for older clients. */
   embedMedia: boolean;
   pinnedAnnouncement: string;
   /** Parent PIN required for sensitive settings actions (invites, roles, leave). */

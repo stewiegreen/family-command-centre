@@ -16,31 +16,49 @@ import {
   type EmbyItem,
   type EmbyView,
 } from '../lib/emby';
+import {
+  bookProgressPercent,
+  bookTitle,
+  komgaBookThumbUrl,
+  komgaBookWebLink,
+  komgaInProgress,
+  komgaLibraries,
+  komgaLibraryWebLink,
+  komgaOnDeck,
+  resolveKomgaWebUrl,
+  type KomgaBook,
+  type KomgaLibrary,
+} from '../lib/komga';
 
 export function MediaPage() {
   const { data, update, currentUser, isParent } = useApp();
   const settings = data.settings;
   const webUrl = resolveEmbyWebUrl(settings);
-  const komgaUrl = settings.komgaUrl;
-  const embedMedia = settings.embedMedia;
+  const komgaWeb = resolveKomgaWebUrl(settings);
   const me = currentUser || data.members.find((m) => m.id === settings.currentUserId);
   const embyUserId = me?.embyUserId?.trim() || '';
 
   const [serverId, setServerId] = useState(settings.emby?.serverId || '');
   const [resume, setResume] = useState<EmbyItem[]>([]);
   const [views, setViews] = useState<EmbyView[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [embyLoading, setEmbyLoading] = useState(false);
+  const [embyError, setEmbyError] = useState<string | null>(null);
 
-  const load = async () => {
+  const [inProgress, setInProgress] = useState<KomgaBook[]>([]);
+  const [onDeck, setOnDeck] = useState<KomgaBook[]>([]);
+  const [libraries, setLibraries] = useState<KomgaLibrary[]>([]);
+  const [komgaLoading, setKomgaLoading] = useState(false);
+  const [komgaError, setKomgaError] = useState<string | null>(null);
+
+  const loadEmby = async () => {
     if (!embyUserId) {
       setResume([]);
       setViews([]);
-      setError(null);
+      setEmbyError(null);
       return;
     }
-    setLoading(true);
-    setError(null);
+    setEmbyLoading(true);
+    setEmbyError(null);
     try {
       let sid = serverId || settings.emby?.serverId || '';
       if (!sid) {
@@ -49,14 +67,19 @@ export function MediaPage() {
           sid = info.Id || '';
           if (sid) {
             setServerId(sid);
-            // Cache non-secret serverId on settings for deep links
-            update((d) => ({
-              ...d,
-              settings: {
-                ...d.settings,
-                emby: { ...d.settings.emby, webUrl: resolveEmbyWebUrl(d.settings), serverId: sid },
-              },
-            }));
+            if (isParent) {
+              update((d) => ({
+                ...d,
+                settings: {
+                  ...d.settings,
+                  emby: {
+                    ...d.settings.emby,
+                    webUrl: resolveEmbyWebUrl(d.settings),
+                    serverId: sid,
+                  },
+                },
+              }));
+            }
           }
         } catch {
           /* optional */
@@ -67,18 +90,45 @@ export function MediaPage() {
       setViews(v);
       if (sid) setServerId(sid);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load Emby data');
+      setEmbyError(e instanceof Error ? e.message : 'Failed to load Emby data');
       setResume([]);
       setViews([]);
     } finally {
-      setLoading(false);
+      setEmbyLoading(false);
+    }
+  };
+
+  const loadKomga = async () => {
+    setKomgaLoading(true);
+    setKomgaError(null);
+    try {
+      const [prog, deck, libs] = await Promise.all([
+        komgaInProgress(12),
+        komgaOnDeck(12),
+        komgaLibraries(),
+      ]);
+      setInProgress(prog);
+      setOnDeck(deck);
+      setLibraries(libs);
+    } catch (e) {
+      setKomgaError(e instanceof Error ? e.message : 'Failed to load Komga data');
+      setInProgress([]);
+      setOnDeck([]);
+      setLibraries([]);
+    } finally {
+      setKomgaLoading(false);
     }
   };
 
   useEffect(() => {
-    void load();
+    void loadEmby();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [embyUserId]);
+
+  useEffect(() => {
+    void loadKomga();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const openItem = (item: EmbyItem) => {
     if (!webUrl || !serverId) {
@@ -97,19 +147,64 @@ export function MediaPage() {
     }
   };
 
+  const openKomgaBook = (book: KomgaBook) => {
+    if (!komgaWeb) return;
+    window.open(komgaBookWebLink(komgaWeb, book.id), '_blank', 'noopener,noreferrer');
+  };
+
+  const renderBookRow = (books: KomgaBook[], empty: string) => {
+    if (komgaLoading && books.length === 0) {
+      return <p className="text-sm text-muted py-6 text-center">Loading…</p>;
+    }
+    if (books.length === 0) {
+      return <p className="text-sm text-muted py-4 text-center">{empty}</p>;
+    }
+    return (
+      <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1 snap-x">
+        {books.map((b) => {
+          const pct = bookProgressPercent(b);
+          return (
+            <button
+              key={b.id}
+              type="button"
+              onClick={() => openKomgaBook(b)}
+              className="snap-start shrink-0 w-28 sm:w-32 text-left group"
+              disabled={!komgaWeb}
+            >
+              <div className="relative aspect-[2/3] rounded-xl overflow-hidden bg-surface-2 border border-border shadow-sm">
+                <img
+                  src={komgaBookThumbUrl(b.id)}
+                  alt=""
+                  className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform"
+                  loading="lazy"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).style.display = 'none';
+                  }}
+                />
+                {pct > 0 && pct < 100 && (
+                  <div className="absolute left-0 right-0 bottom-0 h-1.5 bg-black/40">
+                    <div className="h-full bg-amber-400" style={{ width: `${pct}%` }} />
+                  </div>
+                )}
+              </div>
+              <p className="mt-1.5 text-xs sm:text-sm font-medium text-fg line-clamp-2 leading-snug">
+                {bookTitle(b)}
+              </p>
+              {pct > 0 && pct < 100 && (
+                <p className="text-[11px] text-muted">{Math.round(pct)}%</p>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    );
+  };
+
   return (
     <div className="p-4 lg:p-8 max-w-5xl mx-auto space-y-6">
-      <div className="flex items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Media</h1>
-          <p className="text-sm text-muted mt-1">Continue watching and family libraries</p>
-        </div>
-        {embyUserId && (
-          <Button size="sm" variant="secondary" onClick={() => void load()} disabled={loading}>
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
-        )}
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Media</h1>
+        <p className="text-sm text-muted mt-1">Continue watching & reading</p>
       </div>
 
       {/* Emby */}
@@ -125,10 +220,15 @@ export function MediaPage() {
               {me?.name ? ` · ${me.name}` : ''}
             </p>
           </div>
+          {embyUserId && (
+            <Button size="sm" variant="secondary" onClick={() => void loadEmby()} disabled={embyLoading}>
+              <RefreshCw className={`w-4 h-4 ${embyLoading ? 'animate-spin' : ''}`} />
+            </Button>
+          )}
           {webUrl && (
             <a href={webUrl} target="_blank" rel="noreferrer">
               <Button size="sm" variant="secondary">
-                Open Emby <ExternalLink className="w-3.5 h-3.5" />
+                Open <ExternalLink className="w-3.5 h-3.5" />
               </Button>
             </a>
           )}
@@ -140,23 +240,19 @@ export function MediaPage() {
             <p className="text-sm font-medium text-fg">Not linked yet</p>
             <p className="text-xs text-muted max-w-sm mx-auto">
               {isParent
-                ? 'Link each profile’s Emby User ID under Settings → Media Servers so Continue Watching can load.'
-                : 'Ask a parent to link your Emby account in Settings so you can see Continue Watching here.'}
+                ? 'Link each profile’s Emby User ID under Settings → Media Servers.'
+                : 'Ask a parent to link your Emby account in Settings.'}
             </p>
           </div>
-        ) : error ? (
+        ) : embyError ? (
           <div className="rounded-xl border border-warn/40 bg-warn-tint px-4 py-3 text-sm text-warn">
-            {error}
-            <p className="text-xs mt-1 opacity-80">
-              If this is a new deploy, confirm Cloudflare env vars EMBY_BASE_URL and EMBY_API_KEY are set and the
-              proxy responds at /api/emby/System/Info/Public.
-            </p>
+            {embyError}
           </div>
         ) : (
           <>
             <div>
               <h3 className="text-sm font-semibold text-fg mb-2">Continue Watching</h3>
-              {loading && resume.length === 0 ? (
+              {embyLoading && resume.length === 0 ? (
                 <p className="text-sm text-muted py-6 text-center">Loading…</p>
               ) : resume.length === 0 ? (
                 <p className="text-sm text-muted py-4 text-center">Nothing in progress right now.</p>
@@ -164,7 +260,6 @@ export function MediaPage() {
                 <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1 snap-x">
                   {resume.map((item) => {
                     const pct = playedPercent(item);
-                    const img = embyImageUrl(item.Id, 240);
                     return (
                       <button
                         key={item.Id}
@@ -174,13 +269,10 @@ export function MediaPage() {
                       >
                         <div className="relative aspect-[2/3] rounded-xl overflow-hidden bg-surface-2 border border-border shadow-sm">
                           <img
-                            src={img}
+                            src={embyImageUrl(item.Id, 240)}
                             alt=""
                             className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform"
                             loading="lazy"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).style.display = 'none';
-                            }}
                           />
                           {pct > 0 && (
                             <div className="absolute left-0 right-0 bottom-0 h-1.5 bg-black/40">
@@ -191,28 +283,18 @@ export function MediaPage() {
                         <p className="mt-1.5 text-xs sm:text-sm font-medium text-fg line-clamp-2 leading-snug">
                           {displayTitle(item)}
                         </p>
-                        {pct > 0 && (
-                          <p className="text-[11px] text-muted">{Math.round(pct)}% watched</p>
-                        )}
                       </button>
                     );
                   })}
                 </div>
               )}
             </div>
-
             {views.length > 0 && (
               <div>
                 <h3 className="text-sm font-semibold text-fg mb-2">Libraries</h3>
                 <div className="flex flex-wrap gap-2">
                   {views.map((v) => (
-                    <Button
-                      key={v.Id}
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => openLibrary(v)}
-                      disabled={!webUrl}
-                    >
+                    <Button key={v.Id} size="sm" variant="secondary" onClick={() => openLibrary(v)} disabled={!webUrl}>
                       {v.Name}
                       <ExternalLink className="w-3.5 h-3.5" />
                     </Button>
@@ -222,41 +304,77 @@ export function MediaPage() {
             )}
           </>
         )}
-
-        {!webUrl && isParent && (
-          <p className="text-xs text-muted">
-            Set Emby web URL in Settings so deep links can open titles in the browser.
-          </p>
-        )}
       </Card>
 
-      {/* Komga — unchanged */}
-      <Card className="space-y-3">
+      {/* Komga */}
+      <Card className="space-y-4 !p-4 sm:!p-5">
         <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-xl bg-amber-500/15 flex items-center justify-center">
+          <div className="w-11 h-11 rounded-xl bg-amber-500/15 flex items-center justify-center shrink-0">
             <BookOpen className="w-6 h-6 text-amber-400" />
           </div>
-          <div>
+          <div className="min-w-0 flex-1">
             <h2 className="font-semibold">Komga</h2>
-            <p className="text-xs text-muted truncate max-w-[200px]">{komgaUrl || 'Not configured'}</p>
+            <p className="text-xs text-muted truncate">{komgaWeb || 'Web URL not set'}</p>
           </div>
-        </div>
-        {komgaUrl ? (
-          embedMedia ? (
-            <iframe
-              title="Komga"
-              src={komgaUrl}
-              className="w-full h-64 rounded-xl border border-border-strong bg-black"
-            />
-          ) : (
-            <a href={komgaUrl} target="_blank" rel="noreferrer">
-              <Button className="w-full" variant="secondary">
-                Open Komga <ExternalLink className="w-4 h-4" />
+          <Button size="sm" variant="secondary" onClick={() => void loadKomga()} disabled={komgaLoading}>
+            <RefreshCw className={`w-4 h-4 ${komgaLoading ? 'animate-spin' : ''}`} />
+          </Button>
+          {komgaWeb && (
+            <a href={komgaWeb} target="_blank" rel="noreferrer">
+              <Button size="sm" variant="secondary">
+                Open <ExternalLink className="w-3.5 h-3.5" />
               </Button>
             </a>
-          )
+          )}
+        </div>
+
+        {komgaError ? (
+          <div className="rounded-xl border border-warn/40 bg-warn-tint px-4 py-3 text-sm text-warn">
+            {komgaError}
+            <p className="text-xs mt-1 opacity-80">
+              Set Cloudflare <code className="text-[10px]">KOMGA_BASE_URL</code> +{' '}
+              <code className="text-[10px]">KOMGA_API_KEY</code>, redeploy, then try{' '}
+              <code className="text-[10px]">/api/komga/v1/libraries</code>.
+            </p>
+          </div>
         ) : (
-          <p className="text-sm text-muted">Set Komga URL in Settings.</p>
+          <>
+            <div>
+              <h3 className="text-sm font-semibold text-fg mb-2">Continue Reading</h3>
+              {renderBookRow(inProgress, 'Nothing in progress right now.')}
+            </div>
+            {onDeck.length > 0 && (
+              <div>
+                <h3 className="text-sm font-semibold text-fg mb-2">On Deck</h3>
+                {renderBookRow(onDeck, '')}
+              </div>
+            )}
+            {libraries.length > 0 && (
+              <div>
+                <h3 className="text-sm font-semibold text-fg mb-2">Libraries</h3>
+                <div className="flex flex-wrap gap-2">
+                  {libraries.map((lib) => (
+                    <Button
+                      key={lib.id}
+                      size="sm"
+                      variant="secondary"
+                      disabled={!komgaWeb}
+                      onClick={() =>
+                        window.open(komgaLibraryWebLink(komgaWeb, lib.id), '_blank', 'noopener,noreferrer')
+                      }
+                    >
+                      {lib.name}
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {!komgaWeb && isParent && !komgaError && (
+          <p className="text-xs text-muted">Set Komga web URL in Settings for deep links.</p>
         )}
       </Card>
     </div>

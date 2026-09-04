@@ -540,8 +540,25 @@ export function SettingsPage() {
           <code className="text-[10px]">EMBY_BASE_URL</code> and <code className="text-[10px]">EMBY_API_KEY</code>{' '}
           in Cloudflare Pages environment variables.
         </p>
-        <label className="text-xs text-muted mb-1 block">Komga URL</label>
-        <Input value={s.komgaUrl} onChange={(e) => setS({ ...s, komgaUrl: e.target.value })} className="mb-3" />
+        <label className="text-xs text-muted mb-1 block">Komga web URL</label>
+        <Input
+          value={s.komga?.webUrl || s.komgaUrl || ''}
+          onChange={(e) =>
+            setS({
+              ...s,
+              komgaUrl: e.target.value,
+              komga: { ...s.komga, webUrl: e.target.value },
+            })
+          }
+          placeholder="https://comics.example.com"
+          className="mb-1"
+        />
+        <p className="text-[11px] text-muted mb-3">
+          Public browser URL for deep links. API key is only in Cloudflare:{' '}
+          <code className="text-[10px]">KOMGA_BASE_URL</code> +{' '}
+          <code className="text-[10px]">KOMGA_API_KEY</code>. Progress follows the Komga user that
+          owns that API key.
+        </p>
 
         {isParent && (
           <div className="mt-2 pt-3 border-t border-border space-y-2">

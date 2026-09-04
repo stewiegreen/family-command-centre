@@ -130,6 +130,7 @@ export async function cloudCreateFamily(
       familyName: 'The Family',
       emby: { webUrl: '' },
       embyUrl: '',
+      komga: { webUrl: '' },
       komgaUrl: '',
       theme: 'dark',
       currentUserId: adminMember.id,
