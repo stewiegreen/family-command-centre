@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { ChevronLeft, ChevronRight, Download, Plus, Square, Upload } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, Download, Plus, Square, Upload, Users } from 'lucide-react';
 import {
   addDays,
   addMonths,
@@ -17,6 +17,7 @@ import {
   differenceInCalendarDays,
 } from 'date-fns';
 import { useApp } from '../context/AppContext';
+import { Avatar } from '../components/ui/Avatar';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Input, Textarea } from '../components/ui/Input';
@@ -154,6 +155,8 @@ export function CalendarPage() {
   const [view, setViewState] = useState<CalView>(loadView);
   const [showTasks, setShowTasksState] = useState(loadShowTasks);
   const [filterMemberId, setFilterMemberIdState] = useState(loadMemberFilter);
+  const [filterMenuOpen, setFilterMenuOpen] = useState(false);
+  const filterMenuRef = useRef<HTMLDivElement>(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<FormState>(() => emptyForm(data.settings.currentUserId));
   const [editingMasterId, setEditingMasterId] = useState<string | null>(null);
@@ -234,6 +237,18 @@ export function CalendarPage() {
     setImportResult(result);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
+
+  // Close member filter menu on outside click
+  useEffect(() => {
+    if (!filterMenuOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      if (filterMenuRef.current && !filterMenuRef.current.contains(e.target as Node)) {
+        setFilterMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [filterMenuOpen]);
 
   useEffect(() => {
     const h = () => {
@@ -586,26 +601,93 @@ export function CalendarPage() {
           <Button size="sm" variant="ghost" onClick={() => setCursor(new Date())}>
             Today
           </Button>
-          <label className="sr-only" htmlFor="cal-member-filter">
-            Show events for
-          </label>
-          <select
-            id="cal-member-filter"
-            value={filterMemberId}
-            onChange={(e) => setFilterMemberId(e.target.value)}
-            className="ml-1 max-w-[10.5rem] sm:max-w-[12rem] truncate rounded-xl border border-border-strong bg-surface-2 px-2.5 py-1.5 text-sm text-fg focus:outline-none focus:ring-2 focus:ring-accent/40"
-            title="Whose events to show"
-          >
-            <option value="all">Everyone</option>
-            {data.members
-              .filter((m) => m.role !== 'media')
-              .map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.emoji ? `${m.emoji} ` : ''}
-                  {m.name}
-                </option>
-              ))}
-          </select>
+          <div className="relative ml-1" ref={filterMenuRef}>
+            <button
+              type="button"
+              onClick={() => setFilterMenuOpen((o) => !o)}
+              className="flex items-center gap-1.5 rounded-xl border border-border-strong bg-surface-2 pl-1 pr-2 py-1 text-sm text-fg hover:bg-surface-3 focus:outline-none focus:ring-2 focus:ring-accent/40 max-w-[11rem] sm:max-w-[13rem]"
+              title="Whose events to show"
+              aria-haspopup="listbox"
+              aria-expanded={filterMenuOpen}
+            >
+              {filterMemberId === 'all' ? (
+                <span className="w-7 h-7 rounded-full bg-surface-3 flex items-center justify-center shrink-0">
+                  <Users className="w-3.5 h-3.5 text-muted" />
+                </span>
+              ) : (
+                <Avatar
+                  size="sm"
+                  className="!w-7 !h-7 !text-sm"
+                  name={getMember(filterMemberId)?.name}
+                  color={getMember(filterMemberId)?.color}
+                  emoji={getMember(filterMemberId)?.emoji}
+                  initials={getMember(filterMemberId)?.initials}
+                />
+              )}
+              <span className="truncate font-medium">
+                {filterMemberId === 'all'
+                  ? 'Everyone'
+                  : getMember(filterMemberId)?.name || 'Member'}
+              </span>
+              <ChevronDown className="w-3.5 h-3.5 text-muted shrink-0" />
+            </button>
+            {filterMenuOpen && (
+              <div
+                role="listbox"
+                className="absolute left-0 top-full z-40 mt-1 min-w-[12rem] max-h-72 overflow-auto rounded-xl border border-border-strong bg-surface-1 shadow-lg py-1"
+              >
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={filterMemberId === 'all'}
+                  className={cn(
+                    'w-full flex items-center gap-2 px-2 py-1.5 text-left text-sm hover:bg-surface-2',
+                    filterMemberId === 'all' && 'bg-accent/15 text-accent',
+                  )}
+                  onClick={() => {
+                    setFilterMemberId('all');
+                    setFilterMenuOpen(false);
+                  }}
+                >
+                  <span className="w-7 h-7 rounded-full bg-surface-3 flex items-center justify-center shrink-0">
+                    <Users className="w-3.5 h-3.5 text-muted" />
+                  </span>
+                  Everyone
+                </button>
+                {data.members
+                  .filter((m) => m.role !== 'media')
+                  .map((m) => {
+                    const look = getMember(m.id) || m;
+                    return (
+                      <button
+                        key={m.id}
+                        type="button"
+                        role="option"
+                        aria-selected={filterMemberId === m.id}
+                        className={cn(
+                          'w-full flex items-center gap-2 px-2 py-1.5 text-left text-sm hover:bg-surface-2',
+                          filterMemberId === m.id && 'bg-accent/15 text-accent',
+                        )}
+                        onClick={() => {
+                          setFilterMemberId(m.id);
+                          setFilterMenuOpen(false);
+                        }}
+                      >
+                        <Avatar
+                          size="sm"
+                          className="!w-7 !h-7 !text-sm"
+                          name={look.name}
+                          color={look.color}
+                          emoji={look.emoji}
+                          initials={look.initials}
+                        />
+                        <span className="truncate">{look.name}</span>
+                      </button>
+                    );
+                  })}
+              </div>
+            )}
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex rounded-xl border border-border-strong overflow-hidden">
@@ -861,11 +943,14 @@ export function CalendarPage() {
                           : 'border-border-strong bg-surface text-fg-secondary hover:bg-surface-2',
                       )}
                     >
-                      <span
-                        className="w-2.5 h-2.5 rounded-full shrink-0"
-                        style={{ backgroundColor: look.color || '#6366f1' }}
+                      <Avatar
+                        size="sm"
+                        className="!w-6 !h-6 !text-xs"
+                        name={look.name}
+                        color={look.color}
+                        emoji={look.emoji}
+                        initials={look.initials}
                       />
-                      {look.emoji ? `${look.emoji} ` : ''}
                       {look.name}
                     </button>
                   );
