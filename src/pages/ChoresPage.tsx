@@ -1586,7 +1586,7 @@ export function ChoresPage() {
                       </div>
                       {item.kind === 'screen_time' && me && me.role !== 'media' && (
                         <select
-                          className="shrink-0 max-w-[5.5rem] rounded-lg border border-border bg-inset px-1.5 py-1 text-xs text-fg outline-none focus:border-accent"
+                          className="shrink-0 max-w-[8rem] rounded-lg border border-border bg-inset px-1.5 py-1 text-xs text-fg outline-none focus:border-accent"
                           value={screenGiftFor[item.id] || myId}
                           onChange={(e) =>
                             setScreenGiftFor((prev) => ({ ...prev, [item.id]: e.target.value }))
