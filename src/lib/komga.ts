@@ -88,14 +88,19 @@ export function resolveKomgaWebUrl(settings: Settings): string {
   return (settings.komga?.webUrl || settings.komgaUrl || '').replace(/\/+$/, '');
 }
 
-export function komgaBookWebLink(webUrl: string, bookId: string): string {
+/** Komga web UI uses singular /book/:id (not /books/). /read opens the reader. */
+export function komgaBookWebLink(webUrl: string, bookId: string, openReader = true): string {
   const base = webUrl.replace(/\/+$/, '');
-  return `${base}/books/${encodeURIComponent(bookId)}`;
+  const path = openReader
+    ? `/book/${encodeURIComponent(bookId)}/read`
+    : `/book/${encodeURIComponent(bookId)}`;
+  return `${base}${path}`;
 }
 
+/** Library home in the web UI is /libraries/:id/series (or recommended). */
 export function komgaLibraryWebLink(webUrl: string, libraryId: string): string {
   const base = webUrl.replace(/\/+$/, '');
-  return `${base}/libraries/${encodeURIComponent(libraryId)}`;
+  return `${base}/libraries/${encodeURIComponent(libraryId)}/series`;
 }
 
 export function bookTitle(b: KomgaBook): string {
