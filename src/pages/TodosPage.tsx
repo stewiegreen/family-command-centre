@@ -3,7 +3,7 @@ import { Plus, Trash2, GripVertical, Pencil, Check, X } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Avatar } from '../components/ui/Avatar';
 import { Button } from '../components/ui/Button';
-import { Card } from '../components/ui/Card';
+import { Modal } from '../components/ui/Modal';
 import { Input } from '../components/ui/Input';
 import type { Priority, Todo, TodoRecurrence, TodoStatus } from '../types';
 import { applyTodoStatus, findQuestForTodo, todoStatusOf } from '../lib/todoQuest';
@@ -83,6 +83,17 @@ export function TodosPage() {
     .map((m) => getMember(m.id) || m);
 
   const listId = isParent ? activeId : myId;
+  const openAdd = () => {
+    setText('');
+    setDueAt('');
+    setQuestId('');
+    setRecurrence('none');
+    setRecurrenceInterval(2);
+    setPriority('medium');
+    setAssignId(listId);
+    setComposerOpen(true);
+  };
+  const closeAdd = () => setComposerOpen(false);
   const listOwner = getMember(listId);
   const list = useMemo(
     () => data.todos.filter((t) => t.memberId === listId),
@@ -267,7 +278,7 @@ export function TodosPage() {
               Clear done ({doneCount})
             </button>
           )}
-          <Button onClick={() => setComposerOpen((v) => !v)} className="!py-2">
+          <Button onClick={openAdd} className="!py-2">
             <Plus className="w-4 h-4" /> Add task
           </Button>
         </div>
@@ -306,39 +317,44 @@ export function TodosPage() {
         </div>
       )}
 
-      {/* Composer */}
-      {composerOpen && (
-        <Card className="!p-4 space-y-3 shrink-0">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-muted mb-1 block">What needs doing?</label>
-              <Input
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                placeholder="What needs doing?"
-                autoFocus
-                onKeyDown={(e) => e.key === 'Enter' && addTodo()}
-              />
-            </div>
-            <div>
-              <label className="text-xs text-muted mb-1 block">ChoreQuest (optional)</label>
-              <select
-                value={questId}
-                onChange={(e) => setQuestId(e.target.value)}
-                className="w-full bg-input border border-border-strong rounded-xl px-3 py-2.5 text-sm text-fg"
-              >
-                <option value="">No ChoreQuest</option>
-                {openQuests.map((q) => (
-                  <option key={q.id} value={q.id}>
-                    ⚔️ {q.title} · +{q.xp} XP · +{q.coins}c
-                  </option>
-                ))}
-              </select>
-              <p className="text-[11px] text-muted mt-1">
-                Select an existing open quest. Completing this task will submit it for approval.
-              </p>
-            </div>
+      {/* Add task — modal (same pattern as notes / events / quests) */}
+      <Modal open={composerOpen} onClose={closeAdd} title="Add task" wide>
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs text-muted mb-1 block">What needs doing?</label>
+            <Input
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder="What needs doing?"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  addTodo();
+                }
+              }}
+            />
           </div>
+
+          <div>
+            <label className="text-xs text-muted mb-1 block">ChoreQuest (optional)</label>
+            <select
+              value={questId}
+              onChange={(e) => setQuestId(e.target.value)}
+              className="w-full bg-input border border-border-strong rounded-xl px-3 py-2.5 text-sm text-fg"
+            >
+              <option value="">No ChoreQuest</option>
+              {openQuests.map((q) => (
+                <option key={q.id} value={q.id}>
+                  ⚔️ {q.title} · +{q.xp} XP · +{q.coins}c
+                </option>
+              ))}
+            </select>
+            <p className="text-[11px] text-muted mt-1">
+              Select an existing open quest. Completing this task will submit it for approval.
+            </p>
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="text-xs text-muted mb-1 block">Priority</label>
@@ -378,13 +394,10 @@ export function TodosPage() {
                 </select>
               </div>
             ) : (
-              <div className="flex items-end">
-                <Button onClick={addTodo} className="w-full">
-                  <Plus className="w-4 h-4" /> Add to board
-                </Button>
-              </div>
+              <div className="hidden sm:block" />
             )}
           </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-muted mb-1 block">Repeat</label>
@@ -420,13 +433,17 @@ export function TodosPage() {
               schedules the next one automatically.
             </p>
           )}
-          {isParent && (
-            <Button onClick={addTodo} className="w-full sm:w-auto">
-              <Plus className="w-4 h-4" /> Add to board
+
+          <div className="flex gap-2 pt-1">
+            <Button variant="ghost" className="flex-1" onClick={closeAdd}>
+              Cancel
             </Button>
-          )}
-        </Card>
-      )}
+            <Button className="flex-1" onClick={addTodo} disabled={!text.trim()}>
+              <Plus className="w-4 h-4" /> Add task
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Kanban columns */}
       <div className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden -mx-4 px-4 lg:mx-0 lg:px-0">
