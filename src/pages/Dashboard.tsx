@@ -30,7 +30,7 @@ import { Card } from '../components/ui/Card';
 import { Modal } from '../components/ui/Modal';
 import { ProfileLookCard } from '../components/ProfileLookEditor';
 import type { CalendarEvent, ExpandedEvent, FamilyData, PresenceStatus, Quest, ViewId } from '../types';
-import { applyTodoStatus } from '../lib/todoQuest';
+import { applyTodoStatus, creditMemberForQuest } from '../lib/todoQuest';
 import { FAMILY_LIST_ID, PRESENCE_OPTIONS } from '../types';
 import { upcomingExpanded } from '../lib/recurrence';
 import {
@@ -463,7 +463,7 @@ export function Dashboard() {
       if (!t) return d;
       const nextDone = !t.completed;
       return applyTodoStatus(d, id, nextDone ? 'done' : 'todo', {
-        submittedById: myId,
+        actorId: myId,
       });
     });
   };
@@ -564,7 +564,8 @@ export function Dashboard() {
 
   const approveQuestHome = (quest: Quest) => {
     if (!isParent || !currentUser) return;
-    const forId = quest.submittedById || quest.approvedForId;
+    const forId =
+      creditMemberForQuest(data, quest) || quest.submittedById || quest.approvedForId;
     if (!forId) return;
     const xpGain = quest.xp ?? 0;
     const coinGain = quest.coins ?? 0;

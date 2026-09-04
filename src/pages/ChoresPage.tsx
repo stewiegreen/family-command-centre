@@ -42,6 +42,7 @@ import {
   progressTowardNextLevel,
   rewardsForDifficultyWithConfig,
 } from '../lib/quest';
+import { creditMemberForQuest } from '../lib/todoQuest';
 import {
   claimStreakChest,
   daysUntilWeekEnd,
@@ -465,7 +466,8 @@ export function ChoresPage() {
 
   const approveQuest = (quest: Quest) => {
     if (!me || !isParent) return;
-    const forId = quest.submittedById || quest.approvedForId;
+    // Credit the kid who owns the linked todo — not a parent who marked the todo done.
+    const forId = creditMemberForQuest(data, quest) || quest.submittedById || quest.approvedForId;
     if (!forId) return;
 
     const xpGain = quest.xp ?? DIFFICULTY_REWARDS[quest.difficulty || 'medium'].xp;

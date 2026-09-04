@@ -187,7 +187,7 @@ export function CalendarPage() {
       if (!t) return d;
       const nextDone = !t.completed;
       return applyTodoStatus(d, id, nextDone ? 'done' : 'todo', {
-        submittedById: currentUser?.id,
+        actorId: currentUser?.id,
       });
     });
   };

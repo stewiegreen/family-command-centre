@@ -140,7 +140,7 @@ export function TodosPage() {
   };
 
   const setTodoStatus = (id: string, status: TodoStatus) => {
-    update((d) => applyTodoStatus(d, id, status, { submittedById: myId }));
+    update((d) => applyTodoStatus(d, id, status, { actorId: myId }));
   };
 
   const addTodo = () => {
@@ -149,9 +149,16 @@ export function TodosPage() {
     const memberId = isParent ? assignId : myId;
     const todoId = crypto.randomUUID();
     const due = dueAt ? new Date(dueAt).toISOString() : undefined;
+    const linkedQuestId = questId || undefined;
     update((d) => {
+      const chores = linkedQuestId
+        ? (d.chores || []).map((q) =>
+            q.id === linkedQuestId ? { ...q, todoId } : q,
+          )
+        : d.chores;
       return {
         ...d,
+        chores,
         todos: [
           {
             id: todoId,
@@ -163,7 +170,7 @@ export function TodosPage() {
             priority,
             createdAt: new Date().toISOString(),
             dueAt: due,
-            questId,
+            questId: linkedQuestId,
           },
           ...d.todos,
         ],
