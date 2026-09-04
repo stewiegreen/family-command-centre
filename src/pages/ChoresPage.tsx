@@ -1584,16 +1584,14 @@ export function ChoresPage() {
                             : ''}
                         </p>
                       </div>
-                    </div>
-                    {item.kind === 'screen_time' && me && me.role !== 'media' && (
-                      <label className="block mt-2 mb-1">
-                        <span className="text-[11px] text-muted">Give screen time to</span>
+                      {item.kind === 'screen_time' && me && me.role !== 'media' && (
                         <select
-                          className="mt-0.5 w-full rounded-lg border border-border bg-inset px-2 py-1.5 text-sm text-fg outline-none focus:border-accent"
+                          className="shrink-0 max-w-[5.5rem] rounded-lg border border-border bg-inset px-1.5 py-1 text-xs text-fg outline-none focus:border-accent"
                           value={screenGiftFor[item.id] || myId}
                           onChange={(e) =>
                             setScreenGiftFor((prev) => ({ ...prev, [item.id]: e.target.value }))
                           }
+                          title="Give screen time to"
                         >
                           {shopRecipients.map((m) => {
                             const look = getMember(m.id) || m;
@@ -1605,8 +1603,8 @@ export function ChoresPage() {
                             );
                           })}
                         </select>
-                      </label>
-                    )}
+                      )}
+                    </div>
                     <div className="flex items-center gap-2 mt-auto">
                       {me && me.role !== 'media' && (
                         <Button
