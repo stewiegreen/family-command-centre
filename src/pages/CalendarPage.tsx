@@ -30,6 +30,7 @@ import { cn } from '../lib/cn';
 
 type CalView = 'month' | 'week' | 'day';
 const VIEW_KEY = 'fcc-calendar-view';
+const MEMBER_FILTER_KEY = 'fcc-calendar-member-filter';
 const TASKS_KEY = 'fcc-calendar-show-tasks';
 const HOUR_START = 6;
 const HOUR_END = 22;
@@ -54,6 +55,14 @@ function loadShowTasks(): boolean {
     /* ignore */
   }
   return true;
+}
+
+function loadMemberFilter(): string {
+  try {
+    return localStorage.getItem(MEMBER_FILTER_KEY) || 'all';
+  } catch {
+    return 'all';
+  }
 }
 
 function localDateStr(d: Date): string {
@@ -144,6 +153,7 @@ export function CalendarPage() {
   const [cursor, setCursor] = useState(new Date());
   const [view, setViewState] = useState<CalView>(loadView);
   const [showTasks, setShowTasksState] = useState(loadShowTasks);
+  const [filterMemberId, setFilterMemberIdState] = useState(loadMemberFilter);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<FormState>(() => emptyForm(data.settings.currentUserId));
   const [editingMasterId, setEditingMasterId] = useState<string | null>(null);
@@ -170,10 +180,23 @@ export function CalendarPage() {
     }
   };
 
+  const setFilterMemberId = (id: string) => {
+    setFilterMemberIdState(id);
+    try {
+      localStorage.setItem(MEMBER_FILTER_KEY, id);
+    } catch {
+      /* ignore */
+    }
+  };
+
   const openTodos = data.todos.filter((t) => !t.completed && t.dueAt);
   const tasksOnDay = (day: Date): Todo[] => {
     if (!showTasks) return [];
-    return openTodos.filter((t) => isSameDay(new Date(t.dueAt!), day));
+    return openTodos.filter((t) => {
+      if (!isSameDay(new Date(t.dueAt!), day)) return false;
+      if (filterMemberId === 'all') return true;
+      return t.memberId === filterMemberId;
+    });
   };
   const taskExtra = (t: Todo) => {
     if (!t.questId) return '';
@@ -242,6 +265,12 @@ export function CalendarPage() {
     () => expandEvents(data.events, range.start, addDays(range.end, 1)),
     [data.events, range.start.getTime(), range.end.getTime()],
   );
+
+  /** Everyone vs one member (event matches if any assignee is selected). */
+  const visibleExpanded = useMemo(() => {
+    if (filterMemberId === 'all') return expanded;
+    return expanded.filter((ev) => eventMemberIds(ev).includes(filterMemberId));
+  }, [expanded, filterMemberId]);
 
   const daysInRange = useMemo(
     () => eachDayOfInterval({ start: range.start, end: view === 'day' ? range.start : range.end }),
@@ -557,6 +586,26 @@ export function CalendarPage() {
           <Button size="sm" variant="ghost" onClick={() => setCursor(new Date())}>
             Today
           </Button>
+          <label className="sr-only" htmlFor="cal-member-filter">
+            Show events for
+          </label>
+          <select
+            id="cal-member-filter"
+            value={filterMemberId}
+            onChange={(e) => setFilterMemberId(e.target.value)}
+            className="ml-1 max-w-[10.5rem] sm:max-w-[12rem] truncate rounded-xl border border-border-strong bg-surface-2 px-2.5 py-1.5 text-sm text-fg focus:outline-none focus:ring-2 focus:ring-accent/40"
+            title="Whose events to show"
+          >
+            <option value="all">Everyone</option>
+            {data.members
+              .filter((m) => m.role !== 'media')
+              .map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.emoji ? `${m.emoji} ` : ''}
+                  {m.name}
+                </option>
+              ))}
+          </select>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex rounded-xl border border-border-strong overflow-hidden">
@@ -620,7 +669,7 @@ export function CalendarPage() {
           <MonthView
             cursor={cursor}
             weeks={monthWeeks}
-            expanded={expanded}
+            expanded={visibleExpanded}
             tasksOnDay={tasksOnDay}
             taskExtra={taskExtra}
             getMember={getMember}
@@ -635,7 +684,7 @@ export function CalendarPage() {
           <div className="h-full min-h-0 overflow-auto">
             <TimeGridView
               days={daysInRange}
-              expanded={expanded}
+              expanded={visibleExpanded}
               tasksOnDay={tasksOnDay}
               taskExtra={taskExtra}
               getMember={getMember}
@@ -653,7 +702,7 @@ export function CalendarPage() {
           <div className="h-full min-h-0 overflow-auto">
             <TimeGridView
               days={[startOfDay(cursor)]}
-              expanded={expanded}
+              expanded={visibleExpanded}
               tasksOnDay={tasksOnDay}
               taskExtra={taskExtra}
               getMember={getMember}
