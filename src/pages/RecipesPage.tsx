@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ChefHat, Plus, Pencil, Trash2, ShoppingCart, Archive, RotateCcw, ClipboardPaste } from 'lucide-react';
+import { ChefHat, Plus, Pencil, Trash2, ShoppingCart, Archive, RotateCcw, ClipboardPaste, Search, X } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Avatar } from '../components/ui/Avatar';
 import { Button } from '../components/ui/Button';
@@ -12,6 +12,10 @@ import {
   emptyIngredient,
   formatIngredientLine,
   parseRecipeFromText,
+  SUGGESTED_RECIPE_TAGS,
+  normalizeTags,
+  recipeMatchesSearch,
+  recipeMatchesTags,
 } from '../lib/recipes';
 import {
   SHOPPING_CATEGORY_LABELS,
@@ -28,6 +32,8 @@ type FormState = {
   source: string;
   instructions: string;
   ingredients: RecipeIngredient[];
+  tags: string[];
+  tagDraft: string;
 };
 
 function blankForm(): FormState {
@@ -37,6 +43,8 @@ function blankForm(): FormState {
     source: '',
     instructions: '',
     ingredients: [emptyIngredient(), emptyIngredient(), emptyIngredient()],
+    tags: [],
+    tagDraft: '',
   };
 }
 
@@ -46,6 +54,8 @@ export function RecipesPage() {
   const recipes = data.recipes || [];
 
   const [showArchived, setShowArchived] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeTags, setActiveTags] = useState<string[]>([]);
   const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState<FormState>(blankForm);
   const [shopOpen, setShopOpen] = useState<Recipe | null>(null);
@@ -67,7 +77,44 @@ export function RecipesPage() {
     () => recipes.filter((r) => r.archived).sort((a, b) => a.title.localeCompare(b.title)),
     [recipes],
   );
-  const list = showArchived ? archived : active;
+  const baseList = showArchived ? archived : active;
+
+  /** All tags in use (plus suggestions) for filter chips. */
+  const tagUniverse = useMemo(() => {
+    const set = new Set<string>([...SUGGESTED_RECIPE_TAGS]);
+    for (const r of recipes) {
+      for (const tag of r.tags || []) set.add(tag);
+    }
+    return [...set].sort((a, b) => a.localeCompare(b));
+  }, [recipes]);
+
+  const list = useMemo(
+    () =>
+      baseList.filter(
+        (r) => recipeMatchesSearch(r, searchQuery) && recipeMatchesTags(r, activeTags),
+      ),
+    [baseList, searchQuery, activeTags],
+  );
+
+  const toggleFilterTag = (tag: string) => {
+    setActiveTags((prev) =>
+      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag],
+    );
+  };
+
+  const addFormTag = (raw: string) => {
+    const n = normalizeTags([raw])[0];
+    if (!n) return;
+    setForm((f) => ({
+      ...f,
+      tags: normalizeTags([...f.tags, n]),
+      tagDraft: '',
+    }));
+  };
+
+  const removeFormTag = (tag: string) => {
+    setForm((f) => ({ ...f, tags: f.tags.filter((t) => t !== tag) }));
+  };
 
   const applyParsedRecipe = (parsed: {
     title: string;
@@ -90,6 +137,8 @@ export function RecipesPage() {
               note: i.note || '',
             }))
           : [emptyIngredient()],
+      tags: [],
+      tagDraft: '',
     });
     setPasteOpen(false);
     setPasteText('');
@@ -145,6 +194,8 @@ export function RecipesPage() {
         r.ingredients.length > 0
           ? r.ingredients.map((i) => ({ ...i }))
           : [emptyIngredient()],
+      tags: normalizeTags(r.tags),
+      tagDraft: '',
     });
     setFormOpen(true);
   };
@@ -196,6 +247,7 @@ export function RecipesPage() {
         source: form.source.trim() || undefined,
         instructions: form.instructions.trim() || undefined,
         ingredients,
+        tags: normalizeTags(form.tags),
         createdById: myId,
         createdAt: now,
         updatedAt: now,
@@ -315,9 +367,71 @@ export function RecipesPage() {
         </button>
       </div>
 
+      {/* Search + tags */}
+      <div className="space-y-2">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted pointer-events-none" />
+          <Input
+            className="pl-9 pr-9"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search title, ingredients, tags…"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-muted hover:text-fg"
+              onClick={() => setSearchQuery('')}
+              aria-label="Clear search"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {tagUniverse.map((tag) => {
+            const on = activeTags.includes(tag);
+            return (
+              <button
+                key={tag}
+                type="button"
+                onClick={() => toggleFilterTag(tag)}
+                className={cn(
+                  'px-2.5 py-1 rounded-full text-xs font-medium border transition-colors',
+                  on
+                    ? 'border-accent bg-accent/15 text-accent'
+                    : 'border-border text-muted hover:text-fg hover:border-fg/30',
+                )}
+              >
+                {tag}
+              </button>
+            );
+          })}
+          {activeTags.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setActiveTags([])}
+              className="px-2.5 py-1 rounded-full text-xs text-muted underline"
+            >
+              Clear tags
+            </button>
+          )}
+        </div>
+        {(searchQuery || activeTags.length > 0) && (
+          <p className="text-xs text-muted">
+            Showing {list.length} of {baseList.length}
+            {activeTags.length > 0 ? ` · tags: ${activeTags.join(' + ')}` : ''}
+          </p>
+        )}
+      </div>
+
       {list.length === 0 ? (
         <Card className="!p-8 text-center text-muted text-sm">
-          {showArchived ? 'No archived recipes.' : 'No recipes yet — add one to get started.'}
+          {showArchived
+            ? 'No archived recipes match.'
+            : baseList.length === 0
+              ? 'No recipes yet — add one to get started.'
+              : 'No recipes match this search or tags.'}
         </Card>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
@@ -337,6 +451,18 @@ export function RecipesPage() {
                       {r.ingredients.length} ingredient{r.ingredients.length === 1 ? '' : 's'}
                       {author ? ` · ${author.name}` : ''}
                     </p>
+                    {!!r.tags?.length && (
+                      <div className="flex flex-wrap gap-1 mt-1.5">
+                        {r.tags.map((tag) => (
+                          <span
+                            key={tag}
+                            className="px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-accent/10 text-accent border border-accent/20"
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   {author && <Avatar {...author} size="sm" className="!w-8 !h-8 !text-sm" />}
                 </div>
@@ -522,6 +648,57 @@ export function RecipesPage() {
           </div>
 
           <div>
+            <label className="text-xs text-muted block mb-1">Tags</label>
+            <div className="flex flex-wrap gap-1.5 mb-2">
+              {form.tags.map((tag) => (
+                <button
+                  key={tag}
+                  type="button"
+                  onClick={() => removeFormTag(tag)}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-accent/15 text-accent border border-accent/25"
+                  title="Remove tag"
+                >
+                  {tag}
+                  <X className="w-3 h-3" />
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-2 mb-2">
+              <Input
+                value={form.tagDraft}
+                onChange={(e) => setForm((f) => ({ ...f, tagDraft: e.target.value }))}
+                placeholder="Add tag…"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addFormTag(form.tagDraft);
+                  }
+                }}
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => addFormTag(form.tagDraft)}
+                disabled={!form.tagDraft.trim()}
+              >
+                Add
+              </Button>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {SUGGESTED_RECIPE_TAGS.filter((s) => !form.tags.includes(s)).map((tag) => (
+                <button
+                  key={tag}
+                  type="button"
+                  onClick={() => addFormTag(tag)}
+                  className="px-2 py-0.5 rounded-full text-[11px] border border-border text-muted hover:text-fg hover:border-fg/30"
+                >
+                  + {tag}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
             <label className="text-xs text-muted block mb-1">Instructions (optional)</label>
             <Textarea
               value={form.instructions}
@@ -633,6 +810,19 @@ export function RecipesPage() {
               <p className="text-xs text-muted">
                 Source: <span className="text-fg-secondary">{viewRecipe.source}</span>
               </p>
+            )}
+
+            {!!viewRecipe.tags?.length && (
+              <div className="flex flex-wrap gap-1.5">
+                {viewRecipe.tags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="px-2 py-0.5 rounded-full text-xs font-medium bg-accent/10 text-accent border border-accent/20"
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
             )}
 
             <div>

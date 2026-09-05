@@ -1,4 +1,56 @@
 import type { Recipe, RecipeIngredient, ShoppingItem } from '../types';
+
+/** Suggested tag chips — users can still add any custom tag. */
+export const SUGGESTED_RECIPE_TAGS = [
+  'breakfast',
+  'lunch',
+  'dinner',
+  'snack',
+  'quick',
+  'cheap',
+  'favorite',
+  'kids',
+  'vegetarian',
+  'batch',
+] as const;
+
+export function normalizeTag(raw: string): string {
+  return raw.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+export function normalizeTags(tags: string[] | undefined | null): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const t of tags || []) {
+    const n = normalizeTag(t);
+    if (!n || seen.has(n)) continue;
+    seen.add(n);
+    out.push(n);
+  }
+  return out;
+}
+
+export function recipeMatchesSearch(recipe: Recipe, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  if (recipe.title.toLowerCase().includes(q)) return true;
+  if ((recipe.source || '').toLowerCase().includes(q)) return true;
+  if ((recipe.instructions || '').toLowerCase().includes(q)) return true;
+  for (const tag of recipe.tags || []) {
+    if (tag.includes(q)) return true;
+  }
+  for (const ing of recipe.ingredients || []) {
+    if (ing.name.toLowerCase().includes(q)) return true;
+  }
+  return false;
+}
+
+/** Active filters: recipe must include every selected tag (AND). */
+export function recipeMatchesTags(recipe: Recipe, selected: string[]): boolean {
+  if (!selected.length) return true;
+  const have = new Set((recipe.tags || []).map(normalizeTag));
+  return selected.every((t) => have.has(normalizeTag(t)));
+}
 import type { ShoppingCategory } from './shoppingCategories';
 import { categoryOf } from './shoppingCategories';
 import { uid } from './uid';

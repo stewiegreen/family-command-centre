@@ -288,6 +288,8 @@ export interface Recipe {
   updatedAt: string;
   /** Soft-archive instead of hard-delete when useful later. */
   archived?: boolean;
+  /** Free-form labels, e.g. dinner, quick, favorite. Lowercase, unique. */
+  tags?: string[];
 }
 
 /** Shared shopping / errands list item. */
