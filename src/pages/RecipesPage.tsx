@@ -214,6 +214,9 @@ export function RecipesPage() {
     const servingsNum = form.servings.trim() ? parseFloat(form.servings) : undefined;
     const now = new Date().toISOString();
 
+    // Include any tag still sitting in the draft field (typed but not Add/Enter).
+    const tags = normalizeTags([...form.tags, form.tagDraft]);
+
     update((d) => {
       const list = d.recipes || [];
       if (form.id) {
@@ -228,6 +231,7 @@ export function RecipesPage() {
                   source: form.source.trim() || undefined,
                   instructions: form.instructions.trim() || undefined,
                   ingredients,
+                  tags,
                   updatedAt: now,
                 }
               : r,
@@ -241,7 +245,7 @@ export function RecipesPage() {
         source: form.source.trim() || undefined,
         instructions: form.instructions.trim() || undefined,
         ingredients,
-        tags: normalizeTags(form.tags),
+        tags,
         createdById: myId,
         createdAt: now,
         updatedAt: now,
