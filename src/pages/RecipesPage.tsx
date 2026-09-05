@@ -262,7 +262,7 @@ export function RecipesPage() {
   };
 
   return (
-    <div className="p-4 lg:p-8 max-w-3xl mx-auto space-y-4">
+    <div className="p-4 lg:p-8 max-w-5xl mx-auto space-y-6">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
@@ -320,13 +320,13 @@ export function RecipesPage() {
           {showArchived ? 'No archived recipes.' : 'No recipes yet — add one to get started.'}
         </Card>
       ) : (
-        <div className="space-y-3">
+        <div className="grid gap-3 sm:grid-cols-2">
           {list.map((r) => {
             const author = getMember(r.createdById);
             return (
               <Card
                 key={r.id}
-                className="!p-4 space-y-2"
+                className="!p-4 space-y-2 h-full flex flex-col"
                 onClick={() => setViewRecipe(r)}
               >
                 <div className="flex items-start gap-3">
@@ -350,7 +350,7 @@ export function RecipesPage() {
                     <li className="text-muted text-xs">+{r.ingredients.length - 8} more</li>
                   )}
                 </ul>
-                <div className="flex flex-wrap gap-2 pt-1" onClick={(e) => e.stopPropagation()}>
+                <div className="flex flex-wrap gap-2 pt-1 mt-auto" onClick={(e) => e.stopPropagation()}>
                   {!r.archived && (
                     <Button size="sm" onClick={() => openShop(r)}>
                       <ShoppingCart className="w-3.5 h-3.5" /> Add to list
