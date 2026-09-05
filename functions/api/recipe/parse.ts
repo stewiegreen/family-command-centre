@@ -69,21 +69,16 @@ export type ParsedRecipe = {
 
 const MAX_CHARS = 12_000;
 
-const SYSTEM = `You extract recipes from messy pasted text.
-Return ONLY a single JSON object (no markdown fences) with this shape:
-{
-  "title": string,
-  "servings": number | null,
-  "ingredients": [ { "name": string, "quantity": string | null, "unit": string | null, "note": string | null } ],
-  "instructions": string | null
-}
+const SYSTEM = `You are a JSON API that extracts recipes.
+Reply with ONLY one JSON object. No markdown. No explanation. No code fences.
+Exact shape:
+{"title":"string","servings":2,"ingredients":[{"name":"onion","quantity":"1","unit":null,"note":null}],"instructions":"string or null"}
 Rules:
-- ingredients must be shopping-useful (name is the food item)
-- quantity is a number or simple fraction string when present
-- unit is tbsp, cups, g, ml, etc. when present
-- skip non-ingredient lines (ads, nutrition, "print recipe")
-- if servings unknown use null
-- instructions: short combined steps or null`;
+- ingredients[].name = food item only
+- quantity/unit as strings when known, else null
+- skip ads, nutrition, print buttons
+- servings number or null
+- instructions short text or null`;
 
 function jsonResponse(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -246,10 +241,10 @@ function heuristicParse(text: string): ParsedRecipe {
   };
 }
 
-/** Prefer current catalog models; llama-3.1-8b-instruct was deprecated 2026-05-30. */
+/** Current catalog models (llama-3.1-8b-instruct base was deprecated 2026-05-30). */
 const AI_MODELS = [
-  '@cf/meta/llama-3.1-8b-instruct-fast', // -fast variants stayed active after deprecation
   '@cf/meta/llama-3.2-3b-instruct',
+  '@cf/meta/llama-3.1-8b-instruct-fast',
   '@cf/google/gemma-4-26b-a4b-it',
 ] as const;
 
@@ -257,57 +252,123 @@ function extractModelText(result: unknown): string {
   if (typeof result === 'string') return result;
   if (!result || typeof result !== 'object') return '';
   const r = result as Record<string, unknown>;
-  if (typeof r.response === 'string') return r.response;
-  if (typeof r.text === 'string') return r.text;
-  if (typeof r.result === 'string') return r.result;
+  for (const key of ['response', 'text', 'result', 'output'] as const) {
+    if (typeof r[key] === 'string' && (r[key] as string).trim()) return r[key] as string;
+  }
   if (Array.isArray(r.descriptions) && r.descriptions[0]) return String(r.descriptions[0]);
   if (r.data && typeof r.data === 'object') {
     const d = r.data as Record<string, unknown>;
     if (typeof d.response === 'string') return d.response;
   }
+  // Some chat models return message content arrays
+  if (Array.isArray(r.choices) && r.choices[0] && typeof r.choices[0] === 'object') {
+    const c = r.choices[0] as Record<string, unknown>;
+    if (typeof c.text === 'string') return c.text;
+    if (c.message && typeof c.message === 'object') {
+      const msg = c.message as Record<string, unknown>;
+      if (typeof msg.content === 'string') return msg.content;
+    }
+  }
   return '';
+}
+
+/** Pull the first balanced {...} object from model prose. */
+function extractJsonObject(content: string): string | null {
+  const cleaned = stripFences(content);
+  const start = cleaned.indexOf('{');
+  if (start < 0) return null;
+  let depth = 0;
+  let inStr = false;
+  let esc = false;
+  for (let i = start; i < cleaned.length; i++) {
+    const ch = cleaned[i]!;
+    if (inStr) {
+      if (esc) esc = false;
+      else if (ch === '\\') esc = true;
+      else if (ch === '"') inStr = false;
+      continue;
+    }
+    if (ch === '"') {
+      inStr = true;
+      continue;
+    }
+    if (ch === '{') depth++;
+    else if (ch === '}') {
+      depth--;
+      if (depth === 0) return cleaned.slice(start, i + 1);
+    }
+  }
+  return null;
 }
 
 function parseModelJson(content: string): ParsedRecipe | null {
   if (!content) return null;
-  try {
-    return normalizeParsed(JSON.parse(stripFences(content)), 'ai');
-  } catch {
-    const m = content.match(/\{[\s\S]*\}/);
-    if (!m) return null;
+  const candidates = [stripFences(content)];
+  const extracted = extractJsonObject(content);
+  if (extracted) candidates.unshift(extracted);
+
+  for (const c of candidates) {
     try {
-      return normalizeParsed(JSON.parse(m[0]), 'ai');
+      const parsed = normalizeParsed(JSON.parse(c), 'ai');
+      if (parsed && parsed.ingredients.length > 0) return parsed;
     } catch {
-      return null;
+      /* try next */
     }
   }
+  return null;
 }
 
-async function aiParse(ai: AiBinding, text: string): Promise<ParsedRecipe | null> {
-  const userContent = `Extract the recipe from this text:\n\n${text.slice(0, MAX_CHARS)}`;
-  const input = {
+async function runOneModel(
+  ai: AiBinding,
+  model: string,
+  text: string,
+): Promise<{ parsed: ParsedRecipe | null; rawPreview: string; error?: string }> {
+  const userContent =
+    `Return JSON only for this recipe text.\n\n` +
+    `Example output:\n` +
+    `{"title":"Soup","servings":2,"ingredients":[{"name":"onion","quantity":"1","unit":null,"note":null},{"name":"stock","quantity":"2","unit":"cups","note":null}],"instructions":"Simmer."}\n\n` +
+    `Recipe text:\n${text.slice(0, MAX_CHARS)}`;
+
+  const baseInput: Record<string, unknown> = {
     messages: [
       { role: 'system', content: SYSTEM },
       { role: 'user', content: userContent },
     ],
-    max_tokens: 2048,
+    max_tokens: 1024,
   };
 
-  let lastErr: unknown;
-  for (const model of AI_MODELS) {
-    try {
-      const result = await ai.run(model, input);
-      const content = extractModelText(result);
-      const parsed = parseModelJson(content);
-      if (parsed && parsed.ingredients.length > 0) return parsed;
-      lastErr = new Error(`${model} returned no usable JSON ingredients`);
-    } catch (err) {
-      lastErr = err;
-      console.error('recipe AI model failed', model, err);
-    }
+  // Gemma 4 reasoning models: disable thinking so we get JSON, not chain-of-thought
+  if (model.includes('gemma')) {
+    baseInput.chat_template_kwargs = { enable_thinking: false };
   }
-  if (lastErr) throw lastErr;
-  return null;
+
+  try {
+    const result = await ai.run(model, baseInput);
+    const content = extractModelText(result);
+    const parsed = parseModelJson(content);
+    return {
+      parsed,
+      rawPreview: (content || JSON.stringify(result)).slice(0, 240),
+      error: parsed ? undefined : 'no usable JSON ingredients',
+    };
+  } catch (err) {
+    return {
+      parsed: null,
+      rawPreview: '',
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
+async function aiParse(ai: AiBinding, text: string): Promise<ParsedRecipe | null> {
+  let lastErr = '';
+  for (const model of AI_MODELS) {
+    const { parsed, rawPreview, error } = await runOneModel(ai, model, text);
+    if (parsed && parsed.ingredients.length > 0) return parsed;
+    lastErr = `${model}: ${error || 'failed'}${rawPreview ? ` | preview: ${rawPreview}` : ''}`;
+    console.error('recipe AI model miss', lastErr);
+  }
+  throw new Error(lastErr || 'All AI models failed');
 }
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
