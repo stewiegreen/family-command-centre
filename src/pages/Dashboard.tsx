@@ -35,7 +35,7 @@ import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Modal } from '../components/ui/Modal';
 import { ProfileLookCard } from '../components/ProfileLookEditor';
-import type { CalendarEvent, ExpandedEvent, FamilyData, JournalVisibility, PresenceStatus, Quest, ViewId } from '../types';
+import type { CalendarEvent, ExpandedEvent, FamilyData, JournalVisibility, Note, PresenceStatus, Quest, ViewId } from '../types';
 import { applyTodoStatus, creditMemberForQuest } from '../lib/todoQuest';
 import { FAMILY_LIST_ID, PRESENCE_OPTIONS } from '../types';
 import { upcomingExpanded } from '../lib/recurrence';
@@ -357,6 +357,7 @@ export function Dashboard() {
     [rows, myHiddenWidgets],
   );
   const [manageOpen, setManageOpen] = useState(false);
+  const [viewNote, setViewNote] = useState<Note | null>(null);
 
   const [dragId, setDragId] = useState<SectionId | null>(null);
   const [overId, setOverId] = useState<SectionId | null>(null);
@@ -1697,7 +1698,11 @@ export function Dashboard() {
                 )}
               >
                 <div className="flex items-start gap-3">
-                  <div className="flex-1 min-w-0 space-y-1">
+                  <button
+                    type="button"
+                    onClick={() => setViewNote(n)}
+                    className="flex-1 min-w-0 space-y-1 text-left"
+                  >
                     <div className="flex flex-wrap items-center gap-1.5">
                       {isNotice && (
                         <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-600">
@@ -1731,12 +1736,15 @@ export function Dashboard() {
                         {kids.length} kids
                       </p>
                     )}
-                  </div>
+                  </button>
                   {needsAck && (
                     <Button
                       size="sm"
                       className="shrink-0"
-                      onClick={() => acknowledgeHomeNotice(n.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        acknowledgeHomeNotice(n.id);
+                      }}
                     >
                       I read this
                     </Button>
@@ -1747,6 +1755,35 @@ export function Dashboard() {
           })}
         </div>
       )}
+
+      <Modal open={!!viewNote} onClose={() => setViewNote(null)} title={viewNote?.title || 'Note'}>
+        {viewNote && (
+          <div className="space-y-2">
+            {viewNote.kind === 'checklist' ? (
+              <ul className="space-y-1.5">
+                {(viewNote.checklist || []).map((c) => (
+                  <li
+                    key={c.id}
+                    className={cn(
+                      'text-sm',
+                      c.done ? 'line-through text-muted' : 'text-fg',
+                    )}
+                  >
+                    {c.done ? '✓' : '○'} {c.text}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-fg whitespace-pre-wrap">{viewNote.content}</p>
+            )}
+            {isParent && viewNote.kind === 'notice' && (
+              <p className="text-xs text-faint pt-1">
+                Read by {(viewNote.readBy || []).length}/{kids.length} kids
+              </p>
+            )}
+          </div>
+        )}
+      </Modal>
 
       <div className="space-y-2">
         {visibleRows.map((row, ri) => (
