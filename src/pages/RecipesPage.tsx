@@ -48,6 +48,7 @@ export function RecipesPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState<FormState>(blankForm);
   const [shopOpen, setShopOpen] = useState<Recipe | null>(null);
+  const [viewRecipe, setViewRecipe] = useState<Recipe | null>(null);
   const [cookFor, setCookFor] = useState('');
   const [selectedIng, setSelectedIng] = useState<Record<string, boolean>>({});
   const [store, setStore] = useState('');
@@ -253,7 +254,11 @@ export function RecipesPage() {
           {list.map((r) => {
             const author = getMember(r.createdById);
             return (
-              <Card key={r.id} className="!p-4 space-y-2">
+              <Card
+                key={r.id}
+                className="!p-4 space-y-2"
+                onClick={() => setViewRecipe(r)}
+              >
                 <div className="flex items-start gap-3">
                   <div className="min-w-0 flex-1">
                     <h2 className="font-semibold text-fg truncate">{r.title}</h2>
@@ -275,7 +280,7 @@ export function RecipesPage() {
                     <li className="text-muted text-xs">+{r.ingredients.length - 8} more</li>
                   )}
                 </ul>
-                <div className="flex flex-wrap gap-2 pt-1">
+                <div className="flex flex-wrap gap-2 pt-1" onClick={(e) => e.stopPropagation()}>
                   {!r.archived && (
                     <Button size="sm" onClick={() => openShop(r)}>
                       <ShoppingCart className="w-3.5 h-3.5" /> Add to list
@@ -495,6 +500,86 @@ export function RecipesPage() {
               </Button>
               <Button onClick={pushToShopping}>
                 <ShoppingCart className="w-4 h-4" /> Add to shopping
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* View full recipe */}
+      <Modal
+        open={!!viewRecipe}
+        onClose={() => setViewRecipe(null)}
+        title={viewRecipe?.title || 'Recipe'}
+      >
+        {viewRecipe && (
+          <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+            <div className="flex items-center gap-3">
+              {(() => {
+                const author = getMember(viewRecipe.createdById);
+                return author ? (
+                  <>
+                    <Avatar {...author} size="sm" className="!w-8 !h-8 !text-sm" />
+                    <p className="text-xs text-muted">
+                      {viewRecipe.servings ? `${viewRecipe.servings} servings · ` : ''}
+                      Added by {author.name}
+                    </p>
+                  </>
+                ) : viewRecipe.servings ? (
+                  <p className="text-xs text-muted">{viewRecipe.servings} servings</p>
+                ) : null;
+              })()}
+            </div>
+
+            {viewRecipe.source && (
+              <p className="text-xs text-muted">
+                Source: <span className="text-fg-secondary">{viewRecipe.source}</span>
+              </p>
+            )}
+
+            <div>
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-muted mb-1.5">
+                Ingredients
+              </h3>
+              <ul className="text-sm text-fg space-y-1">
+                {viewRecipe.ingredients.map((ing) => (
+                  <li key={ing.id}>· {formatIngredientLine(ing)}</li>
+                ))}
+              </ul>
+            </div>
+
+            {viewRecipe.instructions && (
+              <div>
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted mb-1.5">
+                  Instructions
+                </h3>
+                <p className="text-sm text-fg whitespace-pre-wrap">{viewRecipe.instructions}</p>
+              </div>
+            )}
+
+            <div className="flex flex-wrap gap-2 pt-1">
+              {!viewRecipe.archived && (
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    const r = viewRecipe;
+                    setViewRecipe(null);
+                    openShop(r);
+                  }}
+                >
+                  <ShoppingCart className="w-3.5 h-3.5" /> Add to list
+                </Button>
+              )}
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => {
+                  const r = viewRecipe;
+                  setViewRecipe(null);
+                  openEdit(r);
+                }}
+              >
+                <Pencil className="w-3.5 h-3.5" /> Edit
               </Button>
             </div>
           </div>
