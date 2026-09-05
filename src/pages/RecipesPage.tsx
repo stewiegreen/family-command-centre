@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ChefHat, Plus, Pencil, Trash2, ShoppingCart, Archive, RotateCcw, ClipboardPaste, Search, X } from 'lucide-react';
+import { ChefHat, Plus, Pencil, Trash2, ShoppingCart, ClipboardPaste, Search, X } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Avatar } from '../components/ui/Avatar';
 import { Button } from '../components/ui/Button';
@@ -53,7 +53,6 @@ export function RecipesPage() {
   const myId = currentUser?.id || data.settings.currentUserId;
   const recipes = data.recipes || [];
 
-  const [showArchived, setShowArchived] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTags, setActiveTags] = useState<string[]>([]);
   const [formOpen, setFormOpen] = useState(false);
@@ -69,15 +68,10 @@ export function RecipesPage() {
   const [store, setStore] = useState('');
   const [toast, setToast] = useState<string | null>(null);
 
-  const active = useMemo(
-    () => recipes.filter((r) => !r.archived).sort((a, b) => a.title.localeCompare(b.title)),
+  const baseList = useMemo(
+    () => [...recipes].sort((a, b) => a.title.localeCompare(b.title)),
     [recipes],
   );
-  const archived = useMemo(
-    () => recipes.filter((r) => r.archived).sort((a, b) => a.title.localeCompare(b.title)),
-    [recipes],
-  );
-  const baseList = showArchived ? archived : active;
 
   /** All tags in use (plus suggestions) for filter chips. */
   const tagUniverse = useMemo(() => {
@@ -257,15 +251,6 @@ export function RecipesPage() {
     setFormOpen(false);
   };
 
-  const setArchived = (id: string, archived: boolean) => {
-    update((d) => ({
-      ...d,
-      recipes: (d.recipes || []).map((r) =>
-        r.id === id ? { ...r, archived, updatedAt: new Date().toISOString() } : r,
-      ),
-    }));
-  };
-
   const removeRecipe = (id: string) => {
     if (!confirm('Delete this recipe permanently?')) return;
     update((d) => ({ ...d, recipes: (d.recipes || []).filter((r) => r.id !== id) }));
@@ -344,28 +329,6 @@ export function RecipesPage() {
         </div>
       )}
 
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={() => setShowArchived(false)}
-          className={cn(
-            'px-3 py-1.5 rounded-xl text-sm font-medium border',
-            !showArchived ? 'border-accent bg-accent/15 text-accent' : 'border-border text-muted',
-          )}
-        >
-          Active ({active.length})
-        </button>
-        <button
-          type="button"
-          onClick={() => setShowArchived(true)}
-          className={cn(
-            'px-3 py-1.5 rounded-xl text-sm font-medium border',
-            showArchived ? 'border-accent bg-accent/15 text-accent' : 'border-border text-muted',
-          )}
-        >
-          Archived ({archived.length})
-        </button>
-      </div>
 
       {/* Search + tags */}
       <div className="space-y-2">
@@ -427,11 +390,9 @@ export function RecipesPage() {
 
       {list.length === 0 ? (
         <Card className="!p-8 text-center text-muted text-sm">
-          {showArchived
-            ? 'No archived recipes match.'
-            : baseList.length === 0
-              ? 'No recipes yet — add one to get started.'
-              : 'No recipes match this search or tags.'}
+          {baseList.length === 0
+            ? 'No recipes yet — add one to get started.'
+            : 'No recipes match this search or tags.'}
         </Card>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
@@ -477,23 +438,12 @@ export function RecipesPage() {
                   )}
                 </ul>
                 <div className="flex flex-wrap gap-2 pt-1 mt-auto" onClick={(e) => e.stopPropagation()}>
-                  {!r.archived && (
-                    <Button size="sm" onClick={() => openShop(r)}>
-                      <ShoppingCart className="w-3.5 h-3.5" /> Add to list
-                    </Button>
-                  )}
+                  <Button size="sm" onClick={() => openShop(r)}>
+                    <ShoppingCart className="w-3.5 h-3.5" /> Add to list
+                  </Button>
                   <Button size="sm" variant="secondary" onClick={() => openEdit(r)}>
                     <Pencil className="w-3.5 h-3.5" /> Edit
                   </Button>
-                  {r.archived ? (
-                    <Button size="sm" variant="ghost" onClick={() => setArchived(r.id, false)}>
-                      <RotateCcw className="w-3.5 h-3.5" /> Restore
-                    </Button>
-                  ) : (
-                    <Button size="sm" variant="ghost" onClick={() => setArchived(r.id, true)}>
-                      <Archive className="w-3.5 h-3.5" /> Archive
-                    </Button>
-                  )}
                   <Button size="sm" variant="ghost" onClick={() => removeRecipe(r.id)}>
                     <Trash2 className="w-3.5 h-3.5" />
                   </Button>
@@ -846,18 +796,16 @@ export function RecipesPage() {
             )}
 
             <div className="flex flex-wrap gap-2 pt-1">
-              {!viewRecipe.archived && (
-                <Button
-                  size="sm"
-                  onClick={() => {
-                    const r = viewRecipe;
-                    setViewRecipe(null);
-                    openShop(r);
-                  }}
-                >
-                  <ShoppingCart className="w-3.5 h-3.5" /> Add to list
-                </Button>
-              )}
+              <Button
+                size="sm"
+                onClick={() => {
+                  const r = viewRecipe;
+                  setViewRecipe(null);
+                  openShop(r);
+                }}
+              >
+                <ShoppingCart className="w-3.5 h-3.5" /> Add to list
+              </Button>
               <Button
                 size="sm"
                 variant="secondary"
