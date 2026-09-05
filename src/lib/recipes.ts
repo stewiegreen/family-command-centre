@@ -63,7 +63,7 @@ function normalizeName(s: string): string {
 
 /**
  * Push recipe ingredients onto the shopping list.
- * - Scales quantities when cookFor ≠ recipe.servings
+ * - Uses ingredient **names only** (no 2 tsp / 1 egg / 2 cups on the list)
  * - Merges into an existing open item with the same name (case-insensitive)
  * - Assigns category from ingredient or guess
  */
@@ -89,11 +89,12 @@ export function addRecipeToShopping(
 
   let maxSort = next.reduce((m, s) => Math.max(m, typeof s.sort === 'number' ? s.sort : 0), 0);
 
+  // Shopping list gets names only — recipe amounts (2 tsp, 1 egg, 2 cups) are not useful at the store.
+  void factor;
+
   for (const ing of lines) {
     const name = ing.name.trim();
     const key = normalizeName(name);
-    const qty = scaleQuantity(ing.quantity, factor);
-    const quantityStr = [qty, ing.unit].filter(Boolean).join(' ').trim() || undefined;
     const cat = categoryOf(ing.category || guessIngredientCategory(name));
     const existingIdx = openByName.get(key);
 
@@ -105,7 +106,6 @@ export function addRecipeToShopping(
         .join(' · ');
       next[existingIdx] = {
         ...cur,
-        quantity: cur.quantity || quantityStr,
         category: cur.category || cat,
         brand: noteBits || cur.brand,
         store: cur.store || opts.store,
@@ -117,7 +117,7 @@ export function addRecipeToShopping(
     const item: ShoppingItem = {
       id: uid(),
       text: name,
-      quantity: quantityStr,
+      // Intentionally omit quantity/unit from recipes
       category: cat,
       brand: ing.note || undefined,
       store: opts.store,
