@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ChefHat, Plus, Pencil, Trash2, ShoppingCart, Archive, RotateCcw } from 'lucide-react';
+import { ChefHat, Plus, Pencil, Trash2, ShoppingCart, Archive, RotateCcw, ClipboardPaste } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Avatar } from '../components/ui/Avatar';
 import { Button } from '../components/ui/Button';
@@ -11,6 +11,7 @@ import {
   addRecipeToShopping,
   emptyIngredient,
   formatIngredientLine,
+  parseRecipeFromText,
 } from '../lib/recipes';
 import {
   SHOPPING_CATEGORY_LABELS,
@@ -49,6 +50,10 @@ export function RecipesPage() {
   const [form, setForm] = useState<FormState>(blankForm);
   const [shopOpen, setShopOpen] = useState<Recipe | null>(null);
   const [viewRecipe, setViewRecipe] = useState<Recipe | null>(null);
+  const [pasteOpen, setPasteOpen] = useState(false);
+  const [pasteText, setPasteText] = useState('');
+  const [pasteBusy, setPasteBusy] = useState(false);
+  const [pasteErr, setPasteErr] = useState<string | null>(null);
   const [cookFor, setCookFor] = useState('');
   const [selectedIng, setSelectedIng] = useState<Record<string, boolean>>({});
   const [store, setStore] = useState('');
@@ -63,6 +68,57 @@ export function RecipesPage() {
     [recipes],
   );
   const list = showArchived ? archived : active;
+
+  const applyParsedRecipe = (parsed: {
+    title: string;
+    servings?: number;
+    ingredients: { name: string; quantity?: string; unit?: string; note?: string }[];
+    instructions?: string;
+  }) => {
+    setForm({
+      title: parsed.title || '',
+      servings: parsed.servings != null ? String(parsed.servings) : '',
+      source: '',
+      instructions: parsed.instructions || '',
+      ingredients:
+        parsed.ingredients.length > 0
+          ? parsed.ingredients.map((i) => ({
+              id: uid(),
+              name: i.name,
+              quantity: i.quantity || '',
+              unit: i.unit || '',
+              note: i.note || '',
+            }))
+          : [emptyIngredient()],
+    });
+    setPasteOpen(false);
+    setPasteText('');
+    setPasteErr(null);
+    setFormOpen(true);
+  };
+
+  const runPasteParse = async () => {
+    const text = pasteText.trim();
+    if (!text) return;
+    setPasteBusy(true);
+    setPasteErr(null);
+    try {
+      const parsed = await parseRecipeFromText(text);
+      if (!parsed.ingredients?.length) {
+        setPasteErr('No ingredients found — try a clearer list or enter manually.');
+        return;
+      }
+      applyParsedRecipe(parsed);
+      if (parsed.parser === 'heuristic') {
+        setToast('Parsed without AI — check quantities, then save.');
+        window.setTimeout(() => setToast(null), 3500);
+      }
+    } catch (e) {
+      setPasteErr(e instanceof Error ? e.message : 'Parse failed');
+    } finally {
+      setPasteBusy(false);
+    }
+  };
 
   const openNew = () => {
     setForm(blankForm());
@@ -208,9 +264,14 @@ export function RecipesPage() {
             Save recipes and push ingredients to the shopping list.
           </p>
         </div>
-        <Button onClick={openNew}>
-          <Plus className="w-4 h-4" /> Add recipe
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" onClick={() => { setPasteOpen(true); setPasteErr(null); }}>
+            <ClipboardPaste className="w-4 h-4" /> Paste import
+          </Button>
+          <Button onClick={openNew}>
+            <Plus className="w-4 h-4" /> Add recipe
+          </Button>
+        </div>
       </div>
 
       {toast && (
@@ -307,6 +368,34 @@ export function RecipesPage() {
           })}
         </div>
       )}
+
+      {/* Paste import (Phase B) */}
+      <Modal open={pasteOpen} onClose={() => !pasteBusy && setPasteOpen(false)} title="Paste a recipe">
+        <div className="space-y-3">
+          <p className="text-xs text-muted leading-relaxed">
+            Copy the recipe from a site or book and paste it below. We structure title, servings,
+            ingredients, and steps. Uses Cloudflare Workers AI when configured; otherwise a
+            simple text parser.
+          </p>
+          <Textarea
+            value={pasteText}
+            onChange={(e) => setPasteText(e.target.value)}
+            rows={12}
+            placeholder={"Pasta alla something\nServes 4\n\nIngredients\n- 400g pasta\n- 2 cloves garlic\n\nInstructions\n1. Boil water..."}
+            className="font-mono text-xs"
+            disabled={pasteBusy}
+          />
+          {pasteErr && <p className="text-sm text-warn">{pasteErr}</p>}
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" disabled={pasteBusy} onClick={() => setPasteOpen(false)}>
+              Cancel
+            </Button>
+            <Button disabled={!pasteText.trim() || pasteBusy} onClick={() => void runPasteParse()}>
+              {pasteBusy ? 'Parsing…' : 'Parse & edit'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Create / edit */}
       <Modal

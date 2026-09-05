@@ -135,3 +135,26 @@ export function addRecipeToShopping(
 export function emptyIngredient(): RecipeIngredient {
   return { id: uid(), name: '', quantity: '', unit: '', category: undefined, note: '' };
 }
+
+/** Result from POST /api/recipe/parse */
+export type ParsedRecipeResponse = {
+  title: string;
+  servings?: number;
+  ingredients: { name: string; quantity?: string; unit?: string; note?: string }[];
+  instructions?: string;
+  parser?: 'ai' | 'heuristic';
+  error?: string;
+};
+
+export async function parseRecipeFromText(text: string): Promise<ParsedRecipeResponse> {
+  const res = await fetch('/api/recipe/parse', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text }),
+  });
+  const data = (await res.json()) as ParsedRecipeResponse;
+  if (!res.ok) {
+    throw new Error(data.error || `Parse failed (${res.status})`);
+  }
+  return data;
+}
