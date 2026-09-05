@@ -22,6 +22,7 @@ export const HOMESCREEN_WIDGETS = [
   'chores',
   'shopping',
   'journal',
+  'weather',
   'look',
 ] as const;
 
@@ -59,6 +60,7 @@ export const DEFAULT_HOMESCREEN_ROWS: HomescreenRow[] = [
   ['events', 'todos'],
   ['chores', 'shopping'],
   ['journal'],
+  ['weather'],
   ['look'],
 ];
 

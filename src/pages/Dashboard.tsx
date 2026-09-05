@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { cloudCreateJournalEntry } from '../lib/firebase';
+import { getWeather, weatherCodeMeta, type WeatherSnapshot } from '../lib/weather';
 import { uid } from '../lib/uid';
 import { Avatar } from '../components/ui/Avatar';
 import { Button } from '../components/ui/Button';
@@ -95,6 +96,7 @@ const SECTION_LABELS: Record<SectionId, string> = {
   chores: 'Chores',
   shopping: 'Shopping',
   journal: 'Journal',
+  weather: 'Weather',
   look: 'Profile look',
 };
 
@@ -284,7 +286,28 @@ export function Dashboard() {
   const [journalVis, setJournalVis] = useState<JournalVisibility>('private');
   const [journalSaving, setJournalSaving] = useState(false);
   const [journalMsg, setJournalMsg] = useState<string | null>(null);
+  const [weatherSnap, setWeatherSnap] = useState<WeatherSnapshot | null>(null);
+  const [weatherErr, setWeatherErr] = useState<string | null>(null);
+  const [weatherLoading, setWeatherLoading] = useState(false);
   const journalPrompt = useMemo(() => homeJournalPrompt(), []);
+
+  const refreshWeather = async (force = false) => {
+    setWeatherLoading(true);
+    setWeatherErr(null);
+    try {
+      const snap = await getWeather(data.settings.weather, force);
+      setWeatherSnap(snap);
+    } catch (e) {
+      setWeatherErr(e instanceof Error ? e.message : 'Weather unavailable');
+    } finally {
+      setWeatherLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void refreshWeather(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data.settings.weather?.latitude, data.settings.weather?.longitude]);
 
   const saveJournalFromHome = async () => {
     const text = journalDraft.trim();
@@ -1608,6 +1631,78 @@ export function Dashboard() {
           {journalMsg && <p className="text-xs text-muted">{journalMsg}</p>}
         </div>
       </Card>
+    ),
+
+    weather: (
+      <div className="space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="font-semibold text-fg flex items-center gap-2">
+            <span className="text-lg" aria-hidden>
+              {weatherSnap
+                ? weatherCodeMeta(weatherSnap.current.weatherCode).emoji
+                : '🌡️'}
+            </span>
+            Weather
+          </h3>
+          <button
+            type="button"
+            onClick={() => void refreshWeather(true)}
+            className="text-xs text-accent"
+            disabled={weatherLoading}
+          >
+            {weatherLoading ? 'Updating…' : 'Refresh'}
+          </button>
+        </div>
+        {weatherErr && (
+          <p className="text-xs text-warn">{weatherErr}</p>
+        )}
+        {!weatherSnap && !weatherErr && (
+          <p className="text-sm text-muted">Loading today's forecast…</p>
+        )}
+        {weatherSnap && (
+          <>
+            <div className="flex items-end justify-between gap-3">
+              <div>
+                <p className="text-4xl font-bold tabular-nums tracking-tight text-fg">
+                  {weatherSnap.current.tempC}°
+                </p>
+                <p className="text-sm text-muted mt-0.5">
+                  {weatherCodeMeta(weatherSnap.current.weatherCode).label}
+                </p>
+                <p className="text-xs text-faint mt-1 truncate max-w-[14rem]">
+                  {weatherSnap.current.label}
+                </p>
+              </div>
+              <div className="text-right text-sm space-y-1">
+                <p className="text-fg">
+                  <span className="text-muted text-xs">High </span>
+                  <span className="font-semibold tabular-nums">{weatherSnap.today.tempMaxC}°</span>
+                </p>
+                <p className="text-fg">
+                  <span className="text-muted text-xs">Low </span>
+                  <span className="font-semibold tabular-nums">{weatherSnap.today.tempMinC}°</span>
+                </p>
+                {weatherSnap.today.precipProb != null && (
+                  <p className="text-fg">
+                    <span className="text-muted text-xs">Rain </span>
+                    <span className="font-semibold tabular-nums">
+                      {weatherSnap.today.precipProb}%
+                    </span>
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-3 text-xs text-muted pt-1 border-t border-border">
+              {weatherSnap.current.humidity != null && (
+                <span>Humidity {weatherSnap.current.humidity}%</span>
+              )}
+              {weatherSnap.current.windKmh != null && (
+                <span>Wind {weatherSnap.current.windKmh} km/h</span>
+              )}
+            </div>
+          </>
+        )}
+      </div>
     ),
 
     look: <ProfileLookCard />,

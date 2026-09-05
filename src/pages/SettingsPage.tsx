@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Bell, Lock, Trash2 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { geocodeCity, saveStoredLocation } from '../lib/weather';
 import { Avatar } from '../components/ui/Avatar';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
@@ -41,6 +42,8 @@ export function SettingsPage() {
   const [s, setS] = useState(data.settings);
   const [members, setMembers] = useState(data.members);
   const [newName, setNewName] = useState('');
+  const [weatherCityDraft, setWeatherCityDraft] = useState(data.settings.weather?.label || '');
+  const [weatherLocMsg, setWeatherLocMsg] = useState<string | null>(null);
   const [cloudMsg, setCloudMsg] = useState('');
   const [invites, setInvites] = useState<Invite[]>([]);
   const [inviteRole, setInviteRole] = useState<Role>('kid');
@@ -610,6 +613,56 @@ export function SettingsPage() {
           ))}
         </div>
       </Card>
+
+      
+      <div className="rounded-2xl border border-border bg-surface p-4 space-y-3">
+        <h2 className="font-semibold text-fg">Weather location</h2>
+        <p className="text-xs text-muted">
+          Used for the header chip and Home weather card (Open-Meteo, no API key). Defaults to
+          Brisbane if unset.
+        </p>
+        {s.weather && (
+          <p className="text-xs text-fg">
+            Current: <span className="font-medium">{s.weather.label}</span>
+            {' '}
+            <span className="text-faint">
+              ({s.weather.latitude.toFixed(2)}, {s.weather.longitude.toFixed(2)})
+            </span>
+          </p>
+        )}
+        <div className="flex gap-2">
+          <Input
+            value={weatherCityDraft}
+            onChange={(e) => setWeatherCityDraft(e.target.value)}
+            placeholder="City name, e.g. Brisbane"
+            className="flex-1"
+          />
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => {
+              void (async () => {
+                setWeatherLocMsg(null);
+                try {
+                  const loc = await geocodeCity(weatherCityDraft);
+                  if (!loc) {
+                    setWeatherLocMsg('No match for that city.');
+                    return;
+                  }
+                  setS({ ...s, weather: loc });
+                  saveStoredLocation(loc);
+                  setWeatherLocMsg(`Set to ${loc.label}`);
+                } catch (e) {
+                  setWeatherLocMsg(e instanceof Error ? e.message : 'Lookup failed');
+                }
+              })();
+            }}
+          >
+            Look up
+          </Button>
+        </div>
+        {weatherLocMsg && <p className="text-xs text-muted">{weatherLocMsg}</p>}
+      </div>
 
       <Button onClick={save} className="w-full">
         Save Settings

@@ -23,6 +23,7 @@ import { useApp } from '../context/AppContext';
 import { Avatar } from './ui/Avatar';
 import { ProfileSwitcher } from './ProfileSwitcher';
 import { cn } from '../lib/cn';
+import { WeatherHeaderChip } from './WeatherHeaderChip';
 import type { ViewId } from '../types';
 import {
   getNotificationPermission,
@@ -331,6 +332,7 @@ export function Layout({ children }: { children: ReactNode }) {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <WeatherHeaderChip />
             <button
               type="button"
               onClick={() => void toggleNotifs()}

@@ -444,6 +444,13 @@ export interface Settings {
   parentPin?: string;
   /** User opted in to browser notifications on this device. */
   notificationsEnabled?: boolean;
+  /** Shared family weather location (Open-Meteo). */
+  weather?: {
+    latitude: number;
+    longitude: number;
+    /** Display name, e.g. "Brisbane". */
+    label: string;
+  };
 }
 
 export interface PresenceEntry {
