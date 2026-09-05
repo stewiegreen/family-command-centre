@@ -124,6 +124,7 @@ export async function cloudCreateFamily(
     todos: [],
     chores: [],
     shopping: [],
+    recipes: [],
     notes: [],
     messages: [],
     settings: {
@@ -310,6 +311,7 @@ export async function cloudWrite(familyId: string, data: FamilyData): Promise<vo
     todos: data.todos || [],
     chores: data.chores || [],
     shopping: data.shopping || [],
+    recipes: data.recipes || [],
     presence: data.presence || {},
     appearance: data.appearance || {},
     screenTime: data.screenTime || {},

@@ -8,6 +8,7 @@ import { CalendarPage } from './pages/CalendarPage';
 import { TodosPage } from './pages/TodosPage';
 import { ChoresPage } from './pages/ChoresPage';
 import { ShoppingPage } from './pages/ShoppingPage';
+import { RecipesPage } from './pages/RecipesPage';
 import { NotesPage } from './pages/NotesPage';
 import { JournalPage } from './pages/JournalPage';
 import { MessagesPage } from './pages/MessagesPage';
@@ -83,6 +84,7 @@ function AppShell() {
             {view === 'todos' && <TodosPage />}
             {view === 'chores' && <ChoresPage />}
             {view === 'shopping' && <ShoppingPage />}
+            {view === 'recipes' && <RecipesPage />}
             {view === 'notes' && <NotesPage />}
             {view === 'journal' && <JournalPage />}
             {view === 'messages' && <MessagesPage />}

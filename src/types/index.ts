@@ -1,6 +1,6 @@
 export type Role = 'parent' | 'kid' | 'media';
 export type Priority = 'low' | 'medium' | 'high';
-export type ViewId = 'dashboard' | 'calendar' | 'todos' | 'chores' | 'shopping' | 'notes' | 'journal' | 'messages' | 'media' | 'settings';
+export type ViewId = 'dashboard' | 'calendar' | 'todos' | 'chores' | 'shopping' | 'recipes' | 'notes' | 'journal' | 'messages' | 'media' | 'settings';
 export type SyncStatus = 'local' | 'connecting' | 'live' | 'error' | 'auth';
 export type ChoreCadence = 'daily' | 'weekly' | 'once'; // legacy
 export type ChoreStatus = 'open' | 'pending' | 'done';
@@ -257,6 +257,39 @@ export interface ScreenTimeLogEntry {
   at: string;
 }
 
+/** One ingredient line on a recipe (Phase A — manual). */
+export interface RecipeIngredient {
+  id: string;
+  /** Display name, e.g. "yellow onion". */
+  name: string;
+  /** Free-form amount, e.g. "2", "1/2", "400". */
+  quantity?: string;
+  /** Free-form unit, e.g. "cups", "g", "tbsp". */
+  unit?: string;
+  /** Optional shopping category hint (ShoppingCategory string). */
+  category?: string;
+  /** Optional note (e.g. "room temperature"). */
+  note?: string;
+}
+
+/** Family recipe book entry — stored on FamilyData, not a subcollection. */
+export interface Recipe {
+  id: string;
+  title: string;
+  /** How many servings the ingredient amounts are written for. */
+  servings?: number;
+  ingredients: RecipeIngredient[];
+  /** Optional free-form steps / notes. */
+  instructions?: string;
+  /** Optional source URL or book reference (manual for Phase A). */
+  source?: string;
+  createdById: string;
+  createdAt: string;
+  updatedAt: string;
+  /** Soft-archive instead of hard-delete when useful later. */
+  archived?: boolean;
+}
+
 /** Shared shopping / errands list item. */
 export interface ShoppingItem {
   id: string;
@@ -423,6 +456,8 @@ export interface FamilyData {
   /** Quest board (legacy field name `chores`). */
   chores: Quest[];
   shopping: ShoppingItem[];
+  /** Manual recipe book (Phase A). */
+  recipes?: Recipe[];
   /** Reusable usual-items catalog (tap to add to live list). */
   shoppingCatalog?: ShoppingCatalogItem[];
   /** Preferred store-tab order (store names). New stores append. */

@@ -28,6 +28,7 @@ export const DEFAULT_DATA: FamilyData = {
   todos: [],
   chores: [],
   shopping: [],
+  recipes: [],
   notes: [],
   messages: [],
   presence: {},
@@ -77,6 +78,7 @@ export function migratePayload(p: Partial<FamilyData>): FamilyData {
     todos,
     chores: (p.chores || []).map((c) => migrateChoreToQuest(c as Parameters<typeof migrateChoreToQuest>[0])),
     shopping: p.shopping || [],
+    recipes: p.recipes || [],
     events: (p.events || []).map((e: {
       id: string;
       title: string;
