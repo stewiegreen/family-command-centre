@@ -29,7 +29,14 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { cloudCreateJournalEntry } from '../lib/firebase';
-import { getWeather, weatherCodeMeta, type WeatherSnapshot } from '../lib/weather';
+import {
+  getWeather,
+  weatherCodeMeta,
+  daytimeHours,
+  weatherDayTip,
+  formatHour,
+  type WeatherSnapshot,
+} from '../lib/weather';
 import { uid } from '../lib/uid';
 import { Avatar } from '../components/ui/Avatar';
 import { Button } from '../components/ui/Button';
@@ -1642,7 +1649,7 @@ export function Dashboard() {
                 ? weatherCodeMeta(weatherSnap.current.weatherCode).emoji
                 : '🌡️'}
             </span>
-            Weather
+            Today&apos;s weather
           </h3>
           <button
             type="button"
@@ -1657,13 +1664,13 @@ export function Dashboard() {
           <p className="text-xs text-warn">{weatherErr}</p>
         )}
         {!weatherSnap && !weatherErr && (
-          <p className="text-sm text-muted">Loading today's forecast…</p>
+          <p className="text-sm text-muted">Loading today&apos;s forecast…</p>
         )}
         {weatherSnap && (
           <>
             <div className="flex items-end justify-between gap-3">
               <div>
-                <p className="text-4xl font-bold tabular-nums tracking-tight text-fg">
+                <p className="text-3xl sm:text-4xl font-bold tabular-nums tracking-tight text-fg">
                   {weatherSnap.current.tempC}°
                 </p>
                 <p className="text-sm text-muted mt-0.5">
@@ -1692,14 +1699,61 @@ export function Dashboard() {
                 )}
               </div>
             </div>
-            <div className="flex flex-wrap gap-3 text-xs text-muted pt-1 border-t border-border">
-              {weatherSnap.current.humidity != null && (
-                <span>Humidity {weatherSnap.current.humidity}%</span>
-              )}
-              {weatherSnap.current.windKmh != null && (
-                <span>Wind {weatherSnap.current.windKmh} km/h</span>
-              )}
+
+            {weatherDayTip(weatherSnap.hourly || []) && (
+              <div className="rounded-xl border border-accent/30 bg-accent/10 px-3 py-2 text-sm text-accent">
+                {weatherDayTip(weatherSnap.hourly || [])}
+              </div>
+            )}
+
+            {/* Full-day strip — scroll horizontally on small screens */}
+            <div className="-mx-1 overflow-x-auto pb-1">
+              <div className="flex gap-1.5 min-w-min px-1">
+                {daytimeHours(weatherSnap.hourly || []).map((h) => {
+                  const meta = weatherCodeMeta(h.weatherCode);
+                  const nowH = new Date().getHours();
+                  const isNow = h.hour === nowH;
+                  const wet = h.precipProb >= 40;
+                  const schoolOut = h.hour >= 14 && h.hour <= 16;
+                  return (
+                    <div
+                      key={h.time}
+                      className={cn(
+                        'flex flex-col items-center gap-0.5 rounded-xl px-2 py-2 min-w-[3.25rem] border',
+                        isNow
+                          ? 'border-accent bg-accent/15'
+                          : wet
+                            ? 'border-sky-500/40 bg-sky-500/10'
+                            : 'border-border/60 bg-surface-2/40',
+                        schoolOut && wet && 'ring-1 ring-sky-400/50',
+                      )}
+                      title={`${formatHour(h.hour)}: ${meta.label}, ${h.tempC}°, rain ${h.precipProb}%`}
+                    >
+                      <span className="text-[10px] text-muted tabular-nums">
+                        {formatHour(h.hour)}
+                      </span>
+                      <span className="text-base leading-none" aria-hidden>
+                        {meta.emoji}
+                      </span>
+                      <span className="text-xs font-semibold tabular-nums text-fg">
+                        {h.tempC}°
+                      </span>
+                      <span
+                        className={cn(
+                          'text-[10px] tabular-nums',
+                          wet ? 'text-sky-400 font-medium' : 'text-faint',
+                        )}
+                      >
+                        {h.precipProb}%
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
+            <p className="text-[10px] text-faint">
+              Scroll the day · blue = rain risk · ring = after-school window
+            </p>
           </>
         )}
       </div>
