@@ -37,26 +37,6 @@ export function scaleFactor(recipeServings: number | undefined, cookFor: number 
   return target / base;
 }
 
-function scaleQuantity(qty: string | undefined, factor: number): string | undefined {
-  if (!qty || factor === 1) return qty;
-  const trimmed = qty.trim();
-  // simple n or n.n
-  if (/^\d+(\.\d+)?$/.test(trimmed)) {
-    const n = parseFloat(trimmed) * factor;
-    const rounded = Math.round(n * 100) / 100;
-    return String(rounded);
-  }
-  // a/b fraction
-  const frac = trimmed.match(/^(\d+)\s*\/\s*(\d+)$/);
-  if (frac) {
-    const n = (parseInt(frac[1]!, 10) / parseInt(frac[2]!, 10)) * factor;
-    const rounded = Math.round(n * 100) / 100;
-    return String(rounded);
-  }
-  // leave free-form as-is (e.g. "a pinch")
-  return qty;
-}
-
 function normalizeName(s: string): string {
   return s.trim().toLowerCase().replace(/\s+/g, ' ');
 }

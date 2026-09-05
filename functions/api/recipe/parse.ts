@@ -67,18 +67,49 @@ export type ParsedRecipe = {
   parser: 'ai' | 'heuristic';
 };
 
-const MAX_CHARS = 12_000;
+// Two different limits, previously conflated as one:
+// - MAX_INPUT_CHARS: how much raw pasted text we accept from the client at
+//   all. Recipe blogs routinely run 5,000-15,000+ characters once you count
+//   the life story before the recipe, so this needs real headroom — reject
+//   too aggressively here and a long, legitimate paste never even reaches
+//   windowForModel() below to be trimmed sensibly; it just hard-fails.
+// - MAX_MODEL_CHARS: how much of that we actually send to any one model
+//   call, after windowForModel() has already prioritized the useful part.
+//   Kept modest so the smaller fallback models' context windows are never
+//   a concern regardless of how long the raw accepted paste was.
+const MAX_INPUT_CHARS = 40_000;
+const MAX_MODEL_CHARS = 12_000;
 
-const SYSTEM = `You are a JSON API that extracts recipes.
-Reply with ONLY one JSON object. No markdown. No explanation. No code fences.
-Exact shape:
-{"title":"string","servings":2,"ingredients":[{"name":"onion","quantity":"1","unit":null,"note":null}],"instructions":"string or null"}
-Rules:
-- ingredients[].name = food item only
-- quantity/unit as strings when known, else null
-- skip ads, nutrition, print buttons
-- servings number or null
-- instructions short text or null`;
+const SYSTEM = `You extract recipes from messy text copy-pasted off recipe websites.
+Reply with ONLY one JSON object. No markdown, no commentary, no code fences.
+Shape:
+{"title":"string","servings":number|null,"ingredients":[{"name":"string","quantity":"string|null","unit":"string|null","note":"string|null"}],"instructions":"string|null"}
+
+Recipe pages are messy — apply ALL of these:
+- IGNORE: nav menus, ads, "Jump to Recipe" links, author life-story/blog text,
+  ratings/review counts, prep/cook/total time lines, nutrition facts, equipment
+  lists, "Rate this recipe", related-recipe links, comments.
+- Section headers like "For the sauce:", "For the topping:", "Marinade:" are
+  NOT ingredients — skip the header line itself, but keep collecting every
+  ingredient under it into the same flat ingredients array (don't group by
+  sub-recipe, we only need one combined shopping-relevant list).
+- ingredients[].name = the plain food item only, suitable for a shopping list
+  (e.g. "onion", not "onion, diced" and not "large yellow onion"). Move prep
+  instructions (diced/minced/chopped/melted/softened), descriptive size
+  words (large/small/ripe), and markers like "(optional)" or "(divided)"
+  into note instead — e.g. "2 onions, diced" -> name "onion", note "diced".
+- quantity: normalize mixed numbers and unicode fractions to a plain string,
+  e.g. "1½" or "1 1/2" -> "1.5"; "½" or "1/2" -> "0.5". For a range like
+  "2-3 cloves" use the lower number ("2") and put the range in note
+  ("2-3 in original"). If there's truly no quantity (e.g. "salt to taste",
+  "black pepper"), use null and put "to taste" in note if present.
+- unit: only real units (cup, tbsp, tsp, g, kg, ml, l, oz, lb, clove, can,
+  pinch, etc.) — descriptive words like "large" or "medium" are not units,
+  fold them into note instead, never invent a unit that isn't in the text.
+- servings: a plain number from "serves", "servings", or "yield" lines, else
+  null — never guess one that isn't stated.
+- instructions: the numbered/step method text only, combined into one string
+  with steps on their own lines, or null if genuinely absent.`;
 
 function jsonResponse(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -241,12 +272,75 @@ function heuristicParse(text: string): ParsedRecipe {
   };
 }
 
-/** Current catalog models (llama-3.1-8b-instruct base was deprecated 2026-05-30). */
+/**
+ * Current catalog models (llama-3.1-8b-instruct base was deprecated 2026-05-30).
+ * Ordered strongest-first, not fastest-first: this is a low-frequency,
+ * paste-a-recipe-a-few-times-a-week feature, not a high-throughput API, so
+ * accuracy matters more than shaving a second of latency. gemma-4-26b-a4b-it
+ * is a 26B MoE model (4B active) — meaningfully more capable at following a
+ * strict schema than the two smaller fallbacks, and confirmed to support
+ * JSON Schema mode (see JSON_SCHEMA below), which the smaller models may or
+ * may not honor as reliably.
+ */
 const AI_MODELS = [
-  '@cf/meta/llama-3.2-3b-instruct',
-  '@cf/meta/llama-3.1-8b-instruct-fast',
   '@cf/google/gemma-4-26b-a4b-it',
+  '@cf/meta/llama-3.1-8b-instruct-fast',
+  '@cf/meta/llama-3.2-3b-instruct',
 ] as const;
+
+/**
+ * Workers AI JSON Mode (OpenAI-compatible response_format). When a model
+ * honors this, its output is constrained to match this schema server-side —
+ * we're no longer just hoping the model replies with clean JSON and no
+ * stray commentary/markdown, which was almost certainly the single biggest
+ * source of "hit or miss" results. Models that don't support it simply
+ * ignore the field, so this is safe to send unconditionally; runOneModel
+ * below still falls back to free-text extraction either way.
+ */
+const JSON_SCHEMA = {
+  type: 'object',
+  properties: {
+    title: { type: 'string' },
+    servings: { type: ['number', 'null'] },
+    ingredients: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          name: { type: 'string' },
+          quantity: { type: ['string', 'null'] },
+          unit: { type: ['string', 'null'] },
+          note: { type: ['string', 'null'] },
+        },
+        required: ['name'],
+      },
+    },
+    instructions: { type: ['string', 'null'] },
+  },
+  required: ['title', 'ingredients'],
+};
+
+/**
+ * Recipe blogs routinely put a multi-paragraph life story, ads, and a "Jump
+ * to Recipe" link before the actual ingredient list — often thousands of
+ * characters of it. A blind slice(0, MAX_MODEL_CHARS) from the *start* of a long
+ * paste can cut off before ever reaching the ingredients/instructions,
+ * which is a very plausible cause of inconsistent results depending on how
+ * verbose a given site's preamble is. If the text is short enough, send it
+ * as-is; if it's long, keep a short prefix (title context) plus start the
+ * real window a bit before the first "ingredient" mention so the parts that
+ * actually matter are prioritized within the budget instead of the top of
+ * the page.
+ */
+function windowForModel(text: string): string {
+  if (text.length <= MAX_MODEL_CHARS) return text;
+  const idx = text.search(/ingredients?\b/i);
+  if (idx < 0) return text.slice(0, MAX_MODEL_CHARS); // no marker found, fall back to prefix
+  const leadIn = 300; // keep a little text before "Ingredients" for the title
+  const start = Math.max(0, idx - leadIn);
+  const prefix = start > 0 ? text.slice(0, Math.min(leadIn, start)) + '\n…\n' : '';
+  return (prefix + text.slice(start)).slice(0, MAX_MODEL_CHARS);
+}
 
 function extractModelText(result: unknown): string {
   if (typeof result === 'string') return result;
@@ -270,6 +364,28 @@ function extractModelText(result: unknown): string {
     }
   }
   return '';
+}
+
+/**
+ * JSON Schema mode (response_format) returns an already-parsed OBJECT under
+ * `response` (or nested under `data.response`), not a string — a model that
+ * honors response_format did its job perfectly and this must be checked
+ * *before* falling through to free-text extraction, or a fully successful
+ * JSON-mode call would be silently treated as a miss.
+ */
+function extractModelObject(result: unknown): Record<string, unknown> | null {
+  if (!result || typeof result !== 'object') return null;
+  const r = result as Record<string, unknown>;
+  if (r.response && typeof r.response === 'object' && !Array.isArray(r.response)) {
+    return r.response as Record<string, unknown>;
+  }
+  if (r.data && typeof r.data === 'object') {
+    const d = r.data as Record<string, unknown>;
+    if (d.response && typeof d.response === 'object' && !Array.isArray(d.response)) {
+      return d.response as Record<string, unknown>;
+    }
+  }
+  return null;
 }
 
 /** Pull the first balanced {...} object from model prose. */
@@ -325,16 +441,31 @@ async function runOneModel(
 ): Promise<{ parsed: ParsedRecipe | null; rawPreview: string; error?: string }> {
   const userContent =
     `Return JSON only for this recipe text.\n\n` +
+    `Example input:\n` +
+    `"Grandma's Chicken Soup\nJump to Recipe\nWhen I was a kid...(life story)...\n` +
+    `Prep: 10 min  Cook: 40 min  Serves: 4\nFor the broth:\n- 1 1/2 lbs chicken thighs\n` +
+    `- 2 large carrots, diced\n- salt and pepper, to taste\nFor the noodles:\n` +
+    `- 8 oz egg noodles (optional)\nInstructions\n1. Simmer chicken 30 min.\n` +
+    `2. Add noodles, cook 8 min.\nNutrition Facts: 320 cal..."\n\n` +
     `Example output:\n` +
-    `{"title":"Soup","servings":2,"ingredients":[{"name":"onion","quantity":"1","unit":null,"note":null},{"name":"stock","quantity":"2","unit":"cups","note":null}],"instructions":"Simmer."}\n\n` +
-    `Recipe text:\n${text.slice(0, MAX_CHARS)}`;
+    `{"title":"Grandma's Chicken Soup","servings":4,"ingredients":[` +
+    `{"name":"chicken thighs","quantity":"1.5","unit":"lbs","note":null},` +
+    `{"name":"carrot","quantity":"2","unit":null,"note":"large, diced"},` +
+    `{"name":"salt and pepper","quantity":null,"unit":null,"note":"to taste"},` +
+    `{"name":"egg noodles","quantity":"8","unit":"oz","note":"optional"}` +
+    `],"instructions":"Simmer chicken 30 min.\\nAdd noodles, cook 8 min."}\n\n` +
+    `Now extract this recipe text:\n${windowForModel(text)}`;
 
   const baseInput: Record<string, unknown> = {
     messages: [
       { role: 'system', content: SYSTEM },
       { role: 'user', content: userContent },
     ],
-    max_tokens: 1024,
+    // Real recipes can have 20+ ingredients plus a full method — 1024 was
+    // tight enough to truncate mid-JSON on longer/more complex recipes,
+    // which produces invalid JSON that looks like a random model failure.
+    max_tokens: 2048,
+    response_format: { type: 'json_schema', json_schema: JSON_SCHEMA },
   };
 
   // Gemma 4 reasoning models: disable thinking so we get JSON, not chain-of-thought
@@ -344,6 +475,15 @@ async function runOneModel(
 
   try {
     const result = await ai.run(model, baseInput);
+    // JSON Schema mode succeeded: response is already a parsed object.
+    const obj = extractModelObject(result);
+    if (obj) {
+      const parsed = normalizeParsed(obj, 'ai');
+      if (parsed && parsed.ingredients.length > 0) {
+        return { parsed, rawPreview: JSON.stringify(obj).slice(0, 240) };
+      }
+    }
+    // Fall back to free-text extraction for models that ignored response_format.
     const content = extractModelText(result);
     const parsed = parseModelJson(content);
     return {
@@ -385,8 +525,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   }
   const text = (body.text || '').trim();
   if (!text) return jsonResponse({ error: 'text is required' }, 400);
-  if (text.length > MAX_CHARS) {
-    return jsonResponse({ error: `text too long (max ${MAX_CHARS} characters)` }, 400);
+  if (text.length > MAX_INPUT_CHARS) {
+    return jsonResponse({ error: `text too long (max ${MAX_INPUT_CHARS} characters)` }, 400);
   }
 
   const aiBound = Boolean(context.env.AI);
