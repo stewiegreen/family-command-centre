@@ -1,7 +1,9 @@
-# Optional local/Pages config. Workers AI binding can also be set in the Cloudflare dashboard:
-# Pages → Settings → Functions → Bindings → Workers AI → variable name "AI"
+# Cloudflare Pages + Workers AI
+# Dashboard alternative: Pages → Settings → Functions → Bindings → Workers AI
+# Variable name MUST be exactly: AI
+# After adding binding, trigger a new deployment (binding applies to new deploys).
 name = "family-command-centre"
-compatibility_date = "2024-09-01"
+compatibility_date = "2024-11-01"
 pages_build_output_dir = "dist"
 
 [ai]

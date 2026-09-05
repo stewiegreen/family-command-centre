@@ -144,6 +144,10 @@ export type ParsedRecipeResponse = {
   instructions?: string;
   parser?: 'ai' | 'heuristic';
   error?: string;
+  /** Whether env.AI was present on the server for this request */
+  aiBound?: boolean;
+  /** Why AI was not used (binding missing, model error, empty result) */
+  aiError?: string;
 };
 
 export async function parseRecipeFromText(text: string): Promise<ParsedRecipeResponse> {

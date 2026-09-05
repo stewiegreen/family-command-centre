@@ -110,8 +110,17 @@ export function RecipesPage() {
       }
       applyParsedRecipe(parsed);
       if (parsed.parser === 'heuristic') {
-        setToast('Parsed without AI — check quantities, then save.');
-        window.setTimeout(() => setToast(null), 3500);
+        const why =
+          parsed.aiBound === false
+            ? 'Workers AI not bound (set binding AI in Cloudflare + redeploy).'
+            : parsed.aiError
+              ? `AI skipped: ${parsed.aiError}`
+              : 'Used text parser.';
+        setToast(`Parsed without AI — ${why} Check quantities, then save.`);
+        window.setTimeout(() => setToast(null), 6000);
+      } else {
+        setToast('Parsed with AI — review and save.');
+        window.setTimeout(() => setToast(null), 2500);
       }
     } catch (e) {
       setPasteErr(e instanceof Error ? e.message : 'Parse failed');

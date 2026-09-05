@@ -265,6 +265,22 @@ async function aiParse(ai: AiBinding, text: string): Promise<ParsedRecipe | null
     if (typeof r.response === 'string') content = r.response;
     else if (typeof r.text === 'string') content = r.text;
     else if (typeof r.result === 'string') content = r.result;
+    else if (Array.isArray(r.descriptions) && r.descriptions[0]) content = String(r.descriptions[0]);
+    // Some models nest under data
+    else if (r.data && typeof r.data === 'object') {
+      const d = r.data as Record<string, unknown>;
+      if (typeof d.response === 'string') content = d.response;
+    }
+    if (!content) {
+      // Last resort: stringify useful fields for debugging upstream
+      try {
+        const s = JSON.stringify(result);
+        const m = s.match(/\{[^{}]*"ingredients"[^{}]*\}/);
+        if (m) content = m[0];
+      } catch {
+        /* ignore */
+      }
+    }
   }
   if (!content) return null;
 
@@ -301,16 +317,22 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     return jsonResponse({ error: `text too long (max ${MAX_CHARS} characters)` }, 400);
   }
 
+  const aiBound = Boolean(context.env.AI);
+  let aiError: string | undefined;
+
   if (context.env.AI) {
     try {
       const aiResult = await aiParse(context.env.AI, text);
       if (aiResult && aiResult.ingredients.length > 0) {
-        return jsonResponse(aiResult);
+        return jsonResponse({ ...aiResult, aiBound: true });
       }
+      aiError = 'AI returned no usable ingredients';
     } catch (err) {
-      // fall through to heuristic
+      aiError = err instanceof Error ? err.message : String(err);
       console.error('recipe AI parse failed', err);
     }
+  } else {
+    aiError = 'Workers AI binding "AI" is not configured on this deployment';
   }
 
   const heur = heuristicParse(text);
@@ -320,17 +342,21 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         error:
           'Could not find ingredients. Try pasting a clearer list, or add the recipe manually.',
         parser: 'heuristic',
+        aiBound,
+        aiError,
       },
       422,
     );
   }
-  return jsonResponse(heur);
+  return jsonResponse({ ...heur, aiBound, aiError });
 };
 
-export const onRequestGet: PagesFunction = async () =>
+export const onRequestGet: PagesFunction<Env> = async (context) =>
   jsonResponse({
     ok: true,
     path: '/api/recipe/parse',
     method: 'POST',
     body: { text: 'string' },
+    /** false = Workers AI binding not attached to this deployment */
+    aiBound: Boolean(context.env.AI),
   });
