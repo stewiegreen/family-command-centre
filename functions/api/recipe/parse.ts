@@ -246,49 +246,33 @@ function heuristicParse(text: string): ParsedRecipe {
   };
 }
 
-async function aiParse(ai: AiBinding, text: string): Promise<ParsedRecipe | null> {
-  const result = await ai.run('@cf/meta/llama-3.1-8b-instruct', {
-    messages: [
-      { role: 'system', content: SYSTEM },
-      {
-        role: 'user',
-        content: `Extract the recipe from this text:\n\n${text.slice(0, MAX_CHARS)}`,
-      },
-    ],
-    max_tokens: 2048,
-  });
+/** Prefer current catalog models; llama-3.1-8b-instruct was deprecated 2026-05-30. */
+const AI_MODELS = [
+  '@cf/meta/llama-3.1-8b-instruct-fast', // -fast variants stayed active after deprecation
+  '@cf/meta/llama-3.2-3b-instruct',
+  '@cf/google/gemma-4-26b-a4b-it',
+] as const;
 
-  let content = '';
-  if (typeof result === 'string') content = result;
-  else if (result && typeof result === 'object') {
-    const r = result as Record<string, unknown>;
-    if (typeof r.response === 'string') content = r.response;
-    else if (typeof r.text === 'string') content = r.text;
-    else if (typeof r.result === 'string') content = r.result;
-    else if (Array.isArray(r.descriptions) && r.descriptions[0]) content = String(r.descriptions[0]);
-    // Some models nest under data
-    else if (r.data && typeof r.data === 'object') {
-      const d = r.data as Record<string, unknown>;
-      if (typeof d.response === 'string') content = d.response;
-    }
-    if (!content) {
-      // Last resort: stringify useful fields for debugging upstream
-      try {
-        const s = JSON.stringify(result);
-        const m = s.match(/\{[^{}]*"ingredients"[^{}]*\}/);
-        if (m) content = m[0];
-      } catch {
-        /* ignore */
-      }
-    }
+function extractModelText(result: unknown): string {
+  if (typeof result === 'string') return result;
+  if (!result || typeof result !== 'object') return '';
+  const r = result as Record<string, unknown>;
+  if (typeof r.response === 'string') return r.response;
+  if (typeof r.text === 'string') return r.text;
+  if (typeof r.result === 'string') return r.result;
+  if (Array.isArray(r.descriptions) && r.descriptions[0]) return String(r.descriptions[0]);
+  if (r.data && typeof r.data === 'object') {
+    const d = r.data as Record<string, unknown>;
+    if (typeof d.response === 'string') return d.response;
   }
-  if (!content) return null;
+  return '';
+}
 
+function parseModelJson(content: string): ParsedRecipe | null {
+  if (!content) return null;
   try {
-    const parsed = JSON.parse(stripFences(content));
-    return normalizeParsed(parsed, 'ai');
+    return normalizeParsed(JSON.parse(stripFences(content)), 'ai');
   } catch {
-    // try to find first {...}
     const m = content.match(/\{[\s\S]*\}/);
     if (!m) return null;
     try {
@@ -297,6 +281,33 @@ async function aiParse(ai: AiBinding, text: string): Promise<ParsedRecipe | null
       return null;
     }
   }
+}
+
+async function aiParse(ai: AiBinding, text: string): Promise<ParsedRecipe | null> {
+  const userContent = `Extract the recipe from this text:\n\n${text.slice(0, MAX_CHARS)}`;
+  const input = {
+    messages: [
+      { role: 'system', content: SYSTEM },
+      { role: 'user', content: userContent },
+    ],
+    max_tokens: 2048,
+  };
+
+  let lastErr: unknown;
+  for (const model of AI_MODELS) {
+    try {
+      const result = await ai.run(model, input);
+      const content = extractModelText(result);
+      const parsed = parseModelJson(content);
+      if (parsed && parsed.ingredients.length > 0) return parsed;
+      lastErr = new Error(`${model} returned no usable JSON ingredients`);
+    } catch (err) {
+      lastErr = err;
+      console.error('recipe AI model failed', model, err);
+    }
+  }
+  if (lastErr) throw lastErr;
+  return null;
 }
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
