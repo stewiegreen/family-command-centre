@@ -491,6 +491,7 @@ export function RecipesPage() {
         open={formOpen}
         onClose={() => setFormOpen(false)}
         title={form.id ? 'Edit recipe' : 'New recipe'}
+        size="lg"
       >
         <div className="space-y-3 max-h-[70vh] overflow-y-auto pr-1">
           <div>
@@ -740,6 +741,7 @@ export function RecipesPage() {
         open={!!viewRecipe}
         onClose={() => setViewRecipe(null)}
         title={viewRecipe?.title || 'Recipe'}
+        size="lg"
       >
         {viewRecipe && (
           <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
