@@ -63,7 +63,6 @@ export function RecipesPage() {
   const [pasteText, setPasteText] = useState('');
   const [pasteBusy, setPasteBusy] = useState(false);
   const [pasteErr, setPasteErr] = useState<string | null>(null);
-  const [cookFor, setCookFor] = useState('');
   const [selectedIng, setSelectedIng] = useState<Record<string, boolean>>({});
   const [store, setStore] = useState('');
   const [toast, setToast] = useState<string | null>(null);
@@ -262,7 +261,6 @@ export function RecipesPage() {
 
   const openShop = (r: Recipe) => {
     setShopOpen(r);
-    setCookFor(r.servings != null ? String(r.servings) : '');
     const sel: Record<string, boolean> = {};
     r.ingredients.forEach((i) => {
       sel[i.id] = true;
@@ -280,12 +278,10 @@ export function RecipesPage() {
       alert('Select at least one ingredient.');
       return;
     }
-    const cook = cookFor.trim() ? parseFloat(cookFor) : undefined;
     update((d) => ({
       ...d,
       shopping: addRecipeToShopping(d.shopping || [], shopOpen, {
         createdById: myId,
-        cookFor: Number.isFinite(cook) ? cook : undefined,
         ingredientIds: ids,
         store: store.trim() || undefined,
       }),
@@ -681,27 +677,13 @@ export function RecipesPage() {
       >
         {shopOpen && (
           <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="text-xs text-muted block mb-1">
-                  Recipe servings: {shopOpen.servings ?? '—'}
-                </label>
-                <label className="text-xs text-muted block mb-1">Cook for</label>
-                <Input
-                  value={cookFor}
-                  onChange={(e) => setCookFor(e.target.value)}
-                  placeholder={shopOpen.servings != null ? String(shopOpen.servings) : '4'}
-                  inputMode="decimal"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-muted block mb-1">Store tab (optional)</label>
-                <Input
-                  value={store}
-                  onChange={(e) => setStore(e.target.value)}
-                  placeholder="e.g. Coles"
-                />
-              </div>
+            <div>
+              <label className="text-xs text-muted block mb-1">Store tab (optional)</label>
+              <Input
+                value={store}
+                onChange={(e) => setStore(e.target.value)}
+                placeholder="e.g. Coles"
+              />
             </div>
             <p className="text-[11px] text-muted">
               Uncheck anything you already have. Matching names on the Need list are merged, not
