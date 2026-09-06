@@ -1741,17 +1741,12 @@ export function Dashboard() {
 
   return (
     <div className="p-4 lg:p-6 max-w-6xl mx-auto space-y-6">
-      {/* Slim date strip always visible */}
+      {/* Toolbar — date lives in the app header only */}
       <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="text-sm text-muted font-medium">
-            {now.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
-          </p>
-          <p className="text-[11px] text-faint mt-0.5 hidden sm:block">
-            Drag cards to reorder · use the width icon to full / half
-          </p>
-        </div>
-        <div className="flex items-center gap-3 shrink-0">
+        <p className="text-[11px] text-faint hidden sm:block">
+          Drag cards to reorder · use the width icon to full / half
+        </p>
+        <div className="flex items-center gap-3 shrink-0 ml-auto">
           <button
             type="button"
             onClick={() => setManageOpen(true)}
