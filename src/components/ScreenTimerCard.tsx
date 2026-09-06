@@ -3,6 +3,7 @@ import { Timer, Square, Play } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Avatar } from './ui/Avatar';
 import { Button } from './ui/Button';
+import { Card } from './ui/Card';
 import { Input } from './ui/Input';
 import { formatCountdown, playTimeUpBeep, unlockTimerAudio } from '../lib/screenTimer';
 
@@ -154,7 +155,7 @@ export function ScreenTimerCard() {
   }, [me?.id, me?.role]);
 
   return (
-    <div className="space-y-3">
+    <Card className="!p-4 lg:!p-5 space-y-3">
       <div className="flex items-center justify-between gap-2">
         <h3 className="font-semibold text-fg flex items-center gap-2">
           <Timer className="w-4 h-4 text-accent" />
@@ -253,7 +254,7 @@ export function ScreenTimerCard() {
               value={label}
               onChange={(e) => setLabel(e.target.value)}
               placeholder="What? (Nintendo…)"
-              className="flex-1"
+              className="flex-1 min-w-0"
             />
           </div>
           <Button size="sm" disabled={!canStart} onClick={startTimer} className="w-full">
@@ -293,6 +294,6 @@ export function ScreenTimerCard() {
               </div>
             );
           })}
-    </div>
+    </Card>
   );
 }
