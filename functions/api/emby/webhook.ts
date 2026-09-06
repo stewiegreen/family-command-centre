@@ -296,3 +296,15 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     hint: 'POST Emby playback webhooks to this URL with ?secret=EMBY_WEBHOOK_SECRET',
   });
 };
+
+/**
+ * Emby's webhook "Test Notification" (and possibly real delivery, depending
+ * on version) sends a preliminary HEAD request to the configured URL before
+ * the actual POST — confirmed via real-world logs from another Emby webhook
+ * integration project hitting the exact same "Method Not Allowed" symptom.
+ * Without this export, Cloudflare rejects that HEAD before Emby ever
+ * attempts the POST carrying the real payload. No body needed — just 200.
+ */
+export const onRequestHead: PagesFunction<Env> = async () => {
+  return new Response(null, { status: 200 });
+};
