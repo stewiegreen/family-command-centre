@@ -10,6 +10,7 @@ import {
   Plus,
   ShoppingCart,
   Newspaper,
+  RefreshCw,
   GripVertical,
   Columns2,
   Square,
@@ -1641,98 +1642,77 @@ export function Dashboard() {
     ),
 
     weather: (
-      <div className="space-y-3">
-        <div className="flex items-center justify-between gap-2">
-          <h3 className="font-semibold text-fg flex items-center gap-2">
-            <span className="text-lg" aria-hidden>
-              {weatherSnap
-                ? weatherCodeMeta(weatherSnap.current.weatherCode).emoji
-                : '🌡️'}
+      <div className="space-y-3 h-full flex flex-col">
+        {/* Compact header: icon + current temp + hi/lo, refresh tucked away as an icon */}
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="text-2xl leading-none shrink-0" aria-hidden>
+              {weatherSnap ? weatherCodeMeta(weatherSnap.current.weatherCode).emoji : '🌡️'}
             </span>
-            Today&apos;s weather
-          </h3>
+            <div className="min-w-0">
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-2xl font-bold tabular-nums text-fg">
+                  {weatherSnap ? `${weatherSnap.current.tempC}°` : '--°'}
+                </span>
+                {weatherSnap && (
+                  <span className="text-xs text-muted tabular-nums shrink-0">
+                    H{weatherSnap.today.tempMaxC}° · L{weatherSnap.today.tempMinC}°
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-muted truncate">
+                {weatherSnap
+                  ? `${weatherCodeMeta(weatherSnap.current.weatherCode).label} · ${weatherSnap.current.label}`
+                  : 'Loading…'}
+              </p>
+            </div>
+          </div>
           <button
             type="button"
             onClick={() => void refreshWeather(true)}
-            className="text-xs text-accent"
             disabled={weatherLoading}
+            className="p-1.5 rounded-lg text-faint hover:text-fg hover:bg-nav-hover shrink-0"
+            title="Refresh weather"
           >
-            {weatherLoading ? 'Updating…' : 'Refresh'}
+            <RefreshCw className={cn('w-3.5 h-3.5', weatherLoading && 'animate-spin')} />
           </button>
         </div>
-        {weatherErr && (
-          <p className="text-xs text-warn">{weatherErr}</p>
-        )}
+
+        {weatherErr && <p className="text-xs text-warn">{weatherErr}</p>}
         {!weatherSnap && !weatherErr && (
           <p className="text-sm text-muted">Loading today&apos;s forecast…</p>
         )}
+
         {weatherSnap && (
           <>
-            <div className="flex items-end justify-between gap-3">
-              <div>
-                <p className="text-3xl sm:text-4xl font-bold tabular-nums tracking-tight text-fg">
-                  {weatherSnap.current.tempC}°
-                </p>
-                <p className="text-sm text-muted mt-0.5">
-                  {weatherCodeMeta(weatherSnap.current.weatherCode).label}
-                </p>
-                <p className="text-xs text-faint mt-1 truncate max-w-[14rem]">
-                  {weatherSnap.current.label}
-                </p>
-              </div>
-              <div className="text-right text-sm space-y-1">
-                <p className="text-fg">
-                  <span className="text-muted text-xs">High </span>
-                  <span className="font-semibold tabular-nums">{weatherSnap.today.tempMaxC}°</span>
-                </p>
-                <p className="text-fg">
-                  <span className="text-muted text-xs">Low </span>
-                  <span className="font-semibold tabular-nums">{weatherSnap.today.tempMinC}°</span>
-                </p>
-                {weatherSnap.today.precipProb != null && (
-                  <p className="text-fg">
-                    <span className="text-muted text-xs">Rain </span>
-                    <span className="font-semibold tabular-nums">
-                      {weatherSnap.today.precipProb}%
-                    </span>
-                  </p>
-                )}
-              </div>
-            </div>
-
             {weatherDayTip(weatherSnap.hourly || []) && (
-              <div className="rounded-xl border border-accent/30 bg-accent/10 px-3 py-2 text-sm text-accent">
+              <p className="text-xs text-accent bg-accent/10 rounded-lg px-2.5 py-1.5 leading-snug">
                 {weatherDayTip(weatherSnap.hourly || [])}
-              </div>
+              </p>
             )}
 
-            {/* Full-day strip — scroll horizontally on small screens */}
-            <div className="-mx-1 overflow-x-auto pb-1">
-              <div className="flex gap-1.5 min-w-min px-1">
+            {/* Hourly strip is the main event — compact per-hour tiles so this still
+                reads well at half width, sharing a row with another card. */}
+            <div className="-mx-1 overflow-x-auto">
+              <div className="flex gap-1 min-w-min px-1">
                 {daytimeHours(weatherSnap.hourly || []).map((h) => {
                   const meta = weatherCodeMeta(h.weatherCode);
                   const nowH = new Date().getHours();
                   const isNow = h.hour === nowH;
                   const wet = h.precipProb >= 40;
-                  const schoolOut = h.hour >= 14 && h.hour <= 16;
                   return (
                     <div
                       key={h.time}
                       className={cn(
-                        'flex flex-col items-center gap-0.5 rounded-xl px-2 py-2 min-w-[3.25rem] border',
-                        isNow
-                          ? 'border-accent bg-accent/15'
-                          : wet
-                            ? 'border-sky-500/40 bg-sky-500/10'
-                            : 'border-border/60 bg-surface-2/40',
-                        schoolOut && wet && 'ring-1 ring-sky-400/50',
+                        'flex flex-col items-center gap-0.5 rounded-lg px-1.5 py-1.5 min-w-[2.75rem]',
+                        isNow ? 'bg-accent/15 ring-1 ring-accent/50' : 'bg-surface-2/40',
                       )}
-                      title={`${formatHour(h.hour)}: ${meta.label}, ${h.tempC}°, rain ${h.precipProb}%`}
+                      title={`${formatHour(h.hour)}: ${meta.label}, ${h.tempC}°${wet ? ` · ${h.precipProb}% rain` : ''}`}
                     >
-                      <span className="text-[10px] text-muted tabular-nums">
+                      <span className="text-[9px] text-faint tabular-nums">
                         {formatHour(h.hour)}
                       </span>
-                      <span className="text-base leading-none" aria-hidden>
+                      <span className="text-sm leading-none" aria-hidden>
                         {meta.emoji}
                       </span>
                       <span className="text-xs font-semibold tabular-nums text-fg">
@@ -1740,8 +1720,8 @@ export function Dashboard() {
                       </span>
                       <span
                         className={cn(
-                          'text-[10px] tabular-nums',
-                          wet ? 'text-sky-400 font-medium' : 'text-faint',
+                          'text-[9px] tabular-nums',
+                          wet ? 'text-sky-400 font-medium' : 'invisible',
                         )}
                       >
                         {h.precipProb}%
@@ -1751,9 +1731,6 @@ export function Dashboard() {
                 })}
               </div>
             </div>
-            <p className="text-[10px] text-faint">
-              Scroll the day · blue = rain risk · ring = after-school window
-            </p>
           </>
         )}
       </div>
