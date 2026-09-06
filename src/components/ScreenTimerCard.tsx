@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Timer, Square, Play } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { Avatar } from './ui/Avatar';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { formatCountdown, playTimeUpBeep, unlockTimerAudio } from '../lib/screenTimer';
@@ -168,30 +169,41 @@ export function ScreenTimerCard() {
 
       {isParent && kids.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
-          {kids.map((k) => (
-            <button
-              key={k.id}
-              type="button"
-              onClick={() => setTargetId(k.id)}
-              className={cn(
-                'px-2.5 py-1 rounded-lg text-xs border',
-                targetId === k.id
-                  ? 'border-accent bg-accent/15 text-accent'
-                  : 'border-border text-muted hover:text-fg',
-              )}
-            >
-              {k.emoji || '👤'} {k.name}
-              {timers[k.id] ? ' · ⏱' : ''}
-            </button>
-          ))}
+          {kids.map((k) => {
+            const look = getMember(k.id) || k;
+            return (
+              <button
+                key={k.id}
+                type="button"
+                onClick={() => setTargetId(k.id)}
+                className={cn(
+                  'flex items-center gap-1.5 pl-1 pr-2.5 py-1 rounded-full text-xs border',
+                  targetId === k.id
+                    ? 'border-accent bg-accent/15 text-accent'
+                    : 'border-border text-muted hover:text-fg',
+                )}
+              >
+                <Avatar {...look} size="sm" className="!w-6 !h-6 !text-sm" />
+                {look.name}
+                {timers[k.id] ? ' · ⏱' : ''}
+              </button>
+            );
+          })}
         </div>
       )}
 
       {myActive ? (
-        <div className="rounded-2xl border border-accent/40 bg-accent/10 p-4 text-center space-y-2">
-          <p className="text-xs text-muted">
-            {myActive.label || 'Screen time'} · {getMember(myActive.memberId)?.name || ''}
-          </p>
+        <div className="rounded-xl border border-accent/40 bg-accent/10 p-4 text-center space-y-2">
+          <div className="flex items-center justify-center gap-2">
+            <Avatar
+              {...(getMember(myActive.memberId) || {})}
+              size="sm"
+              className="!w-6 !h-6 !text-sm"
+            />
+            <p className="text-xs text-muted">
+              {myActive.label || 'Screen time'} · {getMember(myActive.memberId)?.name || ''}
+            </p>
+          </div>
           <p
             className={cn(
               'text-4xl font-bold tabular-nums tracking-tight',
@@ -259,15 +271,23 @@ export function ScreenTimerCard() {
           .filter((s) => s.memberId !== targetId)
           .map((s) => {
             const sec = Math.max(0, Math.ceil((new Date(s.endsAt).getTime() - now) / 1000));
+            const look = getMember(s.memberId);
             return (
               <div
                 key={s.memberId}
-                className="flex items-center justify-between text-xs text-muted border border-border rounded-xl px-3 py-2"
+                className="flex items-center justify-between gap-2 text-xs text-muted border border-border rounded-xl px-3 py-2"
               >
-                <span>
-                  {getMember(s.memberId)?.name} · {s.label || 'timer'} · {formatCountdown(sec)}
+                <span className="flex items-center gap-2 min-w-0">
+                  <Avatar {...(look || {})} size="sm" className="!w-6 !h-6 !text-sm shrink-0" />
+                  <span className="truncate">
+                    {look?.name} · {s.label || 'timer'} · {formatCountdown(sec)}
+                  </span>
                 </span>
-                <button type="button" className="text-accent" onClick={() => stopEarly(s.memberId)}>
+                <button
+                  type="button"
+                  className="text-accent shrink-0"
+                  onClick={() => stopEarly(s.memberId)}
+                >
                   Stop
                 </button>
               </div>
