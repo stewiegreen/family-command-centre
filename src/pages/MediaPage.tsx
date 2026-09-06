@@ -20,7 +20,6 @@ import {
   bookProgressPercent,
   bookTitle,
   komgaBookThumbUrl,
-  komgaBookWebLink,
   komgaInProgress,
   komgaLibraries,
   komgaLibraryWebLink,
@@ -29,6 +28,7 @@ import {
   type KomgaBook,
   type KomgaLibrary,
 } from '../lib/komga';
+import { ComicReader } from '../components/ComicReader';
 
 export function MediaPage() {
   const { data, update, currentUser, isParent } = useApp();
@@ -37,6 +37,8 @@ export function MediaPage() {
   const komgaWeb = resolveKomgaWebUrl(settings);
   const me = currentUser || data.members.find((m) => m.id === settings.currentUserId);
   const embyUserId = me?.embyUserId?.trim() || '';
+  /** Passed to Komga proxy so per-member KOMGA_API_KEY_<id> can be used. */
+  const komgaMemberId = me?.id || undefined;
 
   const [serverId, setServerId] = useState(settings.emby?.serverId || '');
   const [resume, setResume] = useState<EmbyItem[]>([]);
@@ -49,6 +51,7 @@ export function MediaPage() {
   const [libraries, setLibraries] = useState<KomgaLibrary[]>([]);
   const [komgaLoading, setKomgaLoading] = useState(false);
   const [komgaError, setKomgaError] = useState<string | null>(null);
+  const [readingBook, setReadingBook] = useState<KomgaBook | null>(null);
 
   const loadEmby = async () => {
     if (!embyUserId) {
@@ -148,8 +151,7 @@ export function MediaPage() {
   };
 
   const openKomgaBook = (book: KomgaBook) => {
-    if (!komgaWeb) return;
-    window.open(komgaBookWebLink(komgaWeb, book.id), '_blank', 'noopener,noreferrer');
+    setReadingBook(book);
   };
 
   const renderBookRow = (books: KomgaBook[], empty: string) => {
@@ -173,7 +175,7 @@ export function MediaPage() {
             >
               <div className="relative aspect-[2/3] rounded-xl overflow-hidden bg-surface-2 border border-border shadow-sm">
                 <img
-                  src={komgaBookThumbUrl(b.id)}
+                  src={komgaBookThumbUrl(b.id, komgaMemberId)}
                   alt=""
                   className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform"
                   loading="lazy"
@@ -201,6 +203,7 @@ export function MediaPage() {
   };
 
   return (
+    <>
     <div className="p-4 lg:p-8 max-w-5xl mx-auto space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Media</h1>
@@ -341,6 +344,11 @@ export function MediaPage() {
           <>
             <div>
               <h3 className="text-sm font-semibold text-fg mb-2">Continue Reading</h3>
+              <p className="text-[11px] text-faint mb-2">
+                Progress uses your member key when Cloudflare has{' '}
+                <code className="text-[10px]">KOMGA_API_KEY_&lt;memberId&gt;</code>; otherwise the
+                shared family key.
+              </p>
               {renderBookRow(inProgress, 'Nothing in progress right now.')}
             </div>
             {onDeck.length > 0 && (
@@ -378,5 +386,18 @@ export function MediaPage() {
         )}
       </Card>
     </div>
+
+      {readingBook && (
+        <ComicReader
+          book={readingBook}
+          memberId={komgaMemberId}
+          onClose={() => {
+            setReadingBook(null);
+            void loadKomga();
+          }}
+          onOpenBook={(b) => setReadingBook(b)}
+        />
+      )}
+    </>
   );
 }
