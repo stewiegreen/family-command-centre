@@ -105,7 +105,14 @@ function liveKey(embyUserId: string, sessionId?: string): string {
 
 function debitMinutes(elapsedMs: number, minSeconds: number): number {
   if (elapsedMs < minSeconds * 1000) return 0;
-  return Math.max(1, Math.round(elapsedMs / 60000));
+  // Sanity cap: no single charge should ever be able to claim more than a
+  // few hours of "elapsed" playback. This is a backstop against any stale
+  // or clock-skewed startedAt (e.g. a session that outlives a missed stop
+  // event) computing an enormous one-shot debit and instantly wiping a
+  // balance — better to undercharge in a genuinely weird edge case than to
+  // ever drain someone's whole bank in a single erroneous event.
+  const cappedMs = Math.min(elapsedMs, 4 * 60 * 60 * 1000);
+  return Math.max(1, Math.round(cappedMs / 60000));
 }
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
@@ -206,11 +213,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     };
 
     if (ev.kind === 'start' || ev.kind === 'unpause') {
-      // If already playing same key, ignore duplicate start
       const existing = live[key];
-      if (existing && !existing.paused && ev.kind === 'start') {
-        // leave as-is
-      } else if (existing && existing.paused && ev.kind === 'unpause') {
+      if (existing && existing.paused && ev.kind === 'unpause') {
         live[key] = {
           ...existing,
           startedAt: now,
@@ -218,7 +222,14 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
           itemName: ev.itemName || existing.itemName,
         };
       } else {
-        // New play — if bank empty, stop immediately
+        // Any 'start' — including one that finds an existing "still playing"
+        // entry — is treated as authoritative and resets the clock to now.
+        // Do NOT "leave as-is" here: a leftover session from an interrupted
+        // test/earlier watch (missed stop event, dropped webhook, etc.) would
+        // otherwise sit with a stale startedAt, and the next pause/stop would
+        // compute an enormous elapsed time from it and instantly drain the
+        // whole balance in one charge — exactly the "cuts out immediately
+        // despite having time available" bug this fixes.
         if ((screenTime[member.id] ?? 0) <= 0) {
           stopSession = true;
         } else {
