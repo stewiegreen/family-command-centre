@@ -193,7 +193,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     const chargeFrom = (sess: LiveSession) => {
       if (sess.paused) return;
-      const mins = debitMinutes(now - sess.startedAt, minSeconds);
+      const from = sess.lastChargedAt ?? sess.startedAt;
+      const mins = debitMinutes(now - from, minSeconds);
       if (mins <= 0) return;
       const bal = screenTime[member.id] ?? 0;
       const take = Math.min(bal, mins);
@@ -209,6 +210,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
           at: new Date(now).toISOString(),
         });
       }
+      // Always advance lastChargedAt so cron/webhook don't double-count
+      sess.lastChargedAt = now;
       if ((screenTime[member.id] ?? 0) <= 0) stopSession = true;
     };
 
@@ -218,6 +221,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         live[key] = {
           ...existing,
           startedAt: now,
+          lastChargedAt: now,
           paused: false,
           itemName: ev.itemName || existing.itemName,
         };
@@ -236,6 +240,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
           live[key] = {
             memberId: member.id,
             startedAt: now,
+            lastChargedAt: now,
             sessionId: ev.sessionId,
             itemName: ev.itemName,
             paused: false,
@@ -250,6 +255,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
           ...sess,
           paused: true,
           startedAt: now,
+          lastChargedAt: now,
         };
       }
     } else if (ev.kind === 'stop') {
