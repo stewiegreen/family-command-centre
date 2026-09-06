@@ -32,12 +32,15 @@ function b64url(data: ArrayBuffer | Uint8Array | string): string {
   return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-export async function getGoogleAccessToken(sa: ServiceAccount): Promise<string> {
+export async function getGoogleAccessToken(
+  sa: ServiceAccount,
+  scope = 'https://www.googleapis.com/auth/datastore',
+): Promise<string> {
   const now = Math.floor(Date.now() / 1000);
   const header = { alg: 'RS256', typ: 'JWT' };
   const claim = {
     iss: sa.client_email,
-    scope: 'https://www.googleapis.com/auth/datastore',
+    scope,
     aud: sa.token_uri || 'https://oauth2.googleapis.com/token',
     iat: now,
     exp: now + 3600,

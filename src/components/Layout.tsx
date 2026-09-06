@@ -31,6 +31,7 @@ import {
   requestNotificationPermission,
   setNotificationsEnabled,
 } from '../lib/notifications';
+import { registerFcmToken, withFcmToken } from '../lib/fcm';
 
 const NAV: { id: ViewId; label: string; icon: typeof Home }[] = [
   { id: 'dashboard', label: 'Home', icon: Home },
@@ -56,26 +57,30 @@ function loadCollapsed(): boolean {
 }
 
 export function Layout({ children }: { children: ReactNode }) {
-  const {
-    data,
-    view,
-    setView,
-    currentUser,
-    isParent,
-    isMediaOnly,
-    syncStatus,
-    cloudError,
-    pendingWrites,
-    familyId,
-    signOut,
-    authUser,
-  } = useApp();
+  const { data, view, setView, currentUser, isParent, isMediaOnly, syncStatus, cloudError, pendingWrites, familyId, signOut, authUser, update } = useApp();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [collapsed, setCollapsedState] = useState(loadCollapsed);
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [notifOn, setNotifOn] = useState(isNotificationsEnabled);
+
   const { settings } = data;
+
+  // Refresh FCM token when notifications already enabled (token can rotate)
+  useEffect(() => {
+    if (!notifOn) return;
+    let cancelled = false;
+    void (async () => {
+      const token = await registerFcmToken();
+      if (cancelled || !token) return;
+      const memberId = currentUser?.id || settings.currentUserId;
+      if (!memberId) return;
+      update((d) => withFcmToken(d, memberId, token));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [notifOn, currentUser?.id, settings.currentUserId, update]);
 
   const setCollapsed = (v: boolean) => {
     setCollapsedState(v);
@@ -105,6 +110,14 @@ export function Layout({ children }: { children: ReactNode }) {
     setNotificationsEnabled(true);
     setNotifOn(true);
     window.dispatchEvent(new Event('fcc:notif-pref'));
+    // Register FCM so pushes work when the site is closed
+    void (async () => {
+      const token = await registerFcmToken();
+      if (!token) return;
+      const memberId = currentUser?.id || settings.currentUserId;
+      if (!memberId) return;
+      update((d) => withFcmToken(d, memberId, token));
+    })();
   };
 
   const handleSignOut = async () => {

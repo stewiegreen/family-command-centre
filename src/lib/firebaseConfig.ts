@@ -34,3 +34,10 @@ export const BUILT_IN_FIREBASE_CONFIG: FirebaseConfig = fromEnv || BUILT_IN;
 export const HAS_BUILT_IN_CONFIG = Boolean(
   BUILT_IN_FIREBASE_CONFIG.apiKey && BUILT_IN_FIREBASE_CONFIG.projectId,
 );
+
+/**
+ * Web Push VAPID public key from Firebase Console → Project settings → Cloud Messaging
+ * → Web Push certificates. Set VITE_FIREBASE_VAPID_KEY in Cloudflare Pages build env
+ * (or leave empty and paste into .env.local for local builds).
+ */
+export const FIREBASE_VAPID_KEY = (import.meta.env.VITE_FIREBASE_VAPID_KEY as string) || '';

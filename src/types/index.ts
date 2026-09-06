@@ -534,6 +534,11 @@ export interface FamilyData {
   screenTimers?: Record<string, ScreenTimerSession>;
   /** Recent timer-expired alerts for parents (newest first). */
   screenTimeAlerts?: ScreenTimeAlert[];
+  /**
+   * FCM web push device tokens per member (multi-device).
+   * Used to notify parents when a screen timer ends, etc.
+   */
+  fcmTokens?: Record<string, string[]>;
   /** memberId → XP / level. */
   memberProgress?: Record<string, MemberProgress>;
   /** memberId → coin balance (cache; ledger is source of truth). */

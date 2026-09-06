@@ -318,6 +318,7 @@ export async function cloudWrite(familyId: string, data: FamilyData): Promise<vo
     screenTimeLog: (data.screenTimeLog || []).slice(0, 80),
     screenTimers: data.screenTimers || {},
     screenTimeAlerts: (data.screenTimeAlerts || []).slice(0, 30),
+    fcmTokens: data.fcmTokens || {},
     notes: data.notes || [],
     memberProgress: data.memberProgress || {},
     coinBalances: data.coinBalances || {},

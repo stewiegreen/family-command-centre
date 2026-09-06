@@ -6,6 +6,7 @@ import { Button } from './ui/Button';
 import { Card } from './ui/Card';
 import { Input } from './ui/Input';
 import { formatCountdown, playTimeUpBeep, unlockTimerAudio } from '../lib/screenTimer';
+import { requestScreenTimerPush } from '../lib/pushClient';
 
 import type { ScreenTimeAlert, ScreenTimerSession } from '../types';
 import { cn } from '../lib/cn';
@@ -13,7 +14,7 @@ import { cn } from '../lib/cn';
 const PRESETS = [15, 30, 45, 60];
 
 export function ScreenTimerCard() {
-  const { data, update, currentUser, isParent, getMember } = useApp();
+  const { data, update, currentUser, isParent, getMember, familyId } = useApp();
   const me = currentUser || data.members.find((m) => m.id === data.settings.currentUserId);
   const myId = me?.id || '';
   const kids = data.members.filter((m) => m.role === 'kid');
@@ -72,6 +73,14 @@ export function ScreenTimerCard() {
           screenTimeAlerts: [alert, ...(d.screenTimeAlerts || [])].slice(0, 30),
         };
       });
+      if (familyId) {
+        void requestScreenTimerPush({
+          familyId,
+          title: "Time's up!",
+          body: alert.message,
+          view: 'dashboard',
+        });
+      }
     }
   }, [now, timers, getMember, update]);
 
