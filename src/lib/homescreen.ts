@@ -62,6 +62,7 @@ export const DEFAULT_HOMESCREEN_ROWS: HomescreenRow[] = [
   ['chores', 'shopping'],
   ['journal'],
   ['weather'],
+  ['screentimer'],
   ['look'],
 ];
 
@@ -147,12 +148,21 @@ export function resolveHomescreenRows(
     .map((row) => row.filter((id) => (seen.has(id) ? false : (seen.add(id), true))))
     .filter((row) => row.length > 0);
 
+  // Append any known widget missing from the saved layout (new cards after
+  // the user first saved their order). Prefer default-row order, then any
+  // remaining HOMESCREEN_WIDGETS entries.
   for (const def of DEFAULT_HOMESCREEN_ROWS) {
     for (const id of def) {
       if (!seen.has(id)) {
         rows.push([id]);
         seen.add(id);
       }
+    }
+  }
+  for (const id of HOMESCREEN_WIDGETS) {
+    if (!seen.has(id)) {
+      rows.push([id]);
+      seen.add(id);
     }
   }
 
