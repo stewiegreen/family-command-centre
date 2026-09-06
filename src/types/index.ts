@@ -257,6 +257,29 @@ export interface ScreenTimeLogEntry {
   at: string;
 }
 
+/** Active non-Emby screen-time countdown (Nintendo, web, TV, etc.). */
+export interface ScreenTimerSession {
+  memberId: string;
+  /** Who started the timer. */
+  byId: string;
+  /** ISO end time (countdown target). */
+  endsAt: string;
+  startedAt: string;
+  /** Minutes prepaid/debited when the timer started. */
+  totalMin: number;
+  /** Optional label e.g. Nintendo, YouTube. */
+  label?: string;
+}
+
+/** Parent-facing alert when a timer hits zero. */
+export interface ScreenTimeAlert {
+  id: string;
+  memberId: string;
+  memberName: string;
+  message: string;
+  at: string;
+}
+
 /** One ingredient line on a recipe (Phase A — manual). */
 export interface RecipeIngredient {
   id: string;
@@ -507,6 +530,10 @@ export interface FamilyData {
   screenTime?: Record<string, number>;
   /** Recent earn/spend history (newest first, trimmed client-side). */
   screenTimeLog?: ScreenTimeLogEntry[];
+  /** Active non-Emby timers keyed by memberId. */
+  screenTimers?: Record<string, ScreenTimerSession>;
+  /** Recent timer-expired alerts for parents (newest first). */
+  screenTimeAlerts?: ScreenTimeAlert[];
   /** memberId → XP / level. */
   memberProgress?: Record<string, MemberProgress>;
   /** memberId → coin balance (cache; ledger is source of truth). */

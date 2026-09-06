@@ -13,6 +13,7 @@ import {
   wasMessageNotified,
   wasTodoNotified,
 } from '../lib/notifications';
+import { markScreenTimerAlertSeen, wasScreenTimerAlertSeen } from '../lib/screenTimer';
 import { upcomingExpanded } from '../lib/recurrence';
 
 /**
@@ -20,7 +21,7 @@ import { upcomingExpanded } from '../lib/recurrence';
  * Suppresses noise on first enable by seeding a baseline of current IDs.
  */
 export function NotificationWatcher() {
-  const { data, currentUser, getMember, setView } = useApp();
+  const { data, currentUser, getMember, setView, isParent } = useApp();
   const [enabled, setEnabled] = useState(isNotificationsEnabled);
   const me = currentUser?.id || data.settings.currentUserId;
   const seeded = useRef(false);
@@ -216,6 +217,34 @@ export function NotificationWatcher() {
     const id = window.setInterval(check, 60_000);
     return () => window.clearInterval(id);
   }, [enabled, me, data.todos, data.events]);
+
+  
+  // Screen timer expired — notify parents (and the device that was running if enabled)
+  useEffect(() => {
+    if (!enabled || !me) return;
+    const alerts = data.screenTimeAlerts || [];
+    for (const a of alerts) {
+      if (wasScreenTimerAlertSeen(a.id)) continue;
+      // Parents always; kids only for their own timer
+      const forMe = isParent || a.memberId === me;
+      if (!forMe) {
+        markScreenTimerAlertSeen(a.id);
+        continue;
+      }
+      // Only recent alerts (last 15 min) so old history doesn't spam on load
+      const age = Date.now() - new Date(a.at).getTime();
+      if (age > 15 * 60 * 1000) {
+        markScreenTimerAlertSeen(a.id);
+        continue;
+      }
+      void showLocalNotification("Time's up!", {
+        body: a.message.slice(0, 160),
+        tag: `screentimer-${a.id}`,
+        data: { view: 'dashboard' },
+      });
+      markScreenTimerAlertSeen(a.id);
+    }
+  }, [enabled, me, isParent, data.screenTimeAlerts]);
 
   return null;
 }

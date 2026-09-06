@@ -23,6 +23,7 @@ export const HOMESCREEN_WIDGETS = [
   'shopping',
   'journal',
   'weather',
+  'screentimer',
   'look',
 ] as const;
 

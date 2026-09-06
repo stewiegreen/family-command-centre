@@ -1,3 +1,4 @@
+import { ScreenTimerCard } from '../components/ScreenTimerCard';
 import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import {
   Calendar,
@@ -105,6 +106,7 @@ const SECTION_LABELS: Record<SectionId, string> = {
   shopping: 'Shopping',
   journal: 'Journal',
   weather: 'Weather',
+  screentimer: 'Screen timer',
   look: 'Profile look',
 };
 
@@ -1736,6 +1738,7 @@ export function Dashboard() {
       </div>
     ),
 
+    screentimer: <ScreenTimerCard />,
     look: <ProfileLookCard />,
   };
 

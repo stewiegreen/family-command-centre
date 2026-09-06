@@ -35,6 +35,8 @@ export const DEFAULT_DATA: FamilyData = {
   appearance: {},
   screenTime: {},
   screenTimeLog: [],
+  screenTimers: {},
+  screenTimeAlerts: [],
   memberProgress: {},
   coinBalances: {},
   coinLedger: [],
@@ -133,6 +135,8 @@ export function migratePayload(p: Partial<FamilyData>): FamilyData {
     appearance: p.appearance || {},
     screenTime: p.screenTime || {},
     screenTimeLog: p.screenTimeLog || [],
+    screenTimers: p.screenTimers || {},
+    screenTimeAlerts: p.screenTimeAlerts || [],
     memberProgress: Object.fromEntries(
       Object.entries(p.memberProgress || {}).map(([id, prog]) => [id, ensureProgress(prog)]),
     ),
