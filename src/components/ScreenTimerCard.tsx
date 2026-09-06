@@ -3,7 +3,7 @@ import { Timer, Square, Play } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
-import { formatCountdown, playTimeUpBeep } from '../lib/screenTimer';
+import { formatCountdown, playTimeUpBeep, unlockTimerAudio } from '../lib/screenTimer';
 
 import type { ScreenTimeAlert, ScreenTimerSession } from '../types';
 import { cn } from '../lib/cn';
@@ -78,6 +78,7 @@ export function ScreenTimerCard() {
 
   const startTimer = () => {
     if (!canStart || !myId) return;
+    void unlockTimerAudio();
     const m = Math.floor(mins);
     if (m <= 0 || bal < m) {
       alert(`Only ${bal} minutes available.`);

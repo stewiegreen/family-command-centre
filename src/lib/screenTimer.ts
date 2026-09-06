@@ -7,33 +7,98 @@ export function formatCountdown(totalSec: number): string {
   return `${m}:${r.toString().padStart(2, '0')}`;
 }
 
-/** Alarm-style beep (Web Audio). Safe to call from user gesture or timer end. */
-export function playTimeUpBeep(): void {
+let sharedCtx: AudioContext | null = null;
+
+function getCtx(): AudioContext | null {
   try {
-    const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    if (!Ctx) return;
-    const ctx = new Ctx();
-    const now = ctx.currentTime;
-    const beep = (t0: number, freq: number) => {
-      const o = ctx.createOscillator();
-      const g = ctx.createGain();
-      o.type = 'square';
-      o.frequency.value = freq;
-      g.gain.setValueAtTime(0.0001, t0);
-      g.gain.exponentialRampToValueAtTime(0.2, t0 + 0.02);
-      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.35);
-      o.connect(g);
-      g.connect(ctx.destination);
-      o.start(t0);
-      o.stop(t0 + 0.4);
-    };
-    beep(now, 880);
-    beep(now + 0.45, 880);
-    beep(now + 0.9, 660);
-    window.setTimeout(() => void ctx.close(), 2000);
+    const Ctx =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    if (!Ctx) return null;
+    if (!sharedCtx || sharedCtx.state === 'closed') {
+      sharedCtx = new Ctx();
+    }
+    return sharedCtx;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Call from a user gesture (e.g. Start timer) so the browser allows sound later
+ * when the countdown hits zero without another tap.
+ */
+export async function unlockTimerAudio(): Promise<void> {
+  const ctx = getCtx();
+  if (!ctx) return;
+  try {
+    if (ctx.state === 'suspended') await ctx.resume();
+    // Silent blip to fully unlock on iOS
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    g.gain.value = 0.001;
+    o.connect(g);
+    g.connect(ctx.destination);
+    o.start();
+    o.stop(ctx.currentTime + 0.01);
   } catch {
     /* ignore */
   }
+}
+
+/**
+ * Clear, repeating kitchen-timer style alarm (~5s).
+ * Louder than before but not a single harsh spike; pattern is hard to miss.
+ */
+export function playTimeUpBeep(): void {
+  try {
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      navigator.vibrate([200, 100, 200, 100, 400]);
+    }
+  } catch {
+    /* ignore */
+  }
+
+  const ctx = getCtx();
+  if (!ctx) return;
+
+  void (async () => {
+    try {
+      if (ctx.state === 'suspended') await ctx.resume();
+    } catch {
+      /* may still fail without prior unlock */
+    }
+
+    const t0 = ctx.currentTime + 0.02;
+    // Three rounds: high-high-low, pause, repeat
+    const pattern: { at: number; freq: number; dur: number }[] = [];
+    let t = 0;
+    for (let round = 0; round < 3; round++) {
+      pattern.push({ at: t, freq: 1046, dur: 0.22 }); // C6
+      t += 0.28;
+      pattern.push({ at: t, freq: 1046, dur: 0.22 });
+      t += 0.28;
+      pattern.push({ at: t, freq: 784, dur: 0.45 }); // G5
+      t += 0.7;
+    }
+
+    for (const p of pattern) {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = 'sine';
+      o.frequency.value = p.freq;
+      const start = t0 + p.at;
+      const peak = 0.35; // moderate — audible without clipping laptop speakers
+      g.gain.setValueAtTime(0.0001, start);
+      g.gain.exponentialRampToValueAtTime(peak, start + 0.03);
+      g.gain.setValueAtTime(peak, start + p.dur - 0.05);
+      g.gain.exponentialRampToValueAtTime(0.0001, start + p.dur);
+      o.connect(g);
+      g.connect(ctx.destination);
+      o.start(start);
+      o.stop(start + p.dur + 0.02);
+    }
+  })();
 }
 
 const ALERT_SEEN_KEY = 'fcc_screentimer_alerts_seen';
