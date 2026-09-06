@@ -70,7 +70,9 @@ export function readMembers(doc: FsDoc): MemberLite[] {
 
 export type LiveSession = {
   memberId: string;
-  startedAt: number; // ms
+  startedAt: number; // ms — when this play stretch began (informational)
+  /** Always charge elapsed from this, not startedAt. Updated by webhook + cron. */
+  lastChargedAt: number;
   sessionId?: string;
   itemName?: string;
   paused?: boolean;
@@ -86,9 +88,12 @@ export function readLiveSessions(doc: FsDoc): Record<string, LiveSession> {
     const memberId = str(fields.memberId);
     const startedAt = int(fields.startedAt);
     if (!memberId || startedAt == null) continue;
+    // Sessions written before lastChargedAt existed fall back to startedAt
+    const lastChargedAt = int(fields.lastChargedAt) ?? startedAt;
     out[k] = {
       memberId,
       startedAt,
+      lastChargedAt,
       sessionId: str(fields.sessionId),
       itemName: str(fields.itemName),
       paused: 'booleanValue' in (fields.paused || {}) ? (fields.paused as { booleanValue: boolean }).booleanValue : false,
@@ -111,6 +116,7 @@ function liveMapValue(map: Record<string, LiveSession>): FsValue {
     const inner: Record<string, FsValue> = {
       memberId: { stringValue: s.memberId },
       startedAt: { integerValue: String(s.startedAt) },
+      lastChargedAt: { integerValue: String(s.lastChargedAt ?? s.startedAt) },
       paused: { booleanValue: !!s.paused },
     };
     if (s.sessionId) inner.sessionId = { stringValue: s.sessionId };
