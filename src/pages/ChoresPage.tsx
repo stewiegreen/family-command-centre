@@ -5,9 +5,11 @@ import {
   Coins,
   MonitorPlay,
   Pencil,
+  Play,
   Plus,
   ShoppingBag,
   Sparkles,
+  Square,
   Sword,
   RotateCcw,
   Trash2,
@@ -817,43 +819,6 @@ export function ChoresPage() {
 
 
   /** Spend accrued screen-time minutes (TV / games). */
-  const spendScreenTime = (memberId: string, minutes: number, label?: string) => {
-    if (!me) return;
-    const mins = Math.floor(minutes);
-    if (mins <= 0) return;
-    const bal = (data.screenTime || {})[memberId] ?? 0;
-    if (bal < mins) {
-      alert(`Only ${bal} minutes available.`);
-      return;
-    }
-    const who = getMember(memberId);
-    const name = who?.name || 'them';
-    if (!confirm(`Use ${mins} min of screen time for ${name}?`)) return;
-    const at = new Date().toISOString();
-    update((d) => {
-      const current = (d.screenTime || {})[memberId] ?? 0;
-      if (current < mins) return d;
-      return {
-        ...d,
-        screenTime: {
-          ...(d.screenTime || {}),
-          [memberId]: current - mins,
-        },
-        screenTimeLog: [
-          {
-            id: newId(),
-            memberId,
-            delta: -mins,
-            reason: label || `Used ${mins} min screen time`,
-            byId: me.id,
-            at,
-          },
-          ...(d.screenTimeLog || []),
-        ].slice(0, 100),
-      };
-    });
-  };
-
   const [spendOpen, setSpendOpen] = useState(false);
   const [spendMins, setSpendMins] = useState(30);
   const [timerLabel, setTimerLabel] = useState('');
