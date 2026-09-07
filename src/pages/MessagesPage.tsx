@@ -24,6 +24,60 @@ function softTimestampColor(hex: string): string {
   return contrastText(hex) === '#ffffff' ? 'rgba(255,255,255,0.75)' : 'rgba(0,0,0,0.55)';
 }
 
+/** Detect http(s) image URLs so chat can show them without file uploads. */
+const IMAGE_URL_RE =
+  /https?:\/\/[^\s<>"']+\.(?:png|jpe?g|gif|webp|avif|bmp|svg)(?:\?[^\s<>"']*)?/gi;
+
+function MessageBody({ text, linkClass }: { text: string; linkClass?: string }) {
+  const parts: { type: 'text' | 'image'; value: string }[] = [];
+  let last = 0;
+  const re = new RegExp(IMAGE_URL_RE.source, 'gi');
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) parts.push({ type: 'text', value: text.slice(last, m.index) });
+    parts.push({ type: 'image', value: m[0] });
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) parts.push({ type: 'text', value: text.slice(last) });
+  if (parts.length === 0) parts.push({ type: 'text', value: text });
+
+  return (
+    <div className="space-y-2">
+      {parts.map((p, i) =>
+        p.type === 'image' ? (
+          <a
+            key={i}
+            href={p.value}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img
+              src={p.value}
+              alt="Shared"
+              loading="lazy"
+              className="max-w-full max-h-64 rounded-xl object-contain bg-black/20"
+              onError={(e) => {
+                const el = e.currentTarget;
+                el.style.display = 'none';
+                const fallback = el.nextElementSibling as HTMLElement | null;
+                if (fallback) fallback.hidden = false;
+              }}
+            />
+            <span hidden className={linkClass || 'underline break-all text-sm'}>
+              {p.value}
+            </span>
+          </a>
+        ) : (
+          <span key={i}>{p.value}</span>
+        ),
+      )}
+    </div>
+  );
+}
+
+
 export function MessagesPage() {
   const { data, currentUser, getMember, sendMessage, markThreadRead } = useApp();
   const me = currentUser?.id || data.settings.currentUserId;
@@ -153,7 +207,7 @@ export function MessagesPage() {
                   )}
                   style={{ backgroundColor: bg, color: fg }}
                 >
-                  {m.text}
+                  <MessageBody text={m.text} />
                   <div className="text-xs mt-1" style={{ color: ts }}>
                     {new Date(m.timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
                   </div>
@@ -178,7 +232,7 @@ export function MessagesPage() {
             ref={inputRef}
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder="Message…"
+            placeholder="Message… (paste image URL)"
             onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && void send()}
             className="flex-1 text-base"
           />
