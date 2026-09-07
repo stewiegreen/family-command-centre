@@ -25,58 +25,83 @@ function softTimestampColor(hex: string): string {
 }
 
 /** Detect http(s) image URLs so chat can show them without file uploads. */
-const IMAGE_URL_RE =
-  /https?:\/\/[^\s<>"']+\.(?:png|jpe?g|gif|webp|avif|bmp|svg)(?:\?[^\s<>"']*)?/gi;
+const IMAGE_EXT = 'png|jpe?g|gif|webp|avif|bmp|svg';
+const IMAGE_URL_RE = new RegExp(
+  `https?:\\/\\/[^\\s<>"'\\]]+\\.(?:${IMAGE_EXT})(?:\\?[^\\s<>"']*)?`,
+  'gi',
+);
 
-function MessageBody({ text, linkClass }: { text: string; linkClass?: string }) {
+function cleanImageUrl(raw: string): string {
+  // Strip trailing punctuation often included when pasting
+  return raw.replace(/[),.;:!?>\]]+$/g, '');
+}
+
+function ChatImage({ url }: { url: string }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) {
+    return (
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="underline break-all text-sm opacity-90"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {url}
+      </a>
+    );
+  }
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="block my-1 -mx-0.5"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <img
+        src={url}
+        alt="Shared photo"
+        loading="lazy"
+        referrerPolicy="no-referrer"
+        decoding="async"
+        className="max-w-full w-auto max-h-72 rounded-xl object-contain bg-black/25 block"
+        onError={() => setFailed(true)}
+      />
+    </a>
+  );
+}
+
+function MessageBody({ text }: { text: string }) {
   const parts: { type: 'text' | 'image'; value: string }[] = [];
-  let last = 0;
   const re = new RegExp(IMAGE_URL_RE.source, 'gi');
+  let last = 0;
   let m: RegExpExecArray | null;
   while ((m = re.exec(text)) !== null) {
+    const url = cleanImageUrl(m[0]);
     if (m.index > last) parts.push({ type: 'text', value: text.slice(last, m.index) });
-    parts.push({ type: 'image', value: m[0] });
+    parts.push({ type: 'image', value: url });
     last = m.index + m[0].length;
   }
   if (last < text.length) parts.push({ type: 'text', value: text.slice(last) });
   if (parts.length === 0) parts.push({ type: 'text', value: text });
 
+  const onlyImage = parts.length === 1 && parts[0]!.type === 'image';
+
   return (
-    <div className="space-y-2">
-      {parts.map((p, i) =>
-        p.type === 'image' ? (
-          <a
-            key={i}
-            href={p.value}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="block"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <img
-              src={p.value}
-              alt="Shared"
-              loading="lazy"
-              className="max-w-full max-h-64 rounded-xl object-contain bg-black/20"
-              onError={(e) => {
-                const el = e.currentTarget;
-                el.style.display = 'none';
-                const fallback = el.nextElementSibling as HTMLElement | null;
-                if (fallback) fallback.hidden = false;
-              }}
-            />
-            <span hidden className={linkClass || 'underline break-all text-sm'}>
-              {p.value}
-            </span>
-          </a>
+    <div className={onlyImage ? '' : 'space-y-1'}>
+      {parts.map((part, i) =>
+        part.type === 'image' ? (
+          <ChatImage key={`img-${i}`} url={part.value} />
         ) : (
-          <span key={i}>{p.value}</span>
+          <span key={`t-${i}`} className="whitespace-pre-wrap">
+            {part.value}
+          </span>
         ),
       )}
     </div>
   );
 }
-
 
 export function MessagesPage() {
   const { data, currentUser, getMember, sendMessage, markThreadRead } = useApp();
@@ -202,7 +227,7 @@ export function MessagesPage() {
                 )}
                 <div
                   className={cn(
-                    'max-w-[80%] px-3.5 py-2 rounded-2xl text-base whitespace-pre-wrap break-words leading-snug',
+                    'max-w-[80%] px-3.5 py-2 rounded-2xl text-base break-words leading-snug',
                     mine ? 'rounded-br-md' : 'rounded-bl-md',
                   )}
                   style={{ backgroundColor: bg, color: fg }}
