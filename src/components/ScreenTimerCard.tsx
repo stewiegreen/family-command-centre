@@ -179,24 +179,39 @@ export function ScreenTimerCard() {
       </p>
 
       {isParent && kids.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
+        <div
+          className={cn(
+            'grid gap-3 w-full',
+            kids.length === 1 && 'grid-cols-1 max-w-[9rem] mx-auto',
+            kids.length === 2 && 'grid-cols-2',
+            kids.length >= 3 && 'grid-cols-3',
+          )}
+        >
           {kids.map((k) => {
             const look = getMember(k.id) || k;
+            const selected = targetId === k.id;
+            const running = !!timers[k.id];
             return (
               <button
                 key={k.id}
                 type="button"
                 onClick={() => setTargetId(k.id)}
                 className={cn(
-                  'flex items-center gap-1.5 pl-1 pr-2.5 py-1 rounded-full text-xs border',
-                  targetId === k.id
-                    ? 'border-accent bg-accent/15 text-accent'
-                    : 'border-border text-muted hover:text-fg',
+                  'flex flex-col items-center justify-center gap-2 py-3 px-2 rounded-2xl border-2 transition-colors min-h-[7.5rem]',
+                  selected
+                    ? 'border-accent bg-accent/15 text-accent shadow-[0_0_0_1px_var(--app-accent)]'
+                    : 'border-border text-muted hover:border-border-strong hover:text-fg hover:bg-nav-hover/40',
                 )}
               >
-                <Avatar {...look} size="sm" className="!w-6 !h-6 !text-sm" />
-                {look.name}
-                {timers[k.id] ? ' · ⏱' : ''}
+                <Avatar
+                  {...look}
+                  size="lg"
+                  className="!w-[4.5rem] !h-[4.5rem] !text-4xl sm:!w-20 sm:!h-20 sm:!text-5xl"
+                />
+                <span className="text-sm font-semibold truncate max-w-full leading-tight">
+                  {look.name}
+                  {running ? ' ⏱' : ''}
+                </span>
               </button>
             );
           })}
