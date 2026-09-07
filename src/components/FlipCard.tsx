@@ -5,18 +5,16 @@ import {
   useState,
   type MouseEvent,
   type ReactNode,
+  type RefObject,
 } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { cn } from '../lib/cn';
 
 type Props = {
-  /** sessionStorage key so the face sticks for this browser tab */
   storageKey: string;
   frontLabel: string;
   backLabel: string;
-  /** Status chip when on the front (e.g. "2 to approve") — only shown then */
   frontBadge?: string;
-  /** Status chip when on the back (e.g. "1 running") — only shown then */
   backBadge?: string;
   front: ReactNode;
   back: ReactNode;
@@ -24,8 +22,8 @@ type Props = {
 };
 
 /**
- * Two-faced home card. Flip control sits inside the card (top-right).
- * Both faces share one height (taller content wins) so the layout does not jump.
+ * Two-faced home card. Flip control is rendered *inside each face* so it
+ * always sits on the card surface. Faces share one height (max of both).
  */
 export function FlipCard({
   storageKey,
@@ -68,17 +66,22 @@ export function FlipCard({
 
   useLayoutEffect(() => {
     const measure = () => {
+      // Measure natural content height of both faces (ignore forced minHeight)
       const fh = frontRef.current?.scrollHeight ?? 0;
       const bh = backRef.current?.scrollHeight ?? 0;
-      const next = Math.max(fh, bh);
-      if (next > 0) setMinH(next);
+      const next = Math.max(fh, bh, 1);
+      setMinH((prev) => (prev === next ? prev : next));
     };
     measure();
-    const ro = new ResizeObserver(measure);
+    const ro = new ResizeObserver(() => measure());
     if (frontRef.current) ro.observe(frontRef.current);
     if (backRef.current) ro.observe(backRef.current);
-    return () => ro.disconnect();
-  }, [front, back, flipped]);
+    window.addEventListener('resize', measure);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, [front, back]);
 
   const toggle = (e: MouseEvent) => {
     e.preventDefault();
@@ -86,69 +89,83 @@ export function FlipCard({
     setFlipped((v) => !v);
   };
 
-  // Badge describes the *current* face only when useful — never bank minutes on timer→quests
-  const badge = flipped ? backBadge : frontBadge;
-  const otherLabel = flipped ? frontLabel : backLabel;
+  const makeBtn = (side: 'front' | 'back') => {
+    const onBack = side === 'back';
+    // Label = where you go; badge = hint about the *other* side only for front→timer
+    const otherLabel = onBack ? frontLabel : backLabel;
+    const badge = onBack ? undefined : frontBadge;
+    return (
+      <button
+        type="button"
+        onClick={toggle}
+        onMouseDown={(e) => e.stopPropagation()}
+        onPointerDown={(e) => e.stopPropagation()}
+        className={cn(
+          'absolute bottom-3 right-3 z-20',
+          'inline-flex items-center gap-1.5 rounded-full border border-border bg-surface/95',
+          'px-2.5 py-1 text-[11px] font-medium text-muted hover:text-fg hover:border-border-strong',
+          'shadow-sm backdrop-blur-sm transition-colors',
+        )}
+        title={`Show ${otherLabel}`}
+      >
+        <RefreshCw className={cn('w-3 h-3 shrink-0', onBack && 'rotate-180')} />
+        <span className="whitespace-nowrap">
+          Flip to {otherLabel}
+          {badge ? (
+            <span className="ml-1 text-accent font-semibold tabular-nums">· {badge}</span>
+          ) : null}
+        </span>
+      </button>
+    );
+  };
 
-  const flipBtn = (
-    <button
-      type="button"
-      onClick={toggle}
-      onMouseDown={(e) => e.stopPropagation()}
-      onPointerDown={(e) => e.stopPropagation()}
+  const faceShell = (
+    side: 'front' | 'back',
+    ref: RefObject<HTMLDivElement | null>,
+    content: ReactNode,
+    hidden: boolean,
+  ) => (
+    <div
+      ref={ref}
       className={cn(
-        'absolute bottom-3 right-3 z-20',
-        'inline-flex items-center gap-1.5 rounded-full border border-border bg-surface/95',
-        'px-2.5 py-1 text-[11px] font-medium text-muted hover:text-fg hover:border-border-strong',
-        'shadow-sm backdrop-blur-sm transition-colors',
+        'hq-flip-face',
+        side === 'front' ? 'hq-flip-face--front' : 'hq-flip-face--back',
+        hidden && 'pointer-events-none',
       )}
-      title={`Show ${otherLabel}`}
+      aria-hidden={hidden}
+      style={minH ? { minHeight: minH } : undefined}
     >
-      <RefreshCw className={cn('w-3 h-3 shrink-0', flipped && 'rotate-180 transition-transform')} />
-      <span className="whitespace-nowrap">
-        Flip to {otherLabel}
-        {badge ? (
-          <span className="ml-1 text-accent font-semibold tabular-nums">· {badge}</span>
-        ) : null}
-      </span>
-    </button>
+      <div className="hq-flip-face-body">
+        {content}
+        {makeBtn(side)}
+      </div>
+    </div>
   );
 
   if (reduceMotion) {
     return (
       <div className={cn('relative', className)} style={minH ? { minHeight: minH } : undefined}>
-        {flipBtn}
-        <div ref={flipped ? backRef : frontRef} className="hq-flip-pad">
+        <div className="hq-flip-face-body" style={minH ? { minHeight: minH } : undefined}>
           {flipped ? back : front}
+          {makeBtn(flipped ? 'back' : 'front')}
         </div>
-        {/* Keep both mounted off-layout for height measuring */}
-        <div className="sr-only" aria-hidden>
-          <div ref={flipped ? frontRef : backRef}>{flipped ? front : back}</div>
+        {/* Off-screen measure twin */}
+        <div className="absolute opacity-0 pointer-events-none -z-10 w-full" aria-hidden>
+          <div ref={frontRef}>{front}</div>
+          <div ref={backRef}>{back}</div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className={cn('relative hq-flip-scene', className)}>
-      {flipBtn}
+    <div className={cn('hq-flip-scene', className)}>
       <div
         className={cn('hq-flip-inner', flipped && 'hq-flip-inner--flipped')}
         style={minH ? { minHeight: minH } : undefined}
       >
-        <div
-          ref={frontRef}
-          className={cn('hq-flip-face hq-flip-face--front hq-flip-pad', flipped && 'pointer-events-none')}
-        >
-          {front}
-        </div>
-        <div
-          ref={backRef}
-          className={cn('hq-flip-face hq-flip-face--back hq-flip-pad', !flipped && 'pointer-events-none')}
-          aria-hidden={!flipped}
-        >
-          {back}
-        </div>
+        {faceShell('front', frontRef, front, flipped)}
+        {faceShell('back', backRef, back, !flipped)}
       </div>
     </div>
   );

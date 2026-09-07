@@ -1194,7 +1194,7 @@ export function Dashboard() {
           runningTimerCount > 0 ? `${runningTimerCount} running` : undefined
         }
         front={isParent ? (
-      <Card className="!p-4 lg:!p-5 space-y-4">
+      <Card className="!p-4 lg:!p-5 space-y-4 h-full flex flex-col">
         <div className="flex items-center justify-between gap-3">
           <h2 className="font-semibold text-fg flex items-center gap-2">
             <Sword className="w-4 h-4 text-accent" />
@@ -1380,7 +1380,7 @@ export function Dashboard() {
         )}
       </Card>
     ) : (
-      <Card className="!p-4 lg:!p-5">
+      <Card className="!p-4 lg:!p-5 h-full flex flex-col">
         <div className="flex items-center justify-between gap-3 mb-4">
           <h2 className="font-semibold text-fg flex items-center gap-2">
             <Sword className="w-4 h-4 text-accent" />
