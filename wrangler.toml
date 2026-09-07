@@ -1,7 +1,5 @@
-# Cloudflare Pages + Workers AI
-# Dashboard alternative: Pages → Settings → Functions → Bindings → Workers AI
-# Variable name MUST be exactly: AI
-# After adding binding, trigger a new deployment (binding applies to new deploys).
+# Cloudflare Pages + Workers AI + R2
+# Dashboard: Pages → Settings → Functions → Bindings
 name = "family-command-centre"
 compatibility_date = "2024-11-01"
 pages_build_output_dir = "dist"
@@ -9,6 +7,7 @@ pages_build_output_dir = "dist"
 [ai]
 binding = "AI"
 
-# SPA: serve index.html for unknown paths (replaces /* /index.html 200)
-[assets]
-not_found_handling = "single-page-application"
+# Message photo uploads (must also add the binding in the Pages dashboard)
+[[r2_buckets]]
+binding = "MESSAGE_IMAGES"
+bucket_name = "greenhq-messages"

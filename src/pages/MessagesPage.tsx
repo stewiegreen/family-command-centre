@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { MessageCircle, Send } from 'lucide-react';
+import { MessageCircle, Send, ImagePlus } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Avatar } from '../components/ui/Avatar';
 import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
 import { EmptyState } from '../components/ui/EmptyState';
 import { EmojiPicker } from '../components/EmojiPicker';
-import { MAX_MESSAGES_PER_THREAD } from '../lib/firebase';
+import { MAX_MESSAGES_PER_THREAD, getFirebaseAuth } from '../lib/firebase';
 import { cn } from '../lib/cn';
 
 /** Readable text on a coloured bubble (white on dark/saturated, dark on light). */
@@ -104,7 +104,7 @@ function MessageBody({ text }: { text: string }) {
 }
 
 export function MessagesPage() {
-  const { data, currentUser, getMember, sendMessage, markThreadRead } = useApp();
+  const { data, currentUser, getMember, sendMessage, markThreadRead, familyId } = useApp();
   const me = currentUser?.id || data.settings.currentUserId;
   const others = data.members
     .filter((m) => m.id !== me && m.role !== 'media')
@@ -112,6 +112,9 @@ export function MessagesPage() {
   const [chatId, setChatId] = useState(others[0]?.id || '');
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+  const fileRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -146,6 +149,42 @@ export function MessagesPage() {
       });
     } else {
       setText((t) => t + emoji);
+    }
+  };
+
+  const uploadPhoto = async (file: File) => {
+    setUploadError('');
+    setUploading(true);
+    try {
+      const auth = getFirebaseAuth();
+      const user = auth?.currentUser;
+      if (!user) {
+        setUploadError('Sign in required to upload photos.');
+        return;
+      }
+      const idToken = await user.getIdToken();
+      const form = new FormData();
+      form.append('photo', file);
+      if (familyId) form.append('familyId', familyId);
+      const res = await fetch('/api/messages/upload', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${idToken}` },
+        body: form,
+      });
+      const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
+      if (!res.ok || !data.url) {
+        setUploadError(data.error || `Upload failed (${res.status})`);
+        return;
+      }
+      setText((prev) => {
+        const next = prev.trim() ? `${prev.trim()}\n${data.url}` : data.url!;
+        return next;
+      });
+    } catch (e) {
+      setUploadError(e instanceof Error ? e.message : 'Upload failed');
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = '';
     }
   };
 
@@ -251,24 +290,52 @@ export function MessagesPage() {
           })}
           <div ref={bottomRef} />
         </div>
-        <div className="p-3 border-t border-border flex items-end gap-2">
-          <EmojiPicker onPick={insertEmoji} />
-          <Input
-            ref={inputRef}
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="Message… (paste image URL)"
-            onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && void send()}
-            className="flex-1 text-base"
-          />
-          <button
-            type="button"
-            onClick={() => void send()}
-            disabled={sending}
-            className="p-2.5 rounded-xl bg-accent text-accent-ink hover:bg-accent disabled:opacity-50"
-          >
-            <Send className="w-5 h-5" />
-          </button>
+        <div className="p-3 border-t border-border space-y-1.5">
+          {(uploading || uploadError) && (
+            <p className={`text-xs px-1 ${uploadError ? 'text-warn' : 'text-muted'}`}>
+              {uploading ? 'Uploading photo…' : uploadError}
+            </p>
+          )}
+          <div className="flex items-end gap-2">
+            <EmojiPicker onPick={insertEmoji} />
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void uploadPhoto(f);
+              }}
+            />
+            <button
+              type="button"
+              title="Add photo"
+              disabled={uploading}
+              onClick={() => fileRef.current?.click()}
+              className="p-2.5 rounded-xl border border-border text-muted hover:text-fg hover:bg-nav-hover disabled:opacity-50"
+            >
+              <ImagePlus className="w-5 h-5" />
+            </button>
+            <Input
+              ref={inputRef}
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder="Message…"
+              onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && void send()}
+              className="flex-1 text-base"
+              disabled={uploading}
+            />
+            <button
+              type="button"
+              onClick={() => void send()}
+              disabled={sending || uploading}
+              className="p-2.5 rounded-xl bg-accent text-accent-ink hover:bg-accent disabled:opacity-50"
+            >
+              <Send className="w-5 h-5" />
+            </button>
+          </div>
         </div>
       </Card>
     </div>

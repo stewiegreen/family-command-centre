@@ -1,4 +1,4 @@
-# SPA fallback is handled in wrangler.toml:
-#   [assets] not_found_handling = "single-page-application"
-# Do NOT use "/* /index.html 200" here — Cloudflare flags it as an
-# infinite loop and ignores the rule (breaks client-side routes).
+# No SPA catch-all here.
+# "/* /index.html 200" is ignored by Cloudflare (infinite-loop warning).
+# "[assets] not_found_handling" is invalid in Pages wrangler.toml.
+# GreenHQ navigates via in-app view state, so deep path rewrites are unnecessary.
