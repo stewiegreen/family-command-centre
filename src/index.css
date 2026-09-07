@@ -96,49 +96,85 @@
   --font-ui: "Source Sans 3", "Source Sans Pro", system-ui, -apple-system, sans-serif;
 }
 
-/* Neon / cyberpunk night — DO NOT CHANGE */
+/*
+ * Neon cyberpunk — family hub game UI
+ * Electric blue · vibrant magenta · cyber lime
+ * Dark void + subtle grid · holographic card rims · scannable widgets
+ */
 .neon {
-  --app-page: #07060f;
-  --app-surface: #0f0e1a;
-  --app-surface-2: #17162a;
-  --app-surface-3: #221f38;
-  --app-inset: rgba(7, 6, 15, 0.75);
-  --app-elevated: rgba(23, 22, 42, 0.92);
-  --app-border: #2a2750;
-  --app-border-strong: #3d3880;
-  --app-fg: #f0ecff;
-  --app-fg-secondary: #b0a8d9;
-  --app-muted: #8b83b8;
-  --app-faint: #5c5688;
-  --app-header: rgba(7, 6, 15, 0.9);
-  --app-sidebar: #0b0a14;
-  --app-nav-hover: #1c1a33;
-  --app-input: #12111f;
-  --app-scrollbar: #3d3880;
-  /* Electric cyan + magenta hero */
-  --app-hero-from: rgba(0, 240, 255, 0.16);
-  --app-hero-via: rgba(255, 45, 149, 0.08);
-  --app-hero-to: #0f0e1a;
-  --app-hero-border: rgba(0, 240, 255, 0.35);
-  --app-hero-title: #f0ecff;
-  --app-hero-sub: #00f0ff;
-  --app-hero-body: #b0a8d9;
-  --app-ring-offset: #07060f;
-  /* Primary accent = electric cyan */
-  --app-accent: #00e5ff;
-  --app-accent-hover: #5dffff;
-  --app-accent-tint: #0a2430;
-  --app-accent-tint-strong: #0f3544;
-  --app-accent-ink: #041016;
-  --app-warn: #ffcc33;
-  --app-warn-tint: #2e2610;
-  --app-danger: #ff2d6a;
-  --app-danger-tint: #2e0d18;
-  --app-success: #00e5ff;
-  --app-secondary: #ff2d95;
-  --app-shadow-card: 0 0 0 1px rgb(0 229 255 / 0.06), 0 8px 24px rgb(0 0 0 / 0.45);
+  /* Deep void with a cool blue undertone */
+  --app-page: #06060e;
+  --app-surface: #0c0c18;
+  --app-surface-2: #12122a;
+  --app-surface-3: #1a1a36;
+  --app-inset: rgba(6, 6, 14, 0.82);
+  --app-elevated: rgba(14, 14, 28, 0.94);
+  /* Soft holographic borders */
+  --app-border: #252545;
+  --app-border-strong: #3a3a6a;
+  --app-fg: #eef2ff;
+  --app-fg-secondary: #a8b0d8;
+  --app-muted: #8b93b8;
+  --app-faint: #5c6490;
+  --app-header: rgba(6, 6, 14, 0.92);
+  --app-sidebar: #080812;
+  --app-nav-hover: #16162e;
+  --app-input: #0e0e1c;
+  --app-scrollbar: #3a3a6a;
+  /* Hero: electric blue → magenta wash */
+  --app-hero-from: rgba(0, 180, 255, 0.18);
+  --app-hero-via: rgba(255, 45, 180, 0.1);
+  --app-hero-to: #0c0c18;
+  --app-hero-border: rgba(0, 200, 255, 0.4);
+  --app-hero-title: #eef2ff;
+  --app-hero-sub: #00d4ff;
+  --app-hero-body: #a8b0d8;
+  --app-ring-offset: #06060e;
+  /* Primary = electric blue */
+  --app-accent: #00c8ff;
+  --app-accent-hover: #5de0ff;
+  --app-accent-tint: #071a28;
+  --app-accent-tint-strong: #0c2a3c;
+  --app-accent-ink: #021018;
+  /* Magenta secondary / alerts that feel "game UI" */
+  --app-secondary: #ff2db8;
+  --app-warn: #ffe14a;
+  --app-warn-tint: #2a2410;
+  --app-danger: #ff3d7a;
+  --app-danger-tint: #2a0e18;
+  /* Cyber lime for success / done */
+  --app-success: #b8ff3c;
+  /* Holographic rim + soft depth */
+  --app-shadow-card:
+    0 0 0 1px rgb(0 200 255 / 0.12),
+    0 0 20px rgb(0 180 255 / 0.06),
+    0 8px 28px rgb(0 0 0 / 0.5);
   --font-display: Inter, system-ui, -apple-system, sans-serif;
   --font-ui: Inter, system-ui, -apple-system, sans-serif;
+}
+
+/* Subtle cyber grid + vignette — neon only */
+html.neon body {
+  background-color: var(--app-page);
+  background-image:
+    radial-gradient(ellipse 90% 60% at 50% -10%, rgba(0, 180, 255, 0.12), transparent 55%),
+    radial-gradient(ellipse 50% 40% at 100% 100%, rgba(255, 45, 180, 0.07), transparent 50%),
+    linear-gradient(rgba(0, 200, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 200, 255, 0.035) 1px, transparent 1px);
+  background-size: auto, auto, 28px 28px, 28px 28px;
+  background-attachment: fixed;
+}
+
+/* Active nav / focus glow in neon */
+html.neon :focus-visible {
+  outline: 2px solid var(--app-accent);
+  outline-offset: 2px;
+  box-shadow: 0 0 12px rgb(0 200 255 / 0.35);
+}
+
+/* Soft accent glow on primary buttons in neon */
+html.neon .bg-accent {
+  box-shadow: 0 0 16px rgb(0 200 255 / 0.25);
 }
 
 @theme {
