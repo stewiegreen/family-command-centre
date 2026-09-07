@@ -1,5 +1,5 @@
 import { useMemo, useState, type DragEvent } from 'react';
-import { Plus, Trash2, GripVertical, Pencil, Check, X } from 'lucide-react';
+import { Plus, Trash2, GripVertical, Pencil, Check, CheckSquare, X } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Avatar } from '../components/ui/Avatar';
 import { Button } from '../components/ui/Button';
@@ -263,7 +263,10 @@ export function TodosPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 shrink-0">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">To-Dos</h1>
+          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+            <CheckSquare className="w-6 h-6 text-accent" />
+            To-Dos
+          </h1>
           <p className="text-sm text-muted mt-1">
             Kanban board{listOwner ? ` · ${listOwner.name}` : ''}. Drag cards between columns.
           </p>

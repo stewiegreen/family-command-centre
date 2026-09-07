@@ -263,7 +263,10 @@ export function NotesPage() {
     <div className="p-4 lg:p-8 max-w-5xl mx-auto space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Notes</h1>
+          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+            <StickyNote className="w-6 h-6 text-accent" />
+            Notes
+          </h1>
           <p className="text-sm text-muted mt-1">
             Shared family reference — facts, checklists, and must-reads. Not a diary.
           </p>

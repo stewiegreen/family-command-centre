@@ -213,7 +213,10 @@ export function MessagesPage() {
 
   return (
     <div className="p-4 lg:p-6 max-w-3xl mx-auto h-[calc(100dvh-8rem)] lg:h-[calc(100dvh-4rem)] flex flex-col gap-3">
-      <h1 className="text-xl font-bold">Messages</h1>
+      <h1 className="text-xl font-bold flex items-center gap-2">
+        <MessageCircle className="w-6 h-6 text-accent" />
+        Messages
+      </h1>
       <p className="text-xs text-muted -mt-1">
         Private between you and each person — others cannot read these. Latest {MAX_MESSAGES_PER_THREAD} per chat are kept.
       </p>
