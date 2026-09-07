@@ -273,6 +273,34 @@ h3,
   overflow: hidden;
 }
 
+
+
+/* ── Home FlipCard (ChoreQuest ↔ Screen timer) ───────────────── */
+.hq-flip-scene {
+  perspective: 1400px;
+  perspective-origin: 50% 50%;
+}
+.hq-flip-inner {
+  display: grid;
+  transform-style: preserve-3d;
+  transition: transform 0.45s cubic-bezier(0.4, 0.2, 0.2, 1);
+}
+.hq-flip-inner--flipped {
+  transform: rotateY(180deg);
+}
+.hq-flip-face {
+  grid-area: 1 / 1;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  min-width: 0;
+}
+.hq-flip-face--front {
+  transform: rotateY(0deg);
+}
+.hq-flip-face--back {
+  transform: rotateY(180deg);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

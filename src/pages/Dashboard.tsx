@@ -1,4 +1,5 @@
 import { ScreenTimerCard } from '../components/ScreenTimerCard';
+import { FlipCard } from '../components/FlipCard';
 import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import {
   Calendar,
@@ -540,6 +541,8 @@ export function Dashboard() {
     (t) => !t.completed && t.dueAt && new Date(t.dueAt).getTime() < now.getTime(),
   );
   const pendingForParents = isParent ? chores.filter((c) => c.status === 'pending') : [];
+  const runningTimerCount = Object.keys(data.screenTimers || {}).length;
+  const myBankMin = (data.screenTime || {})[myId] ?? 0;
   const myPending = chores.filter((c) => c.status === 'pending' && c.submittedById === myId);
   const myChores = isParent
     ? pendingForParents
@@ -1174,7 +1177,28 @@ export function Dashboard() {
       </Card>
     ),
 
-    chorequest: isParent ? (
+    chorequest: (
+      <FlipCard
+        storageKey="chorequest-timer"
+        frontLabel="Quests"
+        backLabel="Timer"
+        frontBadge={
+          isParent
+            ? pendingForParents.length > 0
+              ? `${pendingForParents.length} to approve`
+              : undefined
+            : openCount > 0
+              ? `${openCount} open`
+              : undefined
+        }
+        backBadge={
+          runningTimerCount > 0
+            ? `${runningTimerCount} running`
+            : myBankMin > 0
+              ? `${myBankMin}m bank`
+              : undefined
+        }
+        front={isParent ? (
       <Card className="!p-4 lg:!p-5 space-y-4">
         <div className="flex items-center justify-between gap-3">
           <h2 className="font-semibold text-fg flex items-center gap-2">
@@ -1736,9 +1760,20 @@ export function Dashboard() {
           </>
         )}
       </Card>
+    )}
+        back={<ScreenTimerCard />}
+      />
+    ),
+    screentimer: rows.some((r) => r.includes('chorequest')) ? (
+      <Card className="!p-4 text-sm text-muted">
+        Screen timer lives on the <span className="text-fg font-medium">back of ChoreQuest</span>
+        — use the <span className="text-fg font-medium">Flip to Timer</span> control on that card.
+        Hide this card in homescreen settings if you don&apos;t need the reminder.
+      </Card>
+    ) : (
+      <ScreenTimerCard />
     ),
 
-    screentimer: <ScreenTimerCard />,
     look: <ProfileLookCard />,
   };
 
