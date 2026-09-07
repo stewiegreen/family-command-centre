@@ -30,7 +30,6 @@ export function FlipCard({
   frontLabel,
   backLabel,
   frontBadge,
-  backBadge,
   front,
   back,
   className,
