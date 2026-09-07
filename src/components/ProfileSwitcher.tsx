@@ -9,8 +9,8 @@ import { cn } from '../lib/cn';
 import type { ThemeId } from '../types';
 
 const THEMES: { id: ThemeId; label: string }[] = [
-  { id: 'dark', label: 'Dark' },
-  { id: 'light', label: 'Light' },
+  { id: 'dark', label: 'Warm dark' },
+  { id: 'light', label: 'Warm light' },
   { id: 'neon', label: 'Neon' },
 ];
 

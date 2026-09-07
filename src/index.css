@@ -1,84 +1,102 @@
 @import "tailwindcss";
 
-/* Semantic tokens — dark is default */
+/*
+ * Themes
+ * - .dark / :root  → Warm Precision (dark)
+ * - .light         → Warm Precision (light)
+ * - .neon          → Neon cyberpunk (unchanged)
+ */
+
+/* Warm Precision — dark (default) */
 :root,
 .dark {
-  /* Deep charcoal with a whisper of forest */
-  --app-page: #0e1110;
-  --app-surface: #161a18;
-  --app-surface-2: #1e2421;
-  --app-surface-3: #282f2b;
-  --app-inset: rgba(14, 17, 16, 0.72);
-  --app-elevated: rgba(30, 36, 33, 0.92);
-  --app-border: #2a322e;
-  --app-border-strong: #3a443f;
-  --app-fg: #eef2ef;
-  --app-fg-secondary: #a8b2ac;
-  --app-muted: #8b968f;
-  --app-faint: #5c665f;
-  --app-header: rgba(14, 17, 16, 0.88);
-  --app-sidebar: #121614;
-  --app-nav-hover: #1e2421;
-  --app-input: #1a1f1d;
-  --app-scrollbar: #3a443f;
-  --app-hero-from: rgba(109, 190, 139, 0.14);
-  --app-hero-via: rgba(109, 190, 139, 0.05);
-  --app-hero-to: #161a18;
-  --app-hero-border: rgba(109, 190, 139, 0.28);
-  --app-hero-title: #eef2ef;
-  --app-hero-sub: #8fd4a8;
-  --app-hero-body: #a8b2ac;
-  --app-ring-offset: #0e1110;
-  --app-accent: #6dbe8b;
-  --app-accent-hover: #82c99a;
-  --app-accent-tint: #15231c;
-  --app-accent-tint-strong: #1c3226;
-  --app-accent-ink: #0b1710;
-  --app-warn: #e0b25c;
-  --app-warn-tint: #2a2214;
-  --app-danger: #e8927e;
+  --app-page: #141210;
+  --app-surface: #1e1b18;
+  --app-surface-2: #2a2622;
+  --app-surface-3: #36312c;
+  --app-inset: rgba(20, 18, 16, 0.75);
+  --app-elevated: rgba(30, 27, 24, 0.96);
+  --app-border: #3a342e;
+  --app-border-strong: #4a433c;
+  --app-fg: #f5f0e8;
+  --app-fg-secondary: #a89f94;
+  --app-muted: #a89f94;
+  --app-faint: #7a7268;
+  --app-header: rgba(20, 18, 16, 0.9);
+  --app-sidebar: #181512;
+  --app-nav-hover: #2a2622;
+  --app-input: #1e1b18;
+  --app-scrollbar: #4a433c;
+  --app-hero-from: rgba(91, 168, 143, 0.14);
+  --app-hero-via: rgba(196, 165, 116, 0.06);
+  --app-hero-to: #1e1b18;
+  --app-hero-border: rgba(91, 168, 143, 0.3);
+  --app-hero-title: #f5f0e8;
+  --app-hero-sub: #7bc4a8;
+  --app-hero-body: #a89f94;
+  --app-ring-offset: #141210;
+  /* Sage primary */
+  --app-accent: #5ba88f;
+  --app-accent-hover: #7bc4a8;
+  --app-accent-tint: #1a2e28;
+  --app-accent-tint-strong: #243d35;
+  --app-accent-ink: #0b1712;
+  --app-warn: #d4a05a;
+  --app-warn-tint: #2e2618;
+  --app-danger: #d47262;
   --app-danger-tint: #2c1a17;
+  --app-success: #5ba88f;
+  --app-secondary: #d4b896;
+  --app-shadow-card: 0 1px 2px rgb(0 0 0 / 0.2), 0 4px 16px rgb(0 0 0 / 0.18);
+  --font-display: "Fraunces", "Iowan Old Style", Palatino, serif;
+  --font-ui: "Source Sans 3", "Source Sans Pro", system-ui, -apple-system, sans-serif;
 }
 
-/* Day mode */
+/* Warm Precision — light */
 .light {
-  --app-page: #fafaf8;
-  --app-surface: #ffffff;
-  --app-surface-2: #f4f3ef;
-  --app-surface-3: #e7e6e0;
-  --app-inset: #f4f3ef;
+  --app-page: #f7f4ef;
+  --app-surface: #fffcf8;
+  --app-surface-2: #f3efe8;
+  --app-surface-3: #e8e2d9;
+  --app-inset: #f3efe8;
   --app-elevated: #ffffff;
-  --app-border: #e7e6e0;
-  --app-border-strong: #d9d8d0;
-  --app-fg: #1c1c1a;
-  --app-fg-secondary: #6b6a62;
-  --app-muted: #6b6a62;
-  --app-faint: #a3a299;
-  --app-header: rgba(255, 255, 255, 0.9);
-  --app-sidebar: #ffffff;
-  --app-nav-hover: #f4f3ef;
+  --app-border: #e8e2d9;
+  --app-border-strong: #d4ccc0;
+  --app-fg: #1c1916;
+  --app-fg-secondary: #6b645b;
+  --app-muted: #6b645b;
+  --app-faint: #9a9288;
+  --app-header: rgba(255, 252, 248, 0.92);
+  --app-sidebar: #fffcf8;
+  --app-nav-hover: #f3efe8;
   --app-input: #ffffff;
-  --app-scrollbar: #d9d8d0;
-  --app-hero-from: #eaf2ea;
-  --app-hero-via: #f4faf5;
-  --app-hero-to: #ffffff;
-  --app-hero-border: #d7e9d9;
-  --app-hero-title: #1c1c1a;
-  --app-hero-sub: #2e6b44;
-  --app-hero-body: #6b6a62;
+  --app-scrollbar: #d4ccc0;
+  --app-hero-from: #e6f2ed;
+  --app-hero-via: #f3f7f1;
+  --app-hero-to: #fffcf8;
+  --app-hero-border: #cfe3db;
+  --app-hero-title: #1c1916;
+  --app-hero-sub: #2f6f5e;
+  --app-hero-body: #6b645b;
   --app-ring-offset: #ffffff;
-  --app-accent: #2e6b44;
-  --app-accent-hover: #255738;
-  --app-accent-tint: #eaf2ea;
-  --app-accent-tint-strong: #d7e9d9;
+  /* Deep sage primary */
+  --app-accent: #2f6f5e;
+  --app-accent-hover: #255a4c;
+  --app-accent-tint: #e6f2ed;
+  --app-accent-tint-strong: #d0e6dc;
   --app-accent-ink: #ffffff;
-  --app-warn: #b4740f;
+  --app-warn: #c4843a;
   --app-warn-tint: #fbf1df;
-  --app-danger: #b4432f;
+  --app-danger: #c45c4a;
   --app-danger-tint: #fbebe7;
+  --app-success: #3d8b6e;
+  --app-secondary: #c4a574;
+  --app-shadow-card: 0 1px 2px rgb(28 25 22 / 0.04), 0 4px 12px rgb(28 25 22 / 0.05);
+  --font-display: "Fraunces", "Iowan Old Style", Palatino, serif;
+  --font-ui: "Source Sans 3", "Source Sans Pro", system-ui, -apple-system, sans-serif;
 }
 
-/* Neon / cyberpunk night */
+/* Neon / cyberpunk night — DO NOT CHANGE */
 .neon {
   --app-page: #07060f;
   --app-surface: #0f0e1a;
@@ -116,6 +134,11 @@
   --app-warn-tint: #2e2610;
   --app-danger: #ff2d6a;
   --app-danger-tint: #2e0d18;
+  --app-success: #00e5ff;
+  --app-secondary: #ff2d95;
+  --app-shadow-card: 0 0 0 1px rgb(0 229 255 / 0.06), 0 8px 24px rgb(0 0 0 / 0.45);
+  --font-display: Inter, system-ui, -apple-system, sans-serif;
+  --font-ui: Inter, system-ui, -apple-system, sans-serif;
 }
 
 @theme {
@@ -135,6 +158,7 @@
   --color-sidebar: var(--app-sidebar);
   --color-nav-hover: var(--app-nav-hover);
   --color-input: var(--app-input);
+  --color-scrollbar: var(--app-scrollbar);
   --color-hero-from: var(--app-hero-from);
   --color-hero-via: var(--app-hero-via);
   --color-hero-to: var(--app-hero-to);
@@ -152,6 +176,10 @@
   --color-warn-tint: var(--app-warn-tint);
   --color-danger: var(--app-danger);
   --color-danger-tint: var(--app-danger-tint);
+  --color-success: var(--app-success);
+  --color-secondary: var(--app-secondary);
+  --font-family-display: var(--font-display);
+  --font-family-sans: var(--font-ui);
 }
 
 html,
@@ -162,10 +190,20 @@ body,
 
 body {
   margin: 0;
-  font-family: Inter, system-ui, -apple-system, sans-serif;
+  font-family: var(--font-ui);
   -webkit-tap-highlight-color: transparent;
   background-color: var(--app-page);
   color: var(--app-fg);
+}
+
+/* Warm Precision headings; neon keeps Inter via --font-display */
+h1,
+h2,
+h3,
+.font-display {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 ::-webkit-scrollbar {
@@ -191,4 +229,20 @@ body {
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+.line-clamp-4 {
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

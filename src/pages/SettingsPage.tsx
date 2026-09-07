@@ -608,7 +608,7 @@ export function SettingsPage() {
                 s.theme === t ? 'bg-accent text-accent-ink' : 'bg-surface-2 text-muted',
               )}
             >
-              {t === 'neon' ? 'Neon' : t}
+              {t === 'neon' ? 'Neon' : t === 'light' ? 'Warm light' : 'Warm dark'}
             </button>
           ))}
         </div>
