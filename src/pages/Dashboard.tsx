@@ -1,5 +1,6 @@
 import { ScreenTimerCard } from '../components/ScreenTimerCard';
 import { FlipCard } from '../components/FlipCard';
+import { EventsDotCalendar } from '../components/EventsDotCalendar';
 import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import {
   Calendar,
@@ -977,7 +978,12 @@ export function Dashboard() {
       </Card>
     ),
     events: (
-      <Card>
+      <FlipCard
+        storageKey="events-dotcal"
+        frontLabel="List"
+        backLabel="Calendar"
+        front={
+<Card className="h-full flex flex-col">
         <div className="flex items-center justify-between gap-2 mb-3">
           <div className="flex items-center gap-2 min-w-0">
             <h2 className="font-semibold text-fg shrink-0">Upcoming Events</h2>
@@ -1121,6 +1127,9 @@ export function Dashboard() {
           </div>
         )}
       </Card>
+        }
+        back={<EventsDotCalendar filterMemberId={eventsFilterMemberId} />}
+      />
     ),
 
     todos: (
