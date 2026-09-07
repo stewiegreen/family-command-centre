@@ -293,12 +293,17 @@ h3,
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
   min-width: 0;
+  height: 100%;
 }
 .hq-flip-face--front {
   transform: rotateY(0deg);
 }
 .hq-flip-face--back {
   transform: rotateY(180deg);
+}
+/* Keep flip chip clear of card header text */
+.hq-flip-pad > * {
+  box-sizing: border-box;
 }
 
 @media (prefers-reduced-motion: reduce) {

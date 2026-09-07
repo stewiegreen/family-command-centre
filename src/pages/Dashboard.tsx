@@ -542,7 +542,6 @@ export function Dashboard() {
   );
   const pendingForParents = isParent ? chores.filter((c) => c.status === 'pending') : [];
   const runningTimerCount = Object.keys(data.screenTimers || {}).length;
-  const myBankMin = (data.screenTime || {})[myId] ?? 0;
   const myPending = chores.filter((c) => c.status === 'pending' && c.submittedById === myId);
   const myChores = isParent
     ? pendingForParents
@@ -1192,11 +1191,7 @@ export function Dashboard() {
               : undefined
         }
         backBadge={
-          runningTimerCount > 0
-            ? `${runningTimerCount} running`
-            : myBankMin > 0
-              ? `${myBankMin}m bank`
-              : undefined
+          runningTimerCount > 0 ? `${runningTimerCount} running` : undefined
         }
         front={isParent ? (
       <Card className="!p-4 lg:!p-5 space-y-4">
