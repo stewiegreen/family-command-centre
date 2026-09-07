@@ -166,7 +166,7 @@ export function MessagesPage() {
       const form = new FormData();
       form.append('photo', file);
       if (familyId) form.append('familyId', familyId);
-      const res = await fetch('/api/messages/upload', {
+      const res = await fetch('/api/messages-upload', {
         method: 'POST',
         headers: { Authorization: `Bearer ${idToken}` },
         body: form,
