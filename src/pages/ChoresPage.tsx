@@ -27,7 +27,9 @@ import type {
   RedemptionRecord,
   RewardItem,
   RewardKind,
+  ScreenTimerSession,
 } from '../types';
+import { formatCountdown } from '../lib/screenTimer';
 import {
   DIFFICULTY_ORDER,
   DIFFICULTY_REWARDS,
@@ -854,6 +856,8 @@ export function ChoresPage() {
 
   const [spendOpen, setSpendOpen] = useState(false);
   const [spendMins, setSpendMins] = useState(30);
+  const [timerLabel, setTimerLabel] = useState('');
+  const [timerNow, setTimerNow] = useState(Date.now());
   /** Who the "Use Screen Time" controls target (kid for parents; self for kids). */
   const [spendMemberId, setSpendMemberId] = useState(() => {
     if (isParent) {
@@ -875,6 +879,97 @@ export function ChoresPage() {
   }, [isParent, kids, spendMemberId, myId]);
 
   const spendBalance = screenTimeMap[spendMemberId] ?? 0;
+  const screenTimers = data.screenTimers || {};
+  const activeTimer = screenTimers[spendMemberId];
+
+  useEffect(() => {
+    if (!activeTimer && !Object.keys(screenTimers).length) return;
+    const id = window.setInterval(() => setTimerNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [activeTimer, Object.keys(screenTimers).length]);
+
+  const timerRemainingSec = useMemo(() => {
+    if (!activeTimer) return 0;
+    return Math.max(0, Math.ceil((new Date(activeTimer.endsAt).getTime() - timerNow) / 1000));
+  }, [activeTimer, timerNow]);
+
+  /** Debit bank up front, run countdown; stop early refunds whole unused minutes. */
+  const startScreenTimer = (memberId: string, minutes: number, label?: string) => {
+    if (!me) return;
+    const m = Math.floor(minutes);
+    if (m <= 0) return;
+    const bal = (data.screenTime || {})[memberId] ?? 0;
+    if (bal < m) {
+      alert(`Only ${bal} minutes available.`);
+      return;
+    }
+    if (screenTimers[memberId]) {
+      alert('A timer is already running for this person. Stop it first.');
+      return;
+    }
+    const startedAt = new Date().toISOString();
+    const endsAt = new Date(Date.now() + m * 60_000).toISOString();
+    const session: ScreenTimerSession = {
+      memberId,
+      byId: me.id,
+      startedAt,
+      endsAt,
+      totalMin: m,
+      label: (label || '').trim() || undefined,
+    };
+    update((d) => {
+      const current = (d.screenTime || {})[memberId] ?? 0;
+      if (current < m) return d;
+      return {
+        ...d,
+        screenTime: { ...(d.screenTime || {}), [memberId]: current - m },
+        screenTimeLog: [
+          {
+            id: newId(),
+            memberId,
+            delta: -m,
+            reason: `Timer: ${(label || '').trim() || 'screen time'} (${m}m)`,
+            byId: me.id,
+            at: startedAt,
+          },
+          ...(d.screenTimeLog || []),
+        ].slice(0, 100),
+        screenTimers: { ...(d.screenTimers || {}), [memberId]: session },
+      };
+    });
+  };
+
+  const stopScreenTimer = (memberId: string) => {
+    if (!me) return;
+    const sess = (data.screenTimers || {})[memberId];
+    if (!sess) return;
+    const leftSec = Math.max(0, new Date(sess.endsAt).getTime() - Date.now());
+    const refund = Math.floor(leftSec / 60_000);
+    if (!confirm(refund > 0 ? `Stop timer and refund ${refund} unused minute(s)?` : 'Stop timer?')) {
+      return;
+    }
+    update((d) => {
+      const nextTimers = { ...(d.screenTimers || {}) };
+      delete nextTimers[memberId];
+      const st = { ...(d.screenTime || {}) };
+      let log = d.screenTimeLog || [];
+      if (refund > 0) {
+        st[memberId] = (st[memberId] ?? 0) + refund;
+        log = [
+          {
+            id: newId(),
+            memberId,
+            delta: refund,
+            reason: `Timer stopped early — refund ${refund}m`,
+            byId: me.id,
+            at: new Date().toISOString(),
+          },
+          ...log,
+        ].slice(0, 100);
+      }
+      return { ...d, screenTimers: nextTimers, screenTime: st, screenTimeLog: log };
+    });
+  };
 
   const claimChest = () => {
     if (!me) return;
@@ -1133,63 +1228,100 @@ export function ChoresPage() {
             </div>
           </div>
 
-          {myScreen > 0 && (
-            <div className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted">Use Screen Time</p>
-              <div className="flex flex-wrap gap-2">
-                {[15, 30, 60].map((m) => (
-                  <Button
-                    key={m}
-                    size="sm"
-                    variant="secondary"
-                    disabled={myScreen < m}
-                    onClick={() => spendScreenTime(myId, m)}
-                  >
-                    Use {m}m
-                  </Button>
-                ))}
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => {
-                    setSpendMemberId(myId);
-                    setSpendMins(Math.min(30, Math.max(5, myScreen || 30)));
-                    setSpendOpen(true);
-                  }}
-                >
-                  Custom…
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted">Use Screen Time</p>
+            <p className="text-[11px] text-faint">
+              Starts a timer and spends from your bank; stop early to refund unused minutes.
+            </p>
+            {screenTimers[myId] ? (
+              <div className="rounded-xl border border-accent/40 bg-accent/10 p-3 text-center space-y-2">
+                <p className="text-3xl font-bold tabular-nums text-fg">
+                  {formatCountdown(
+                    Math.max(
+                      0,
+                      Math.ceil((new Date(screenTimers[myId]!.endsAt).getTime() - timerNow) / 1000),
+                    ),
+                  )}
+                </p>
+                <Button size="sm" variant="secondary" onClick={() => stopScreenTimer(myId)}>
+                  <Square className="w-3.5 h-3.5" /> Stop · refund leftover
                 </Button>
               </div>
-            </div>
-          )}
+            ) : (
+              <>
+                <div className="flex flex-wrap gap-2">
+                  {[15, 30, 45, 60].map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      disabled={myScreen < m}
+                      onClick={() => setSpendMins(m)}
+                      className={cn(
+                        'px-2.5 py-1 rounded-lg text-xs border tabular-nums',
+                        spendMins === m
+                          ? 'border-accent bg-accent/15 text-accent'
+                          : 'border-border text-muted hover:text-fg',
+                        myScreen < m && 'opacity-40 cursor-not-allowed',
+                      )}
+                    >
+                      {m}m
+                    </button>
+                  ))}
+                </div>
+                <Button
+                  size="sm"
+                  className="w-full"
+                  disabled={myScreen < spendMins || spendMins <= 0}
+                  onClick={() => startScreenTimer(myId, spendMins)}
+                >
+                  <Play className="w-3.5 h-3.5" /> Start · spend {Math.floor(spendMins)}m
+                </Button>
+                {myScreen <= 0 && (
+                  <p className="text-xs text-warn">No minutes in the bank — buy some in the shop.</p>
+                )}
+              </>
+            )}
+          </div>
         </Card>
       )}
 
-      {/* Parents: kid-first Use Screen Time strip */}
+      {/* Parents: Use Screen Time — same timer model as home card (spend + countdown + refund) */}
       {isParent && kids.length > 0 && (
         <Card className="!p-4 lg:!p-5 space-y-3">
-          <div className="flex items-center gap-2">
-            <MonitorPlay className="w-4 h-4 text-sky-600 shrink-0" />
-            <h2 className="text-sm font-semibold text-fg">Use Screen Time</h2>
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <MonitorPlay className="w-4 h-4 text-sky-600 shrink-0" />
+              <h2 className="text-sm font-semibold text-fg">Use Screen Time</h2>
+            </div>
+            <span className="text-xs text-muted tabular-nums">{spendBalance}m bank</span>
           </div>
           <p className="text-[11px] text-muted">
-            Pick who is watching, then log minutes from their bank.
+            Pick who is watching, start a timer from their bank. Stop early to refund unused minutes —
+            fairer than deducting a fixed block all at once.
           </p>
-          <div className="flex flex-wrap gap-2">
+          <div
+            className={cn(
+              'grid gap-2 w-full',
+              kids.length === 1 && 'grid-cols-1',
+              kids.length === 2 && 'grid-cols-2',
+              kids.length >= 3 && 'grid-cols-3',
+            )}
+          >
             {kids.map((k) => {
               const look = getMember(k.id) || k;
               const bal = screenTimeMap[k.id] ?? 0;
               const selected = spendMemberId === k.id;
+              const running = !!screenTimers[k.id];
               return (
                 <button
                   key={k.id}
                   type="button"
                   onClick={() => setSpendMemberId(k.id)}
                   className={cn(
-                    'flex items-center gap-2 pl-2 pr-3 py-1.5 rounded-full border transition-colors',
+                    'flex items-center gap-2.5 px-3 py-2.5 rounded-xl border-2 text-left transition-colors min-h-[3.25rem]',
                     selected
-                      ? 'border-accent bg-accent/15 ring-2 ring-accent/30'
-                      : 'border-border bg-inset hover:bg-nav-hover',
+                      ? 'border-accent bg-accent/15 text-accent'
+                      : 'border-border bg-inset hover:bg-nav-hover hover:border-border-strong',
                   )}
                 >
                   <Avatar
@@ -1197,44 +1329,95 @@ export function ChoresPage() {
                     emoji={look.emoji}
                     color={look.color}
                     initials={look.initials}
-                    size="sm"
+                    size="md"
+                    className="!w-11 !h-11 !text-2xl !rounded-xl"
                   />
-                  <span className="text-xs font-semibold text-fg">{look.name}</span>
-                  <span
-                    className={cn(
-                      'text-[11px] tabular-nums font-medium',
-                      bal > 0 ? 'text-sky-600' : 'text-faint',
-                    )}
-                  >
-                    {bal}m
-                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-fg truncate">
+                      {look.name}
+                      {running ? ' ⏱' : ''}
+                    </p>
+                    <p
+                      className={cn(
+                        'text-[11px] tabular-nums font-medium',
+                        bal > 0 ? 'text-sky-600' : 'text-faint',
+                      )}
+                    >
+                      {bal}m bank
+                    </p>
+                  </div>
                 </button>
               );
             })}
           </div>
-          <div className="flex flex-wrap gap-2">
-            {[15, 30, 60].map((m) => (
-              <Button
-                key={m}
-                size="sm"
-                variant="secondary"
-                disabled={spendBalance < m}
-                onClick={() => spendScreenTime(spendMemberId, m)}
+
+          {activeTimer ? (
+            <div className="rounded-xl border border-accent/40 bg-accent/10 p-4 text-center space-y-2">
+              <p className="text-xs text-muted">
+                {activeTimer.label || 'Screen time'} · {getMember(activeTimer.memberId)?.name}
+              </p>
+              <p
+                className={cn(
+                  'text-4xl font-bold tabular-nums tracking-tight',
+                  timerRemainingSec <= 60 ? 'text-warn' : 'text-fg',
+                )}
               >
-                Use {m}m
+                {formatCountdown(timerRemainingSec)}
+              </p>
+              <Button size="sm" variant="secondary" onClick={() => stopScreenTimer(spendMemberId)}>
+                <Square className="w-3.5 h-3.5" /> Stop · refund leftover
               </Button>
-            ))}
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => {
-                setSpendMins(Math.min(30, Math.max(5, spendBalance || 15)));
-                setSpendOpen(true);
-              }}
-            >
-              Custom…
-            </Button>
-          </div>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <div className="flex flex-wrap gap-1.5">
+                {[15, 30, 45, 60].map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    disabled={m > spendBalance}
+                    onClick={() => setSpendMins(m)}
+                    className={cn(
+                      'px-2.5 py-1 rounded-lg text-xs border tabular-nums',
+                      spendMins === m
+                        ? 'border-accent bg-accent/15 text-accent'
+                        : 'border-border text-muted hover:text-fg',
+                      m > spendBalance && 'opacity-40 cursor-not-allowed',
+                    )}
+                  >
+                    {m}m
+                  </button>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  min={1}
+                  max={spendBalance || 1}
+                  value={spendMins}
+                  onChange={(e) => setSpendMins(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                  className="w-20 rounded-xl border border-border bg-inset px-3 py-2 text-sm text-fg outline-none focus:border-accent tabular-nums"
+                />
+                <input
+                  value={timerLabel}
+                  onChange={(e) => setTimerLabel(e.target.value)}
+                  placeholder="What? (Nintendo…)"
+                  className="flex-1 min-w-0 rounded-xl border border-border bg-inset px-3 py-2 text-sm text-fg outline-none focus:border-accent"
+                />
+              </div>
+              <Button
+                size="sm"
+                className="w-full"
+                disabled={spendBalance < spendMins || spendMins <= 0}
+                onClick={() => startScreenTimer(spendMemberId, spendMins, timerLabel)}
+              >
+                <Play className="w-3.5 h-3.5" /> Start · spend {Math.floor(spendMins)}m
+              </Button>
+              {spendBalance <= 0 && (
+                <p className="text-xs text-warn">No minutes in the bank — earn some in ChoreQuest first.</p>
+              )}
+            </div>
+          )}
         </Card>
       )}
 
@@ -2287,12 +2470,12 @@ export function ChoresPage() {
             </Button>
             <Button
               onClick={() => {
-                spendScreenTime(spendMemberId, spendMins);
+                startScreenTimer(spendMemberId, spendMins, timerLabel);
                 setSpendOpen(false);
               }}
               disabled={spendMins <= 0 || (screenTimeMap[spendMemberId] ?? 0) < spendMins}
             >
-              Use {spendMins || 0} min
+              Start timer · {spendMins || 0} min
             </Button>
           </div>
         </div>
