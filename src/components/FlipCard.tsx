@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, type MouseEvent, type ReactNode } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { cn } from '../lib/cn';
 
@@ -56,7 +56,7 @@ export function FlipCard({
     }
   }, [flipped, key]);
 
-  const toggle = (e: React.MouseEvent) => {
+  const toggle = (e: MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setFlipped((v) => !v);

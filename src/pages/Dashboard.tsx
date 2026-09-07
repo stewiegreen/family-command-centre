@@ -1474,6 +1474,9 @@ export function Dashboard() {
           </div>
         )}
       </Card>
+        )}
+        back={<ScreenTimerCard />}
+      />
     ),
 
     chores: (
@@ -1760,10 +1763,8 @@ export function Dashboard() {
           </>
         )}
       </Card>
-    )}
-        back={<ScreenTimerCard />}
-      />
     ),
+
     screentimer: rows.some((r) => r.includes('chorequest')) ? (
       <Card className="!p-4 text-sm text-muted">
         Screen timer lives on the <span className="text-fg font-medium">back of ChoreQuest</span>
