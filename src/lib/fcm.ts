@@ -10,6 +10,37 @@ import type { FamilyData } from '../types';
 
 let messaging: Messaging | null = null;
 
+/**
+ * Tracks (per-device, via localStorage) whether this browser has a live,
+ * successfully-registered FCM token. NotificationWatcher.tsx uses this to
+ * skip its own local "catch-up" notification for alert types that already
+ * have a real server-pushed notification (screen-timer alerts) — without
+ * this, a device with working push would show BOTH the real push (via
+ * sw.js's background handler) AND the local one, stacking as duplicates,
+ * since they're two independent systems reacting to the same underlying
+ * event with no coordination between them.
+ */
+const FCM_ACTIVE_KEY = 'greenhq:fcmActive';
+
+export function hasActiveFcmToken(): boolean {
+  try {
+    return localStorage.getItem(FCM_ACTIVE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function setFcmActive(active: boolean) {
+  try {
+    if (active) localStorage.setItem(FCM_ACTIVE_KEY, '1');
+    else localStorage.removeItem(FCM_ACTIVE_KEY);
+  } catch {
+    // localStorage unavailable (private browsing, etc.) — fine, just means
+    // the local-notification fallback stays on for this device, which is
+    // the safe default (better an occasional duplicate than a missed alert).
+  }
+}
+
 function appInstance(): FirebaseApp | null {
   const apps = getApps();
   if (apps.length) return apps[0]!;
@@ -64,9 +95,11 @@ export async function registerFcmToken(): Promise<string | null> {
       vapidKey: FIREBASE_VAPID_KEY,
       serviceWorkerRegistration: reg,
     });
+    setFcmActive(!!token);
     return token || null;
   } catch (e) {
     console.warn('FCM getToken failed', e);
+    setFcmActive(false);
     return null;
   }
 }
@@ -81,6 +114,7 @@ export function withFcmToken(data: FamilyData, memberId: string, token: string):
 }
 
 export function withoutFcmToken(data: FamilyData, memberId: string, token: string): FamilyData {
+  setFcmActive(false);
   const byMember = { ...(data.fcmTokens || {}) };
   byMember[memberId] = (byMember[memberId] || []).filter((t) => t !== token);
   return { ...data, fcmTokens: byMember };

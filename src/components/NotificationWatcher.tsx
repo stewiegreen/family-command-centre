@@ -14,6 +14,7 @@ import {
   wasTodoNotified,
 } from '../lib/notifications';
 import { markScreenTimerAlertSeen, wasScreenTimerAlertSeen } from '../lib/screenTimer';
+import { hasActiveFcmToken } from '../lib/fcm';
 import { upcomingExpanded } from '../lib/recurrence';
 
 /**
@@ -237,11 +238,17 @@ export function NotificationWatcher() {
         markScreenTimerAlertSeen(a.id);
         continue;
       }
-      void showLocalNotification("Time's up!", {
-        body: a.message.slice(0, 160),
-        tag: `screentimer-${a.id}`,
-        data: { view: 'dashboard' },
-      });
+      // This device already gets a real push for screen-timer alerts (via
+      // sw.js's background handler) whenever one has been successfully
+      // registered — showing this local one too would just duplicate it.
+      // Only show the local fallback on devices that never got push working.
+      if (!hasActiveFcmToken()) {
+        void showLocalNotification("Time's up!", {
+          body: a.message.slice(0, 160),
+          tag: `screentimer-${a.id}`,
+          data: { view: 'dashboard' },
+        });
+      }
       markScreenTimerAlertSeen(a.id);
     }
   }, [enabled, me, isParent, data.screenTimeAlerts]);

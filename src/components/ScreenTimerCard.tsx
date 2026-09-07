@@ -76,6 +76,7 @@ export function ScreenTimerCard() {
       if (familyId) {
         void requestScreenTimerPush({
           familyId,
+          alertId: alert.id,
           title: "Time's up!",
           body: alert.message,
           view: 'dashboard',

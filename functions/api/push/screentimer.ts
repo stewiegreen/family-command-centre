@@ -94,6 +94,7 @@ async function sendFcm(
   title: string,
   body: string,
   view: string,
+  tag: string,
 ): Promise<{ ok: boolean; status: number; detail?: string }> {
   const res = await fetch(
     `https://fcm.googleapis.com/v1/projects/${encodeURIComponent(projectId)}/messages:send`,
@@ -107,7 +108,7 @@ async function sendFcm(
         message: {
           token: deviceToken,
           notification: { title, body },
-          data: { title, body, view, tag: 'screentimer' },
+          data: { title, body, view, tag },
           webpush: {
             headers: { Urgency: 'high' },
             notification: {
@@ -140,7 +141,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   const verified = await verifyIdToken(idToken, apiKey);
   if (!verified) return json({ error: 'Invalid id token' }, 401);
 
-  let body: { familyId?: string; title?: string; body?: string; view?: string };
+  let body: { familyId?: string; alertId?: string; title?: string; body?: string; view?: string };
   try {
     body = await context.request.json();
   } catch {
@@ -152,6 +153,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   const title = (body.title || "Time's up!").slice(0, 80);
   const text = (body.body || 'Screen time ended').slice(0, 160);
   const view = body.view || 'dashboard';
+  // Fall back to a title-derived tag if no alertId was sent (older client),
+  // so this never throws — just loses the cross-path de-dup benefit.
+  const tag = body.alertId ? `screentimer-${body.alertId}` : 'screentimer';
 
   try {
     const sa = parseServiceAccount(env.FIREBASE_SERVICE_ACCOUNT);
@@ -187,7 +191,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     let sent = 0;
     const errors: string[] = [];
     for (const deviceToken of tokens) {
-      const r = await sendFcm(sa.project_id, fcmToken, deviceToken, title, text, view);
+      const r = await sendFcm(sa.project_id, fcmToken, deviceToken, title, text, view, tag);
       if (r.ok) sent++;
       else errors.push(`${r.status}: ${r.detail?.slice(0, 120)}`);
     }
