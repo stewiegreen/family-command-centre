@@ -1644,7 +1644,7 @@ export function Dashboard() {
     ),
 
     weather: (
-      <div className="space-y-3 h-full flex flex-col">
+      <Card className="!p-4 lg:!p-5 space-y-3 h-full flex flex-col">
         {/* Compact header: icon + current temp + hi/lo, refresh tucked away as an icon */}
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-center gap-2.5 min-w-0">
@@ -1735,7 +1735,7 @@ export function Dashboard() {
             </div>
           </>
         )}
-      </div>
+      </Card>
     ),
 
     screentimer: <ScreenTimerCard />,
