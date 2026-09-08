@@ -12,7 +12,6 @@ const THEMES: { id: ThemeId; label: string }[] = [
   { id: 'dark', label: 'Warm dark' },
   { id: 'light', label: 'Warm light' },
   { id: 'neon', label: 'Neon' },
-  { id: 'starwars', label: 'Star Wars' },
 ];
 
 export function ProfileSwitcher({

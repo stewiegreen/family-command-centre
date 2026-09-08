@@ -26,7 +26,7 @@ export type RewardKind =
 export type RedemptionStatus = 'pending' | 'fulfilled' | 'cancelled';
 /** Simple presence — no GPS. */
 export type PresenceStatus = 'home' | 'school' | 'work' | 'out' | 'away';
-export type ThemeId = 'dark' | 'light' | 'neon' | 'starwars';
+export type ThemeId = 'dark' | 'light' | 'neon';
 
 /** Shared family-wide todo list (not assigned to one person). */
 export const FAMILY_LIST_ID = '__family__';

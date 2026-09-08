@@ -5,7 +5,6 @@
  * - .dark / :root  → Warm Precision (dark)
  * - .light         → Warm Precision (light)
  * - .neon          → Neon cyberpunk (unchanged)
- * - .starwars      → Deep space + crawl yellow (preview theme)
  */
 
 /* Warm Precision — dark (default) */
@@ -177,86 +176,6 @@ html.neon :focus-visible {
 html.neon .bg-accent {
   box-shadow: 0 0 16px rgb(0 200 255 / 0.25);
 }
-
-/* Star Wars–inspired — deep space + crawl yellow + saber accents
- * (colour mood only — no official marks/fonts)
- */
-.starwars {
-  --app-page: #0b0d12;
-  --app-surface: #141820;
-  --app-surface-2: #1a2030;
-  --app-surface-3: #242c3e;
-  --app-inset: rgba(11, 13, 18, 0.85);
-  --app-elevated: rgba(20, 24, 32, 0.96);
-  --app-border: #2a3344;
-  --app-border-strong: #3d4a60;
-  --app-fg: #f2f4f8;
-  --app-fg-secondary: #a8b0c0;
-  --app-muted: #8b93a7;
-  --app-faint: #5c6578;
-  --app-header: rgba(11, 13, 18, 0.92);
-  --app-sidebar: #0e1118;
-  --app-nav-hover: #1a2030;
-  --app-input: #12161f;
-  --app-scrollbar: #3d4a60;
-  /* Hero: soft yellow wash + blue edge */
-  --app-hero-from: rgba(255, 232, 31, 0.12);
-  --app-hero-via: rgba(79, 195, 247, 0.06);
-  --app-hero-to: #141820;
-  --app-hero-border: rgba(255, 232, 31, 0.35);
-  --app-hero-title: #f2f4f8;
-  --app-hero-sub: #ffe81f;
-  --app-hero-body: #a8b0c0;
-  --app-ring-offset: #0b0d12;
-  /* Crawl yellow primary */
-  --app-accent: #ffe81f;
-  --app-accent-hover: #fff066;
-  --app-accent-tint: #2a2610;
-  --app-accent-tint-strong: #3d3614;
-  --app-accent-ink: #1a1600;
-  --app-secondary: #4fc3f7;
-  --app-warn: #ffb74d;
-  --app-warn-tint: #2a2010;
-  --app-danger: #e53935;
-  --app-danger-tint: #2a1010;
-  --app-success: #4fc3f7;
-  --app-shadow-card:
-    0 0 0 1px rgb(255 232 31 / 0.1),
-    0 0 24px rgb(255 232 31 / 0.05),
-    0 8px 28px rgb(0 0 0 / 0.55);
-  --font-display: Inter, system-ui, -apple-system, sans-serif;
-  --font-ui: Inter, system-ui, -apple-system, sans-serif;
-}
-
-/* Subtle starfield + soft yellow corona — starwars only */
-html.starwars body {
-  background-color: var(--app-page);
-  background-image:
-    radial-gradient(ellipse 80% 50% at 50% -15%, rgba(255, 232, 31, 0.1), transparent 55%),
-    radial-gradient(ellipse 40% 35% at 0% 100%, rgba(79, 195, 247, 0.06), transparent 50%),
-    radial-gradient(1px 1px at 12% 18%, rgba(255, 255, 255, 0.45), transparent),
-    radial-gradient(1px 1px at 28% 62%, rgba(255, 255, 255, 0.35), transparent),
-    radial-gradient(1px 1px at 44% 28%, rgba(255, 255, 255, 0.3), transparent),
-    radial-gradient(1px 1px at 61% 74%, rgba(255, 255, 255, 0.4), transparent),
-    radial-gradient(1px 1px at 77% 22%, rgba(255, 255, 255, 0.28), transparent),
-    radial-gradient(1px 1px at 89% 55%, rgba(255, 255, 255, 0.35), transparent),
-    radial-gradient(1.5px 1.5px at 33% 88%, rgba(255, 255, 255, 0.25), transparent),
-    radial-gradient(1px 1px at 52% 10%, rgba(255, 255, 255, 0.4), transparent),
-    radial-gradient(1px 1px at 8% 48%, rgba(255, 255, 255, 0.3), transparent),
-    radial-gradient(1px 1px at 95% 82%, rgba(255, 255, 255, 0.28), transparent);
-  background-attachment: fixed;
-}
-
-html.starwars :focus-visible {
-  outline: 2px solid var(--app-accent);
-  outline-offset: 2px;
-  box-shadow: 0 0 12px rgb(255 232 31 / 0.35);
-}
-
-html.starwars .bg-accent {
-  box-shadow: 0 0 16px rgb(255 232 31 / 0.28);
-}
-
 
 @theme {
   --color-page: var(--app-page);

@@ -393,7 +393,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     root.classList.toggle('dark', t === 'dark');
     root.classList.toggle('light', t === 'light');
     root.classList.toggle('neon', t === 'neon');
-    root.classList.toggle('starwars', t === 'starwars');
   }, [data.settings.theme, data.settings.currentUserId, data.appearance]);
 
   const currentUserRaw = data.members.find((m) => m.id === data.settings.currentUserId);
@@ -740,7 +739,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   const setMyTheme = useCallback(
-    (theme: import('../types').ThemeId) => {
+    (theme: 'dark' | 'light' | 'neon') => {
       update((d) => {
         const id = d.settings.currentUserId;
         if (!id) return d;
