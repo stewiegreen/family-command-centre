@@ -46,7 +46,6 @@ export const DEFAULT_DATA: FamilyData = {
   shoppingCatalog: [],
   shoppingStoreOrder: [],
   redemptions: [],
-  partyMap: null,
   settings: DEFAULT_SETTINGS,
 };
 
@@ -151,7 +150,6 @@ export function migratePayload(p: Partial<FamilyData>): FamilyData {
     shoppingStoreOrder: p.shoppingStoreOrder || [],
     redemptions: p.redemptions || [],
     weekState: p.weekState,
-    partyMap: p.partyMap ?? null,
     choreQuest: p.choreQuest,
   };
 }
