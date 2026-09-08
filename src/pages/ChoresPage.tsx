@@ -71,7 +71,7 @@ function newId() {
 }
 
 /** Bump when shipping a Chores/ChoreQuest UI change so deploy lag is obvious. */
-const CHOREQUEST_UI_VERSION = 'catalog-1';
+const CHOREQUEST_UI_VERSION = 'shop-sort-2';
 
 type TabId = 'quests' | 'catalog' | 'shop' | 'vault' | 'board' | 'rates';
 
