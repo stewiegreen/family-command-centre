@@ -1191,16 +1191,9 @@ export function Dashboard() {
         frontLabel="Quests"
         backLabel="Timer"
         frontBadge={
-          isParent
-            ? pendingForParents.length > 0
-              ? `${pendingForParents.length} to approve`
-              : undefined
-            : openCount > 0
-              ? `${openCount} open`
-              : undefined
-        }
-        backBadge={
-          runningTimerCount > 0 ? `${runningTimerCount} running` : undefined
+          isParent && pendingForParents.length > 0
+            ? `${pendingForParents.length} to approve`
+            : undefined
         }
         front={isParent ? (
       <Card className="!p-4 lg:!p-5 space-y-4 h-full flex flex-col">
