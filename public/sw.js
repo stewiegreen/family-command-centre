@@ -17,20 +17,23 @@ try {
   const messaging = firebase.messaging();
   messaging.onBackgroundMessage((payload) => {
     const title =
-      (payload.notification && payload.notification.title) ||
       (payload.data && payload.data.title) ||
+      (payload.notification && payload.notification.title) ||
       'GreenHQ';
     const body =
-      (payload.notification && payload.notification.body) ||
       (payload.data && payload.data.body) ||
+      (payload.notification && payload.notification.body) ||
       '';
     const view = (payload.data && payload.data.view) || 'dashboard';
-    self.registration.showNotification(title, {
+    const tag = (payload.data && payload.data.tag) || 'greenhq-push';
+    // One notification per tag — OS replaces rather than stacks.
+    return self.registration.showNotification(title, {
       body,
       icon: '/favicon.svg',
       badge: '/favicon.svg',
-      tag: (payload.data && payload.data.tag) || 'greenhq-push',
-      data: { view },
+      tag,
+      renotify: false,
+      data: { view, tag },
     });
   });
 } catch (e) {

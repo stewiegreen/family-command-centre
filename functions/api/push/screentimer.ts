@@ -105,18 +105,15 @@ async function sendFcm(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
+        // DATA-ONLY message. Including a top-level or webpush `notification`
+        // makes the browser auto-display one, and our SW onBackgroundMessage
+        // shows another — same alert twice (or 4× with two tokens). The SW
+        // is the single place that calls showNotification.
         message: {
           token: deviceToken,
-          notification: { title, body },
           data: { title, body, view, tag },
           webpush: {
             headers: { Urgency: 'high' },
-            notification: {
-              title,
-              body,
-              icon: '/favicon.svg',
-              badge: '/favicon.svg',
-            },
             fcmOptions: { link: `https://greenhq.io/?view=${encodeURIComponent(view)}` },
           },
         },

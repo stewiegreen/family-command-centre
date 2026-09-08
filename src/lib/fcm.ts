@@ -75,8 +75,10 @@ function setStoredFcmToken(token: string | null) {
 export function syncFcmToken(data: FamilyData, memberId: string, newToken: string): FamilyData {
   const prevToken = getStoredFcmToken();
   let next = data;
+  // Drop this device's previous token from *every* member (profile switches
+  // used to leave copies under the sibling / other parent).
   if (prevToken && prevToken !== newToken) {
-    next = withoutFcmToken(next, memberId, prevToken);
+    next = withoutFcmToken(next, '*', prevToken);
   }
   next = withFcmToken(next, memberId, newToken);
   setStoredFcmToken(newToken);
@@ -144,18 +146,33 @@ export async function registerFcmToken(): Promise<string | null> {
   }
 }
 
-/** Merge token into family.fcmTokens for this member (max 5 devices). */
+/** Merge token into family.fcmTokens for this member (max 5 devices).
+ *  Also strips this exact token from every other member so one phone never
+ *  receives N pushes because it was registered under multiple profiles. */
 export function withFcmToken(data: FamilyData, memberId: string, token: string): FamilyData {
-  const byMember = { ...(data.fcmTokens || {}) };
-  const existing = byMember[memberId] || [];
-  if (existing.includes(token)) return data;
+  const byMember: Record<string, string[]> = {};
+  for (const [mid, list] of Object.entries(data.fcmTokens || {})) {
+    const filtered = (list || []).filter((t) => t !== token);
+    if (mid === memberId) continue;
+    if (filtered.length) byMember[mid] = filtered;
+  }
+  const existing = (data.fcmTokens || {})[memberId] || [];
   byMember[memberId] = [token, ...existing.filter((t) => t !== token)].slice(0, 5);
   return { ...data, fcmTokens: byMember };
 }
 
+/** Remove token from one member, or from every member when memberId is '*'. */
 export function withoutFcmToken(data: FamilyData, memberId: string, token: string): FamilyData {
   const byMember = { ...(data.fcmTokens || {}) };
+  if (memberId === '*') {
+    for (const mid of Object.keys(byMember)) {
+      byMember[mid] = (byMember[mid] || []).filter((t) => t !== token);
+      if (!byMember[mid].length) delete byMember[mid];
+    }
+    return { ...data, fcmTokens: byMember };
+  }
   byMember[memberId] = (byMember[memberId] || []).filter((t) => t !== token);
+  if (!byMember[memberId]?.length) delete byMember[memberId];
   return { ...data, fcmTokens: byMember };
 }
 
