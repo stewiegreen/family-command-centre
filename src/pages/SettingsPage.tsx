@@ -598,7 +598,7 @@ export function SettingsPage() {
       <Card>
         <h2 className="font-semibold mb-3">Theme</h2>
         <div className="flex flex-wrap gap-2">
-          {(['dark', 'light', 'neon'] as const).map((t) => (
+          {(['dark', 'light', 'neon', 'starwars'] as const).map((t) => (
             <button
               key={t}
               type="button"
@@ -608,7 +608,7 @@ export function SettingsPage() {
                 s.theme === t ? 'bg-accent text-accent-ink' : 'bg-surface-2 text-muted',
               )}
             >
-              {t === 'neon' ? 'Neon' : t === 'light' ? 'Warm light' : 'Warm dark'}
+              {t === 'neon' ? 'Neon' : t === 'starwars' ? 'Star Wars' : t === 'light' ? 'Warm light' : 'Warm dark'}
             </button>
           ))}
         </div>
