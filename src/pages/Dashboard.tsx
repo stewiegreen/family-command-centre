@@ -542,7 +542,6 @@ export function Dashboard() {
     (t) => !t.completed && t.dueAt && new Date(t.dueAt).getTime() < now.getTime(),
   );
   const pendingForParents = isParent ? chores.filter((c) => c.status === 'pending') : [];
-  const runningTimerCount = Object.keys(data.screenTimers || {}).length;
   const myPending = chores.filter((c) => c.status === 'pending' && c.submittedById === myId);
   const myChores = isParent
     ? pendingForParents

@@ -5,7 +5,6 @@ import {
   useState,
   type MouseEvent,
   type ReactNode,
-  type RefObject,
 } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { cn } from '../lib/cn';
