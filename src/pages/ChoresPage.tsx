@@ -71,7 +71,7 @@ function newId() {
 }
 
 /** Bump when shipping a Chores/ChoreQuest UI change so deploy lag is obvious. */
-const CHOREQUEST_UI_VERSION = 'shop-sort-2';
+const CHOREQUEST_UI_VERSION = 'shop-sort-3';
 
 type TabId = 'quests' | 'catalog' | 'shop' | 'vault' | 'board' | 'rates';
 
@@ -2389,6 +2389,250 @@ export function ChoresPage() {
         </section>
       )}
 
+
+      {/* Style picker — avatar / name flair (no separate page) */}
+      <Modal
+        open={styleModal !== null}
+        onClose={() => setStyleModal(null)}
+        title={styleModal === 'avatar' ? 'Avatar flair' : styleModal === 'name' ? 'Name flair' : 'Style'}
+      >
+        {styleModal === 'avatar' && (
+          <div className="space-y-4">
+            <p className="text-sm text-muted">
+              Shape + ring colour around your avatar. Your profile emoji and name stay the same.
+            </p>
+            <div className="flex justify-center py-2">
+              <Avatar
+                {...(me || {})}
+                name={me?.name}
+                size="lg"
+                avatarFlairShape={data.appearance?.[myId]?.avatarFlairShape || me?.avatarFlairShape}
+                avatarFlairColor={data.appearance?.[myId]?.avatarFlairColor || me?.avatarFlairColor}
+              />
+            </div>
+
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">Shape</p>
+              <div className="grid grid-cols-2 gap-2">
+                {AVATAR_FLAIR_SHAPES.map((s) => {
+                  const on =
+                    (data.appearance?.[myId]?.avatarFlairShape || 'circle') === s.id;
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => {
+                        update((d) => {
+                          const prev = d.appearance?.[myId] || {};
+                          return {
+                            ...d,
+                            appearance: {
+                              ...(d.appearance || {}),
+                              [myId]: { ...prev, avatarFlairShape: s.id },
+                            },
+                          };
+                        });
+                      }}
+                      className={cn(
+                        'rounded-xl border px-3 py-2.5 text-sm transition-colors',
+                        on ? 'border-accent bg-accent/10' : 'border-border hover:bg-nav-hover',
+                      )}
+                    >
+                      <span className="mr-1.5">{s.preview}</span>
+                      {s.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">
+                Ring colour
+              </p>
+              <div className="grid grid-cols-5 sm:grid-cols-6 gap-2">
+                {AVATAR_FLAIR_COLORS.map((c) => {
+                  const current = data.appearance?.[myId]?.avatarFlairColor || '';
+                  const on = current === c.hex || (!current && !c.hex);
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      title={c.label}
+                      onClick={() => {
+                        update((d) => {
+                          const prev = d.appearance?.[myId] || {};
+                          return {
+                            ...d,
+                            appearance: {
+                              ...(d.appearance || {}),
+                              [myId]: {
+                                ...prev,
+                                avatarFlairColor: c.hex || undefined,
+                              },
+                            },
+                          };
+                        });
+                      }}
+                      className={cn(
+                        'h-9 rounded-lg border-2 flex items-center justify-center text-[10px] font-medium',
+                        on ? 'border-accent scale-105' : 'border-border',
+                      )}
+                      style={
+                        c.hex
+                          ? { backgroundColor: c.hex }
+                          : undefined
+                      }
+                    >
+                      {!c.hex ? (
+                        <span className="text-muted">Off</span>
+                      ) : (
+                        <span className="sr-only">{c.label}</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <Button className="w-full" onClick={() => setStyleModal(null)}>
+              Done
+            </Button>
+          </div>
+        )}
+        {styleModal === 'name' && (
+          <div className="space-y-4">
+            <p className="text-sm text-muted">
+              Write your own title under your name (max {NAME_FLAIR_MAX} characters). This is{' '}
+              <span className="text-fg font-medium">not</span> a rename — everyone still sees you as{' '}
+              <span className="text-fg font-medium">{me?.name}</span>.
+            </p>
+            <div className="rounded-xl border border-border bg-inset px-4 py-3 text-center">
+              <p className="text-lg font-semibold text-fg">{me?.name}</p>
+              {nameFlairLabel(data.appearance?.[myId]?.nameFlairText) ? (
+                <p
+                  className="text-sm mt-0.5 font-medium"
+                  style={{
+                    color: data.appearance?.[myId]?.nameFlairColor || undefined,
+                  }}
+                >
+                  {nameFlairLabel(data.appearance?.[myId]?.nameFlairText)}
+                </p>
+              ) : (
+                <p className="text-xs text-muted mt-0.5">No flair yet</p>
+              )}
+            </div>
+            <div>
+              <label className="text-xs text-muted mb-1 block">
+                Your flair{' '}
+                <span className="tabular-nums">
+                  ({(data.appearance?.[myId]?.nameFlairText || '').length}/{NAME_FLAIR_MAX})
+                </span>
+              </label>
+              <input
+                className="w-full rounded-xl border border-border bg-inset px-3 py-2 text-fg text-sm outline-none focus:border-accent"
+                maxLength={NAME_FLAIR_MAX}
+                placeholder="e.g. Sock Slayer"
+                value={data.appearance?.[myId]?.nameFlairText || ''}
+                onChange={(e) => {
+                  const next = sanitizeNameFlair(e.target.value);
+                  update((d) => {
+                    const prev = d.appearance?.[myId] || {};
+                    return {
+                      ...d,
+                      appearance: {
+                        ...(d.appearance || {}),
+                        [myId]: {
+                          ...prev,
+                          nameFlairText: next || undefined,
+                        },
+                      },
+                    };
+                  });
+                }}
+              />
+              <p className="text-[11px] text-muted mt-1">
+                Tip: keep it fun. Parents can clear it if needed.
+              </p>
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">
+                Flair colour
+              </p>
+              <div className="grid grid-cols-5 sm:grid-cols-6 gap-2">
+                {AVATAR_FLAIR_COLORS.map((c) => {
+                  const current = data.appearance?.[myId]?.nameFlairColor || '';
+                  const on = current === c.hex || (!current && !c.hex);
+                  return (
+                    <button
+                      key={`name-${c.id}`}
+                      type="button"
+                      title={c.label}
+                      onClick={() => {
+                        update((d) => {
+                          const prev = d.appearance?.[myId] || {};
+                          return {
+                            ...d,
+                            appearance: {
+                              ...(d.appearance || {}),
+                              [myId]: {
+                                ...prev,
+                                nameFlairColor: c.hex || undefined,
+                              },
+                            },
+                          };
+                        });
+                      }}
+                      className={cn(
+                        'h-9 rounded-lg border-2 flex items-center justify-center text-[10px] font-medium',
+                        on ? 'border-accent scale-105' : 'border-border',
+                      )}
+                      style={c.hex ? { backgroundColor: c.hex } : undefined}
+                    >
+                      {!c.hex ? (
+                        <span className="text-muted">Def</span>
+                      ) : (
+                        <span className="sr-only">{c.label}</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-[11px] text-muted mt-1">
+                “Def” uses the normal accent colour.
+              </p>
+            </div>
+
+            <div className="flex gap-2">
+              <Button
+                variant="secondary"
+                className="flex-1"
+                onClick={() => {
+                  update((d) => {
+                    const prev = d.appearance?.[myId] || {};
+                    return {
+                      ...d,
+                      appearance: {
+                        ...(d.appearance || {}),
+                        [myId]: {
+                          ...prev,
+                          nameFlairText: undefined,
+                          nameFlairColor: undefined,
+                        },
+                      },
+                    };
+                  });
+                }}
+              >
+                Clear
+              </Button>
+              <Button className="flex-1" onClick={() => setStyleModal(null)}>
+                Done
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
 
       {/* Create / edit quest modal */}
       <Modal
