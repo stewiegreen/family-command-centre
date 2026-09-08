@@ -182,6 +182,28 @@ export interface QuestTemplate {
 /** @deprecated Use Quest */
 export type Chore = Quest;
 
+/** Shared Party Map adventure (parent preview; kids UI later). */
+export interface PartyMapLogEntry {
+  id: string;
+  at: string;
+  questId: string;
+  memberId: string;
+  label: string;
+  stepsGained: number;
+  regionId: string;
+  /** Set when this step first unlocked a new region. */
+  regionUnlock?: string;
+}
+
+export interface PartyMapState {
+  seasonId: string;
+  steps: number;
+  currentRegionId: string;
+  unlockedRegionIds: string[];
+  log: PartyMapLogEntry[];
+  seasonStartedAt: string;
+}
+
 /** Per-kid XP / level (not spendable). */
 export interface MemberProgress {
   xp: number;
@@ -554,6 +576,7 @@ export interface FamilyData {
   /** Current week cycle state (Phase 3). */
   weekState?: WeekState;
   /** Parent-tunable quest economy (Phase 5). */
+  partyMap?: PartyMapState | null;
   choreQuest?: ChoreQuestConfig;
   memberUids?: string[];
   /** Auth uids of members with role === 'parent'. Enforced by security rules. */

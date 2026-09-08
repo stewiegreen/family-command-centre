@@ -14,6 +14,7 @@ import {
   RotateCcw,
   Trash2,
   Trophy,
+  Map,
   X,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
@@ -48,6 +49,14 @@ import {
 } from '../lib/quest';
 import { creditMemberForQuest } from '../lib/todoQuest';
 import {
+  PARTY_REGIONS,
+  advancePartyMapOnApprove,
+  ensurePartyMap,
+  nextRegion,
+  resetPartyMap,
+  stepsForQuest,
+} from '../lib/partyMap';
+import {
   claimStreakChest,
   daysUntilWeekEnd,
   ensureWeekRollover,
@@ -66,7 +75,7 @@ function newId() {
 /** Bump when shipping a Chores/ChoreQuest UI change so deploy lag is obvious. */
 const CHOREQUEST_UI_VERSION = 'catalog-1';
 
-type TabId = 'quests' | 'catalog' | 'shop' | 'vault' | 'board' | 'rates';
+type TabId = 'quests' | 'catalog' | 'shop' | 'vault' | 'board' | 'rates' | 'map';
 
 const KIND_LABEL: Record<RewardKind, string> = {
   screen_time: 'Screen time',
@@ -553,6 +562,8 @@ export function ChoresPage() {
       };
       // Count toward weekday streak (Mon–Fri only; no-op on weekends)
       result = recordWeekdayCompletion(result, forId, new Date(at));
+      // Party Map (shared adventure path)
+      result = advancePartyMapOnApprove(result, { quest, forId, at });
       return result;
     });
   };
@@ -1116,6 +1127,7 @@ export function ChoresPage() {
     },
     { id: 'board', label: 'Board' },
     ...(isParent ? [{ id: 'rates' as const, label: 'Rates' }] : []),
+    ...(isParent ? [{ id: 'map' as const, label: 'Map' }] : []),
   ];
 
   return (
@@ -2277,6 +2289,196 @@ export function ChoresPage() {
           </div>
         </section>
       )}
+
+
+      {/* ── MAP TAB (parents only — kids never see this until ready) ── */}
+      {tab === 'map' && isParent && (() => {
+        const map = ensurePartyMap(data.partyMap);
+        const nxt = nextRegion(map.steps);
+        const pctToNext = nxt
+          ? Math.min(
+              100,
+              Math.round(
+                ((map.steps - (PARTY_REGIONS.find((r) => r.id === map.currentRegionId)?.atStep || 0)) /
+                  Math.max(1, nxt.atStep - (PARTY_REGIONS.find((r) => r.id === map.currentRegionId)?.atStep || 0))) *
+                  100,
+              ),
+            )
+          : 100;
+        const current = PARTY_REGIONS.find((r) => r.id === map.currentRegionId) || PARTY_REGIONS[0]!;
+        return (
+          <section className="space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-semibold uppercase tracking-wide text-muted mb-1 flex items-center gap-2">
+                  <Map className="w-4 h-4 text-accent" />
+                  Party Map
+                  <span className="text-[10px] font-medium normal-case tracking-normal px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                    Parent preview
+                  </span>
+                </h2>
+                <p className="text-xs text-muted max-w-xl">
+                  Shared adventure path. Every approved quest moves the party (Easy +1 · Medium +2 · Epic +3).
+                  Kids do not see this tab yet — only you.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2 shrink-0">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => {
+                    if (!confirm('Reset the party map to Home Base? Progress log clears.')) return;
+                    update((d) => ({ ...d, partyMap: resetPartyMap() }));
+                  }}
+                >
+                  Reset season
+                </Button>
+              </div>
+            </div>
+
+            <Card className="!p-4 lg:!p-5 space-y-4">
+              <div className="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <p className="text-2xl font-bold text-fg">
+                    {current.emoji} {current.name}
+                  </p>
+                  <p className="text-sm text-muted mt-1 max-w-md">{current.blurb}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-3xl font-bold text-accent tabular-nums">{map.steps}</p>
+                  <p className="text-xs text-muted">party steps</p>
+                </div>
+              </div>
+
+              {nxt ? (
+                <div>
+                  <div className="flex justify-between text-xs text-muted mb-1">
+                    <span>
+                      Next: {nxt.emoji} {nxt.name}
+                    </span>
+                    <span className="tabular-nums">
+                      {map.steps} / {nxt.atStep}
+                    </span>
+                  </div>
+                  <div className="h-2 rounded-full bg-inset border border-border overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-accent transition-all"
+                      style={{ width: `${pctToNext}%` }}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-accent font-medium">Summit reached for this season. ⛰️</p>
+              )}
+            </Card>
+
+            {/* Path */}
+            <Card className="!p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-3">The path</p>
+              <ol className="space-y-0">
+                {PARTY_REGIONS.map((r, i) => {
+                  const unlocked = map.steps >= r.atStep;
+                  const here = map.currentRegionId === r.id;
+                  return (
+                    <li key={r.id} className="relative flex gap-3">
+                      <div className="flex flex-col items-center w-8 shrink-0">
+                        <span
+                          className={cn(
+                            'w-8 h-8 rounded-full flex items-center justify-center text-base border-2 z-10',
+                            here
+                              ? 'border-accent bg-accent/20 scale-110'
+                              : unlocked
+                                ? 'border-accent/50 bg-accent/10'
+                                : 'border-border bg-inset text-faint',
+                          )}
+                        >
+                          {r.emoji}
+                        </span>
+                        {i < PARTY_REGIONS.length - 1 ? (
+                          <span
+                            className={cn(
+                              'w-0.5 flex-1 min-h-[1.25rem]',
+                              map.steps >= PARTY_REGIONS[i + 1]!.atStep ? 'bg-accent/50' : 'bg-border',
+                            )}
+                          />
+                        ) : null}
+                      </div>
+                      <div className={cn('pb-4 flex-1 min-w-0', !unlocked && 'opacity-50')}>
+                        <div className="flex items-baseline justify-between gap-2">
+                          <p className={cn('font-medium text-sm', here ? 'text-accent' : 'text-fg')}>
+                            {r.name}
+                            {here ? (
+                              <span className="ml-2 text-[10px] uppercase tracking-wide text-accent">
+                                Party here
+                              </span>
+                            ) : null}
+                          </p>
+                          <span className="text-[11px] text-muted tabular-nums shrink-0">
+                            {r.atStep === 0 ? 'Start' : `${r.atStep} steps`}
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted mt-0.5">{r.blurb}</p>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ol>
+            </Card>
+
+            {/* Log */}
+            <Card className="!p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">
+                Adventure log
+              </p>
+              {map.log.length === 0 ? (
+                <p className="text-sm text-muted py-2">
+                  Approve a quest to move the party. Easy +1 · Medium +2 · Epic +3.
+                </p>
+              ) : (
+                <ul className="space-y-2 max-h-64 overflow-y-auto">
+                  {map.log.map((e) => {
+                    const who = getMember(e.memberId);
+                    const region = PARTY_REGIONS.find((r) => r.id === e.regionId);
+                    return (
+                      <li
+                        key={e.id}
+                        className="flex items-start gap-2 text-sm border border-border rounded-xl px-2.5 py-2"
+                      >
+                        <span className="text-base shrink-0">{region?.emoji || '👣'}</span>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-fg truncate">
+                            <span className="font-medium">{who?.name || 'Hero'}</span>
+                            <span className="text-muted"> · {e.label}</span>
+                          </p>
+                          <p className="text-[11px] text-muted">
+                            +{e.stepsGained} step{e.stepsGained === 1 ? '' : 's'}
+                            {e.regionUnlock
+                              ? ` · unlocked ${PARTY_REGIONS.find((r) => r.id === e.regionUnlock)?.name || e.regionUnlock}`
+                              : ''}
+                            {' · '}
+                            {new Date(e.at).toLocaleString(undefined, {
+                              month: 'short',
+                              day: 'numeric',
+                              hour: 'numeric',
+                              minute: '2-digit',
+                            })}
+                          </p>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </Card>
+
+            <p className="text-[11px] text-faint text-center">
+              Step weights: Easy quest +{stepsForQuest({ difficulty: 'easy' })} · Medium +
+              {stepsForQuest({ difficulty: 'medium' })} · Epic +
+              {stepsForQuest({ difficulty: 'epic' })}
+            </p>
+          </section>
+        );
+      })()}
 
       {/* Create / edit quest modal */}
       <Modal
