@@ -1774,7 +1774,11 @@ export function Dashboard() {
     ),
 
     look: <ProfileLookCard />,
-    pictureframe: <PictureFrameCard />,
+    pictureframe: (
+      <Card className="!p-2 h-full flex flex-col min-h-[14rem]">
+        <PictureFrameCard />
+      </Card>
+    ),
   };
 
   return (

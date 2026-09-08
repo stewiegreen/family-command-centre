@@ -40,7 +40,7 @@ export function PictureFrameCard() {
 
   if (!unlocked) {
     return (
-      <div className="flex flex-col items-center justify-center gap-2 py-6 text-center">
+      <div className="h-full min-h-[14rem] flex flex-col items-center justify-center gap-2 text-center px-4">
         <ImagePlus className="w-8 h-8 text-muted" />
         <p className="text-sm text-muted">
           Unlock a picture frame in the ChoreQuest shop to pin a photo here.
@@ -102,7 +102,7 @@ export function PictureFrameCard() {
   };
 
   return (
-    <div className="space-y-1.5">
+    <div className="h-full min-h-[14rem] flex flex-col">
       <input
         ref={fileRef}
         type="file"
@@ -113,15 +113,14 @@ export function PictureFrameCard() {
       />
 
       {url ? (
-        <div className="relative group rounded-xl overflow-hidden border border-border bg-inset aspect-[4/3]">
-          {/* object-contain so the whole image fits inside the card */}
+        <div className="relative flex-1 min-h-[14rem] rounded-2xl overflow-hidden border border-border bg-inset">
+          {/* Fill the paired row height; whole image stays visible */}
           <img
             src={url}
             alt=""
             className="absolute inset-0 w-full h-full object-contain"
           />
 
-          {/* Overlay controls — top-right, always reachable on touch */}
           <div className="absolute top-2 right-2 flex items-center gap-1.5 z-10">
             <button
               type="button"
@@ -163,7 +162,7 @@ export function PictureFrameCard() {
           disabled={busy}
           onClick={() => fileRef.current?.click()}
           className={cn(
-            'w-full aspect-[4/3] rounded-xl border-2 border-dashed border-border',
+            'flex-1 min-h-[14rem] w-full rounded-2xl border-2 border-dashed border-border',
             'flex flex-col items-center justify-center gap-2 text-muted hover:border-accent/50 hover:text-fg transition-colors',
             busy && 'opacity-60 pointer-events-none',
           )}
@@ -177,7 +176,7 @@ export function PictureFrameCard() {
         </button>
       )}
 
-      {err && <p className="text-xs text-warn">{err}</p>}
+      {err && <p className="text-xs text-warn mt-1">{err}</p>}
     </div>
   );
 }
