@@ -1186,7 +1186,15 @@ export function ChoresPage() {
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-fg truncate">{me.name}</p>
                   {nameFlairLabel(me.nameFlairText) ? (
-                    <p className="text-[11px] text-accent truncate">{nameFlairLabel(me.nameFlairText)}</p>
+                    <p
+                      className={cn(
+                        'text-[11px] truncate font-medium',
+                        !me.nameFlairColor && 'text-accent',
+                      )}
+                      style={me.nameFlairColor ? { color: me.nameFlairColor } : undefined}
+                    >
+                      {nameFlairLabel(me.nameFlairText)}
+                    </p>
                   ) : null}
                 </div>
               </div>
@@ -2696,7 +2704,12 @@ export function ChoresPage() {
             <div className="rounded-xl border border-border bg-inset px-4 py-3 text-center">
               <p className="text-lg font-semibold text-fg">{me?.name}</p>
               {nameFlairLabel(data.appearance?.[myId]?.nameFlairText) ? (
-                <p className="text-sm text-accent mt-0.5">
+                <p
+                  className="text-sm mt-0.5 font-medium"
+                  style={{
+                    color: data.appearance?.[myId]?.nameFlairColor || undefined,
+                  }}
+                >
                   {nameFlairLabel(data.appearance?.[myId]?.nameFlairText)}
                 </p>
               ) : (
@@ -2736,6 +2749,54 @@ export function ChoresPage() {
                 Tip: keep it fun. Parents can clear it if needed.
               </p>
             </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">
+                Flair colour
+              </p>
+              <div className="grid grid-cols-5 sm:grid-cols-6 gap-2">
+                {AVATAR_FLAIR_COLORS.map((c) => {
+                  const current = data.appearance?.[myId]?.nameFlairColor || '';
+                  const on = current === c.hex || (!current && !c.hex);
+                  return (
+                    <button
+                      key={`name-${c.id}`}
+                      type="button"
+                      title={c.label}
+                      onClick={() => {
+                        update((d) => {
+                          const prev = d.appearance?.[myId] || {};
+                          return {
+                            ...d,
+                            appearance: {
+                              ...(d.appearance || {}),
+                              [myId]: {
+                                ...prev,
+                                nameFlairColor: c.hex || undefined,
+                              },
+                            },
+                          };
+                        });
+                      }}
+                      className={cn(
+                        'h-9 rounded-lg border-2 flex items-center justify-center text-[10px] font-medium',
+                        on ? 'border-accent scale-105' : 'border-border',
+                      )}
+                      style={c.hex ? { backgroundColor: c.hex } : undefined}
+                    >
+                      {!c.hex ? (
+                        <span className="text-muted">Def</span>
+                      ) : (
+                        <span className="sr-only">{c.label}</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-[11px] text-muted mt-1">
+                “Def” uses the normal accent colour.
+              </p>
+            </div>
+
             <div className="flex gap-2">
               <Button
                 variant="secondary"
@@ -2747,7 +2808,11 @@ export function ChoresPage() {
                       ...d,
                       appearance: {
                         ...(d.appearance || {}),
-                        [myId]: { ...prev, nameFlairText: undefined },
+                        [myId]: {
+                          ...prev,
+                          nameFlairText: undefined,
+                          nameFlairColor: undefined,
+                        },
                       },
                     };
                   });

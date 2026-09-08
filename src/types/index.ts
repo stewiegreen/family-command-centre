@@ -59,6 +59,7 @@ export interface Member {
   avatarFlairShape?: string;
   avatarFlairColor?: string;
   nameFlairText?: string;
+  nameFlairColor?: string;
 }
 
 export interface CalendarEvent {
@@ -549,6 +550,8 @@ export interface FamilyData {
       avatarFlairColor?: string;
       /** Custom title under real name (max ~24 chars) */
       nameFlairText?: string;
+      /** Hex colour for name flair text */
+      nameFlairColor?: string;
       /** Ordered list of dashboard widget ids for this member only. */
       /** Ordered list of dashboard widget ids for this member only (legacy). */
       homescreenOrder?: string[];
