@@ -47,6 +47,7 @@ import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Modal } from '../components/ui/Modal';
 import { ProfileLookCard } from '../components/ProfileLookEditor';
+import { PictureFrameCard } from '../components/PictureFrameCard';
 import type { CalendarEvent, ExpandedEvent, FamilyData, JournalVisibility, Note, PresenceStatus, Quest, ViewId } from '../types';
 import { applyTodoStatus, creditMemberForQuest } from '../lib/todoQuest';
 import { FAMILY_LIST_ID, PRESENCE_OPTIONS } from '../types';
@@ -110,6 +111,7 @@ const SECTION_LABELS: Record<SectionId, string> = {
   weather: 'Weather',
   screentimer: 'Screen timer',
   look: 'Profile look',
+  pictureframe: 'Picture frame',
 };
 
 const HOME_JOURNAL_MOODS = ['😊', '😌', '😐', '😔', '😤', '🤩', '😴', '🙏'] as const;

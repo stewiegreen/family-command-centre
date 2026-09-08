@@ -71,7 +71,7 @@ function newId() {
 }
 
 /** Bump when shipping a Chores/ChoreQuest UI change so deploy lag is obvious. */
-const CHOREQUEST_UI_VERSION = 'shop-sort-3';
+const CHOREQUEST_UI_VERSION = 'picture-frame-1';
 
 type TabId = 'quests' | 'catalog' | 'shop' | 'vault' | 'board' | 'rates';
 
@@ -83,11 +83,12 @@ const KIND_LABEL: Record<RewardKind, string> = {
   allowance: 'Allowance',
   avatar_flair: 'Avatar flair',
   name_flair: 'Name flair',
+  picture_frame: 'Picture frame',
   custom: 'Custom',
 };
 
 export function ChoresPage() {
-  const { data, update, currentUser, isParent, getMember } = useApp();
+  const { data, update, currentUser, isParent, getMember, familyId, setView } = useApp();
   const me = currentUser;
   const myId = me?.id || data.settings.currentUserId;
   const shopRecipients = useMemo(
@@ -661,7 +662,8 @@ export function ChoresPage() {
       };
 
       const isFlair = item.kind === 'avatar_flair' || item.kind === 'name_flair';
-      const autoDone = isScreen || isFlair;
+      const isPictureFrame = item.kind === 'picture_frame';
+      const autoDone = isScreen || isFlair || isPictureFrame;
 
       const record: RedemptionRecord = {
         id: redemptionId,
@@ -703,14 +705,28 @@ export function ChoresPage() {
       }
 
       let nextAppearance = d.appearance || {};
-      if (isFlair) {
+      if (isFlair || isPictureFrame) {
         const prev = nextAppearance[myId] || {};
+        let homescreenRows = prev.homescreenRows;
+        if (isPictureFrame) {
+          // Pin the frame card onto this member's homescreen if missing
+          const docs = Array.isArray(homescreenRows) ? [...homescreenRows] : [];
+          const has = docs.some(
+            (row) => Array.isArray(row?.ids) && row.ids.includes('pictureframe'),
+          );
+          if (!has) {
+            docs.push({ ids: ['pictureframe'] });
+            homescreenRows = docs;
+          }
+        }
         nextAppearance = {
           ...nextAppearance,
           [myId]: {
             ...prev,
             ...(item.kind === 'avatar_flair' ? { unlockAvatarFlair: true } : {}),
             ...(item.kind === 'name_flair' ? { unlockNameFlair: true } : {}),
+            ...(isPictureFrame ? { unlockPictureFrame: true } : {}),
+            ...(homescreenRows ? { homescreenRows } : {}),
           },
         };
       }
@@ -1858,6 +1874,9 @@ export function ChoresPage() {
                         const unlockedName =
                           item.kind === 'name_flair' &&
                           !!data.appearance?.[myId]?.unlockNameFlair;
+                        const unlockedFrame =
+                          item.kind === 'picture_frame' &&
+                          !!data.appearance?.[myId]?.unlockPictureFrame;
                         if (unlockedAvatar || unlockedName) {
                           return (
                             <Button
@@ -1869,6 +1888,18 @@ export function ChoresPage() {
                               }
                             >
                               Customize
+                            </Button>
+                          );
+                        }
+                        if (unlockedFrame) {
+                          return (
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              className="flex-1"
+                              onClick={() => setView('dashboard')}
+                            >
+                              Open on Home
                             </Button>
                           );
                         }

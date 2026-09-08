@@ -309,6 +309,15 @@ export const DEFAULT_REWARD_CATALOG: RewardItem[] = [
     active: true,
     sort: 41,
   },
+  {
+    id: 'picture-frame',
+    label: 'Picture frame unlock',
+    icon: '🖼️',
+    kind: 'picture_frame',
+    coinCost: 40,
+    active: true,
+    sort: 42,
+  },
 ];
 
 export function ensureRewardCatalog(existing?: RewardItem[] | null): RewardItem[] {
@@ -319,7 +328,10 @@ export function ensureRewardCatalog(existing?: RewardItem[] | null): RewardItem[
   // Soft-merge new default cosmetics so existing families get flair items
   const ids = new Set(base.map((r) => r.id));
   for (const d of DEFAULT_REWARD_CATALOG) {
-    if (!ids.has(d.id) && (d.kind === 'avatar_flair' || d.kind === 'name_flair')) {
+    if (
+      !ids.has(d.id) &&
+      (d.kind === 'avatar_flair' || d.kind === 'name_flair' || d.kind === 'picture_frame')
+    ) {
       base.push({ ...d });
     }
   }

@@ -21,6 +21,7 @@ export type RewardKind =
   | 'allowance'
   | 'avatar_flair'
   | 'name_flair'
+  | 'picture_frame'
   | 'custom';
 export type RedemptionStatus = 'pending' | 'fulfilled' | 'cancelled';
 /** Simple presence — no GPS. */
@@ -530,6 +531,10 @@ export interface FamilyData {
       nameFlairText?: string;
       /** Hex colour for name flair text */
       nameFlairColor?: string;
+      /** Shop unlock: personal dashboard picture-frame card */
+      unlockPictureFrame?: boolean;
+      /** Public URL of the framed image (R2 via messages upload) */
+      pictureFrameUrl?: string;
       /** Ordered list of dashboard widget ids for this member only. */
       /** Ordered list of dashboard widget ids for this member only (legacy). */
       homescreenOrder?: string[];
