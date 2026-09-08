@@ -23,6 +23,7 @@ import { useApp } from '../context/AppContext';
 import { Avatar } from './ui/Avatar';
 import { ProfileSwitcher } from './ProfileSwitcher';
 import { cn } from '../lib/cn';
+import { nameFlairLabel } from '../lib/flair';
 import { WeatherHeaderChip } from './WeatherHeaderChip';
 import type { ViewId } from '../types';
 import {
@@ -249,8 +250,27 @@ export function Layout({ children }: { children: ReactNode }) {
               >
                 <Avatar {...currentUser} size="sm" />
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium truncate text-fg">{currentUser.name}</p>
-                  <p className="text-[11px] text-faint capitalize">{currentUser.role}</p>
+                  <p className="text-sm font-medium truncate text-fg">
+                    {currentUser.name}
+                    <span className="text-[11px] font-normal text-faint capitalize ml-1.5">
+                      · {currentUser.role}
+                    </span>
+                  </p>
+                  {nameFlairLabel(currentUser.nameFlairText) ? (
+                    <p
+                      className={cn(
+                        'text-[11px] truncate font-medium',
+                        !currentUser.nameFlairColor && 'text-accent',
+                      )}
+                      style={
+                        currentUser.nameFlairColor
+                          ? { color: currentUser.nameFlairColor }
+                          : undefined
+                      }
+                    >
+                      {nameFlairLabel(currentUser.nameFlairText)}
+                    </p>
+                  ) : null}
                 </div>
               </button>
               <button
@@ -339,14 +359,29 @@ export function Layout({ children }: { children: ReactNode }) {
             <div className="min-w-0">
               <p className="text-sm font-medium truncate text-fg">
                 Hey, {currentUser?.name || 'there'} 👋
+                <span className="text-xs font-normal text-faint ml-2 hidden sm:inline">
+                  {new Date().toLocaleDateString(undefined, {
+                    weekday: 'long',
+                    month: 'long',
+                    day: 'numeric',
+                  })}
+                </span>
               </p>
-              <p className="text-xs text-faint hidden sm:block">
-                {new Date().toLocaleDateString(undefined, {
-                  weekday: 'long',
-                  month: 'long',
-                  day: 'numeric',
-                })}
-              </p>
+              {nameFlairLabel(currentUser?.nameFlairText) ? (
+                <p
+                  className={cn(
+                    'text-xs truncate font-medium',
+                    !currentUser?.nameFlairColor && 'text-accent',
+                  )}
+                  style={
+                    currentUser?.nameFlairColor
+                      ? { color: currentUser.nameFlairColor }
+                      : undefined
+                  }
+                >
+                  {nameFlairLabel(currentUser?.nameFlairText)}
+                </p>
+              ) : null}
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -454,8 +489,27 @@ export function Layout({ children }: { children: ReactNode }) {
                 <div className="flex items-center gap-2.5 px-1 py-1.5 rounded-xl bg-surface-2 border border-border">
                   <Avatar {...currentUser} size="sm" />
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium truncate text-fg">{currentUser.name}</p>
-                    <p className="text-[11px] text-faint capitalize">{currentUser.role}</p>
+                    <p className="text-sm font-medium truncate text-fg">
+                      {currentUser.name}
+                      <span className="text-[11px] font-normal text-faint capitalize ml-1.5">
+                        · {currentUser.role}
+                      </span>
+                    </p>
+                    {nameFlairLabel(currentUser.nameFlairText) ? (
+                      <p
+                        className={cn(
+                          'text-[11px] truncate font-medium',
+                          !currentUser.nameFlairColor && 'text-accent',
+                        )}
+                        style={
+                          currentUser.nameFlairColor
+                            ? { color: currentUser.nameFlairColor }
+                            : undefined
+                        }
+                      >
+                        {nameFlairLabel(currentUser.nameFlairText)}
+                      </p>
+                    ) : null}
                   </div>
                 </div>
                 <button
