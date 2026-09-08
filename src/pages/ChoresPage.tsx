@@ -115,6 +115,12 @@ export function ChoresPage() {
   const [alsoSaveToCatalog, setAlsoSaveToCatalog] = useState(false);
   const [levelUp, setLevelUp] = useState<{ name: string; level: number } | null>(null);
   const [ratesDraft, setRatesDraft] = useState<ChoreQuestConfig | null>(null);
+  const [adjKidId, setAdjKidId] = useState('');
+  const [adjXp, setAdjXp] = useState(0);
+  const [adjCoins, setAdjCoins] = useState(0);
+  const [adjScreen, setAdjScreen] = useState(0);
+  const [adjNote, setAdjNote] = useState('');
+  const [adjMsg, setAdjMsg] = useState('');
   const [shopEditOpen, setShopEditOpen] = useState(false);
   const [catalogEditOpen, setCatalogEditOpen] = useState(false);
   const [editTemplate, setEditTemplate] = useState<QuestTemplate | null>(null);
@@ -138,6 +144,8 @@ export function ChoresPage() {
   useEffect(() => {
     if (tab === 'rates' && isParent) {
       setRatesDraft(getChoreQuestConfig(data));
+      const kids = (data.members || []).filter((m) => m.role === 'kid');
+      setAdjKidId((prev) => prev || kids[0]?.id || '');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
@@ -2061,6 +2069,212 @@ export function ChoresPage() {
               </Card>
             );
           })()}
+
+          {/* Manual balance adjustments — fix mistakes / test */}
+          <div className="pt-2">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted mb-1">
+              Adjust balances
+            </h2>
+            <p className="text-xs text-muted mb-3">
+              Add or subtract XP, coins, or screen minutes for a kid. Use negative numbers to
+              remove. Written to the ledger so you can see what changed.
+            </p>
+            <Card className="!p-4 space-y-4">
+              {(() => {
+                const kids = (data.members || []).filter((m) => m.role === 'kid');
+                const kidId = adjKidId || kids[0]?.id || '';
+                const prog = ensureProgress(progressMap[kidId]);
+                const coins = coinBalances[kidId] ?? 0;
+                const screen = screenTimeMap[kidId] ?? 0;
+                return (
+                  <>
+                    <div>
+                      <label className="text-xs text-muted mb-1 block">Kid</label>
+                      <div className="flex flex-wrap gap-2">
+                        {kids.map((k) => {
+                          const look = getMember(k.id) || k;
+                          const on = kidId === k.id;
+                          return (
+                            <button
+                              key={k.id}
+                              type="button"
+                              onClick={() => {
+                                setAdjKidId(k.id);
+                                setAdjMsg('');
+                              }}
+                              className={cn(
+                                'flex items-center gap-2 rounded-xl border px-2.5 py-1.5 text-sm transition-colors',
+                                on
+                                  ? 'border-accent bg-accent/10 text-fg'
+                                  : 'border-border text-muted hover:bg-nav-hover',
+                              )}
+                            >
+                              <Avatar {...look} size="sm" className="!w-7 !h-7 !text-sm" />
+                              {look.name}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {kidId ? (
+                      <div className="grid grid-cols-3 gap-2 text-center">
+                        <div className="rounded-xl bg-inset border border-border px-2 py-2">
+                          <p className="text-lg font-bold text-fg tabular-nums">{prog.xp}</p>
+                          <p className="text-[11px] text-muted">XP · Lv {prog.level}</p>
+                        </div>
+                        <div className="rounded-xl bg-inset border border-border px-2 py-2">
+                          <p className="text-lg font-bold text-fg tabular-nums">{coins}</p>
+                          <p className="text-[11px] text-muted">Coins</p>
+                        </div>
+                        <div className="rounded-xl bg-inset border border-border px-2 py-2">
+                          <p className="text-lg font-bold text-sky-500 tabular-nums">{screen}m</p>
+                          <p className="text-[11px] text-muted">Screen bank</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted">No kids in the family yet.</p>
+                    )}
+
+                    <div className="grid sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className="text-xs text-muted mb-1 block">XP delta</label>
+                        <input
+                          type="number"
+                          step={1}
+                          className="w-full rounded-xl border border-border bg-inset px-3 py-2 text-fg text-sm outline-none focus:border-accent"
+                          value={adjXp}
+                          onChange={(e) => setAdjXp(Number(e.target.value))}
+                          placeholder="e.g. 50 or -20"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-muted mb-1 block">Coins delta</label>
+                        <input
+                          type="number"
+                          step={1}
+                          className="w-full rounded-xl border border-border bg-inset px-3 py-2 text-fg text-sm outline-none focus:border-accent"
+                          value={adjCoins}
+                          onChange={(e) => setAdjCoins(Number(e.target.value))}
+                          placeholder="e.g. 10 or -5"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-muted mb-1 block">Screen minutes delta</label>
+                        <input
+                          type="number"
+                          step={1}
+                          className="w-full rounded-xl border border-border bg-inset px-3 py-2 text-fg text-sm outline-none focus:border-accent"
+                          value={adjScreen}
+                          onChange={(e) => setAdjScreen(Number(e.target.value))}
+                          placeholder="e.g. 15 or -10"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-xs text-muted mb-1 block">Note (optional)</label>
+                      <input
+                        className="w-full rounded-xl border border-border bg-inset px-3 py-2 text-fg text-sm outline-none focus:border-accent"
+                        value={adjNote}
+                        onChange={(e) => setAdjNote(e.target.value)}
+                        placeholder="e.g. Fix double-credit bug"
+                      />
+                    </div>
+
+                    {adjMsg ? (
+                      <p className="text-xs text-accent">{adjMsg}</p>
+                    ) : null}
+
+                    <Button
+                      disabled={!kidId || (adjXp === 0 && adjCoins === 0 && adjScreen === 0)}
+                      onClick={() => {
+                        if (!kidId || !me) return;
+                        const xpD = Math.trunc(adjXp);
+                        const coinD = Math.trunc(adjCoins);
+                        const screenD = Math.trunc(adjScreen);
+                        if (!xpD && !coinD && !screenD) return;
+                        const at = new Date().toISOString();
+                        const weekId = isoWeekId();
+                        const note = adjNote.trim() || 'Manual adjustment';
+                        update((d) => {
+                          let next = { ...d };
+                          if (xpD) {
+                            const prev = ensureProgress(d.memberProgress?.[kidId]);
+                            const newXp = Math.max(0, prev.xp + xpD);
+                            const level = progressTowardNextLevel(newXp).level;
+                            next = {
+                              ...next,
+                              memberProgress: {
+                                ...(next.memberProgress || {}),
+                                [kidId]: { xp: newXp, level },
+                              },
+                            };
+                          }
+                          if (coinD) {
+                            const prevC = next.coinBalances?.[kidId] ?? 0;
+                            const newC = Math.max(0, prevC + coinD);
+                            const entry = {
+                              id: `adjust:${kidId}:${at}`,
+                              memberId: kidId,
+                              delta: coinD,
+                              reason: 'adjust' as const,
+                              label: note,
+                              byId: me.id,
+                              at,
+                              weekId,
+                            };
+                            next = {
+                              ...next,
+                              coinBalances: {
+                                ...(next.coinBalances || {}),
+                                [kidId]: newC,
+                              },
+                              coinLedger: [entry, ...(next.coinLedger || [])].slice(0, 200),
+                            };
+                          }
+                          if (screenD) {
+                            const prevS = next.screenTime?.[kidId] ?? 0;
+                            const newS = Math.max(0, prevS + screenD);
+                            next = {
+                              ...next,
+                              screenTime: {
+                                ...(next.screenTime || {}),
+                                [kidId]: newS,
+                              },
+                              screenTimeLog: [
+                                {
+                                  id: newId(),
+                                  memberId: kidId,
+                                  delta: screenD,
+                                  reason: note,
+                                  byId: me.id,
+                                  at,
+                                },
+                                ...(next.screenTimeLog || []),
+                              ].slice(0, 100),
+                            };
+                          }
+                          return next;
+                        });
+                        const parts: string[] = [];
+                        if (xpD) parts.push(`${xpD > 0 ? '+' : ''}${xpD} XP`);
+                        if (coinD) parts.push(`${coinD > 0 ? '+' : ''}${coinD} coins`);
+                        if (screenD) parts.push(`${screenD > 0 ? '+' : ''}${screenD}m screen`);
+                        setAdjMsg(`Applied ${parts.join(', ')} to ${getMember(kidId)?.name || 'kid'}.`);
+                        setAdjXp(0);
+                        setAdjCoins(0);
+                        setAdjScreen(0);
+                        setAdjNote('');
+                      }}
+                    >
+                      Apply adjustment
+                    </Button>
+                  </>
+                );
+              })()}
+            </Card>
+          </div>
         </section>
       )}
 
