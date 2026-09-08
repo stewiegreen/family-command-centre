@@ -31,7 +31,7 @@ import {
   requestNotificationPermission,
   setNotificationsEnabled,
 } from '../lib/notifications';
-import { registerFcmToken, withFcmToken } from '../lib/fcm';
+import { registerFcmToken, syncFcmToken, disableFcmForMember } from '../lib/fcm';
 
 const NAV: { id: ViewId; label: string; icon: typeof Home }[] = [
   { id: 'dashboard', label: 'Home', icon: Home },
@@ -66,7 +66,10 @@ export function Layout({ children }: { children: ReactNode }) {
 
   const { settings } = data;
 
-  // Refresh FCM token when notifications already enabled (token can rotate)
+  // Refresh FCM token when notifications already enabled (token can rotate —
+  // syncFcmToken replaces this device's previous token instead of just
+  // appending the rotated one alongside it, which used to leave stale
+  // entries piling up and each getting its own duplicate push).
   useEffect(() => {
     if (!notifOn) return;
     let cancelled = false;
@@ -75,7 +78,7 @@ export function Layout({ children }: { children: ReactNode }) {
       if (cancelled || !token) return;
       const memberId = currentUser?.id || settings.currentUserId;
       if (!memberId) return;
-      update((d) => withFcmToken(d, memberId, token));
+      update((d) => syncFcmToken(d, memberId, token));
     })();
     return () => {
       cancelled = true;
@@ -99,6 +102,8 @@ export function Layout({ children }: { children: ReactNode }) {
 
   const toggleNotifs = async () => {
     if (notifOn) {
+      const memberId = currentUser?.id || settings.currentUserId;
+      if (memberId) update((d) => disableFcmForMember(d, memberId));
       setNotificationsEnabled(false);
       setNotifOn(false);
       window.dispatchEvent(new Event('fcc:notif-pref'));
@@ -116,7 +121,7 @@ export function Layout({ children }: { children: ReactNode }) {
       if (!token) return;
       const memberId = currentUser?.id || settings.currentUserId;
       if (!memberId) return;
-      update((d) => withFcmToken(d, memberId, token));
+      update((d) => syncFcmToken(d, memberId, token));
     })();
   };
 

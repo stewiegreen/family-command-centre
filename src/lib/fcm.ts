@@ -19,26 +19,68 @@ let messaging: Messaging | null = null;
  * sw.js's background handler) AND the local one, stacking as duplicates,
  * since they're two independent systems reacting to the same underlying
  * event with no coordination between them.
+ *
+ * This ALSO stores the actual last-registered token value (not just a
+ * boolean) so a re-registration on this same device can find and remove
+ * its own previous token before adding the new one. FCM tokens rotate over
+ * time even on an unchanged device (service worker updates, storage
+ * changes, etc.) — withFcmToken() only de-dupes by exact string match, so
+ * without this, every rotation on every app reopen just appended another
+ * entry to fcmTokens[memberId] (capped at 5) rather than replacing the
+ * stale one, and the server sends a separate push to every entry — which
+ * is exactly how one real alert turns into several stacked notifications
+ * on the same phone.
  */
-const FCM_ACTIVE_KEY = 'greenhq:fcmActive';
+const FCM_ACTIVE_KEY = 'greenhq:fcmActive'; // legacy boolean, still read for back-compat
+const FCM_TOKEN_KEY = 'greenhq:fcmToken';
 
 export function hasActiveFcmToken(): boolean {
   try {
-    return localStorage.getItem(FCM_ACTIVE_KEY) === '1';
+    return !!localStorage.getItem(FCM_TOKEN_KEY) || localStorage.getItem(FCM_ACTIVE_KEY) === '1';
   } catch {
     return false;
   }
 }
 
-function setFcmActive(active: boolean) {
+function getStoredFcmToken(): string | null {
   try {
-    if (active) localStorage.setItem(FCM_ACTIVE_KEY, '1');
-    else localStorage.removeItem(FCM_ACTIVE_KEY);
+    return localStorage.getItem(FCM_TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function setStoredFcmToken(token: string | null) {
+  try {
+    if (token) {
+      localStorage.setItem(FCM_TOKEN_KEY, token);
+      localStorage.setItem(FCM_ACTIVE_KEY, '1');
+    } else {
+      localStorage.removeItem(FCM_TOKEN_KEY);
+      localStorage.removeItem(FCM_ACTIVE_KEY);
+    }
   } catch {
     // localStorage unavailable (private browsing, etc.) — fine, just means
     // the local-notification fallback stays on for this device, which is
     // the safe default (better an occasional duplicate than a missed alert).
   }
+}
+
+/**
+ * Reconcile fcmTokens[memberId] for THIS device: remove whatever token this
+ * device previously registered (if different), add the new one. Always use
+ * this instead of calling withFcmToken() directly, or stale rotated tokens
+ * will silently pile up instead of being replaced.
+ */
+export function syncFcmToken(data: FamilyData, memberId: string, newToken: string): FamilyData {
+  const prevToken = getStoredFcmToken();
+  let next = data;
+  if (prevToken && prevToken !== newToken) {
+    next = withoutFcmToken(next, memberId, prevToken);
+  }
+  next = withFcmToken(next, memberId, newToken);
+  setStoredFcmToken(newToken);
+  return next;
 }
 
 function appInstance(): FirebaseApp | null {
@@ -95,11 +137,9 @@ export async function registerFcmToken(): Promise<string | null> {
       vapidKey: FIREBASE_VAPID_KEY,
       serviceWorkerRegistration: reg,
     });
-    setFcmActive(!!token);
     return token || null;
   } catch (e) {
     console.warn('FCM getToken failed', e);
-    setFcmActive(false);
     return null;
   }
 }
@@ -114,8 +154,21 @@ export function withFcmToken(data: FamilyData, memberId: string, token: string):
 }
 
 export function withoutFcmToken(data: FamilyData, memberId: string, token: string): FamilyData {
-  setFcmActive(false);
   const byMember = { ...(data.fcmTokens || {}) };
   byMember[memberId] = (byMember[memberId] || []).filter((t) => t !== token);
   return { ...data, fcmTokens: byMember };
+}
+
+/** Call when the person explicitly disables notifications on this device. */
+export function forgetLocalFcmToken() {
+  setStoredFcmToken(null);
+}
+
+/** Explicit "disable notifications" flow: remove this device's token from
+ *  both Firestore and local tracking, so re-enabling later starts clean. */
+export function disableFcmForMember(data: FamilyData, memberId: string): FamilyData {
+  const token = getStoredFcmToken();
+  const next = token ? withoutFcmToken(data, memberId, token) : data;
+  setStoredFcmToken(null);
+  return next;
 }
