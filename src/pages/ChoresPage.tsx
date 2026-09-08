@@ -48,6 +48,7 @@ import {
   rewardsForDifficultyWithConfig,
 } from '../lib/quest';
 import { creditMemberForQuest } from '../lib/todoQuest';
+import { AVATAR_FLAIR, NAME_FLAIR, nameFlairLabel } from '../lib/flair';
 import {
   PARTY_REGIONS,
   advancePartyMapOnApprove,
@@ -83,6 +84,8 @@ const KIND_LABEL: Record<RewardKind, string> = {
   choice: 'Choice',
   late_bed: 'Late bedtime',
   allowance: 'Allowance',
+  avatar_flair: 'Avatar flair',
+  name_flair: 'Name flair',
   custom: 'Custom',
 };
 
@@ -124,6 +127,7 @@ export function ChoresPage() {
   const [alsoSaveToCatalog, setAlsoSaveToCatalog] = useState(false);
   const [levelUp, setLevelUp] = useState<{ name: string; level: number } | null>(null);
   const [ratesDraft, setRatesDraft] = useState<ChoreQuestConfig | null>(null);
+  const [styleModal, setStyleModal] = useState<'avatar' | 'name' | null>(null);
   const [adjKidId, setAdjKidId] = useState('');
   const [adjXp, setAdjXp] = useState(0);
   const [adjCoins, setAdjCoins] = useState(0);
@@ -652,6 +656,9 @@ export function ChoresPage() {
         weekId,
       };
 
+      const isFlair = item.kind === 'avatar_flair' || item.kind === 'name_flair';
+      const autoDone = isScreen || isFlair;
+
       const record: RedemptionRecord = {
         id: redemptionId,
         memberId: myId,
@@ -661,10 +668,10 @@ export function ChoresPage() {
         kind: item.kind,
         coinCost: item.coinCost,
         screenMinutes: item.screenMinutes,
-        status: isScreen ? 'fulfilled' : 'pending',
+        status: autoDone ? 'fulfilled' : 'pending',
         requestedAt: at,
-        fulfilledAt: isScreen ? at : undefined,
-        fulfilledById: isScreen ? me.id : undefined,
+        fulfilledAt: autoDone ? at : undefined,
+        fulfilledById: autoDone ? me.id : undefined,
       };
 
       let nextScreen = d.screenTime || {};
@@ -691,6 +698,19 @@ export function ChoresPage() {
         ].slice(0, 100);
       }
 
+      let nextAppearance = d.appearance || {};
+      if (isFlair) {
+        const prev = nextAppearance[myId] || {};
+        nextAppearance = {
+          ...nextAppearance,
+          [myId]: {
+            ...prev,
+            ...(item.kind === 'avatar_flair' ? { unlockAvatarFlair: true } : {}),
+            ...(item.kind === 'name_flair' ? { unlockNameFlair: true } : {}),
+          },
+        };
+      }
+
       return {
         ...d,
         coinBalances: nextBalances,
@@ -698,9 +718,14 @@ export function ChoresPage() {
         redemptions: [record, ...(d.redemptions || [])].slice(0, 100),
         screenTime: nextScreen,
         screenTimeLog: nextLog,
+        appearance: nextAppearance,
         rewardCatalog: ensureRewardCatalog(d.rewardCatalog),
       };
     });
+
+    // After unlock, open the picker so they can choose immediately
+    if (item.kind === 'avatar_flair') setStyleModal('avatar');
+    if (item.kind === 'name_flair') setStyleModal('name');
   };
 
   const fulfillRedemption = (r: RedemptionRecord) => {
@@ -1143,6 +1168,42 @@ export function ChoresPage() {
           <p className="text-sm text-muted mt-1">
             Complete quests, earn Treasure, spend it in the shop.
           </p>
+          {me && me.role !== 'media' && (
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <Avatar {...me} size="sm" avatarFlairId={me.avatarFlairId} />
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-fg truncate">{me.name}</p>
+                  {nameFlairLabel(me.nameFlairId) ? (
+                    <p className="text-[11px] text-accent truncate">{nameFlairLabel(me.nameFlairId)}</p>
+                  ) : null}
+                </div>
+              </div>
+              {(data.appearance?.[myId]?.unlockAvatarFlair ||
+                data.appearance?.[myId]?.unlockNameFlair) && (
+                <div className="flex gap-1.5">
+                  {data.appearance?.[myId]?.unlockAvatarFlair ? (
+                    <button
+                      type="button"
+                      onClick={() => setStyleModal('avatar')}
+                      className="text-[11px] px-2 py-1 rounded-lg border border-border text-muted hover:text-fg hover:bg-nav-hover"
+                    >
+                      Avatar flair
+                    </button>
+                  ) : null}
+                  {data.appearance?.[myId]?.unlockNameFlair ? (
+                    <button
+                      type="button"
+                      onClick={() => setStyleModal('name')}
+                      className="text-[11px] px-2 py-1 rounded-lg border border-border text-muted hover:text-fg hover:bg-nav-hover"
+                    >
+                      Name flair
+                    </button>
+                  ) : null}
+                </div>
+              )}
+            </div>
+          )}
         </div>
         {isParent && tab === 'quests' && (
           <Button onClick={openCreate}>
@@ -1774,21 +1835,43 @@ export function ChoresPage() {
                       )}
                     </div>
                     <div className="flex items-center gap-2 mt-auto">
-                      {me && me.role !== 'media' && (
-                        <Button
-                          size="sm"
-                          disabled={!canAfford}
-                          onClick={() => redeem(item)}
-                          className="flex-1"
-                        >
-                          {canAfford
-                            ? item.kind === 'screen_time' &&
-                              (screenGiftFor[item.id] || myId) !== myId
-                              ? 'Gift'
-                              : 'Redeem'
-                            : 'Need more coins'}
-                        </Button>
-                      )}
+                      {me && me.role !== 'media' && (() => {
+                        const unlockedAvatar =
+                          item.kind === 'avatar_flair' &&
+                          !!data.appearance?.[myId]?.unlockAvatarFlair;
+                        const unlockedName =
+                          item.kind === 'name_flair' &&
+                          !!data.appearance?.[myId]?.unlockNameFlair;
+                        if (unlockedAvatar || unlockedName) {
+                          return (
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              className="flex-1"
+                              onClick={() =>
+                                setStyleModal(unlockedAvatar ? 'avatar' : 'name')
+                              }
+                            >
+                              Customize
+                            </Button>
+                          );
+                        }
+                        return (
+                          <Button
+                            size="sm"
+                            disabled={!canAfford}
+                            onClick={() => redeem(item)}
+                            className="flex-1"
+                          >
+                            {canAfford
+                              ? item.kind === 'screen_time' &&
+                                (screenGiftFor[item.id] || myId) !== myId
+                                ? 'Gift'
+                                : 'Redeem'
+                              : 'Need more coins'}
+                          </Button>
+                        );
+                      })()}
                       {isParent && (
                         <>
                           <button
@@ -2479,6 +2562,121 @@ export function ChoresPage() {
           </section>
         );
       })()}
+
+
+      {/* Style picker — avatar / name flair (no separate page) */}
+      <Modal
+        open={styleModal !== null}
+        onClose={() => setStyleModal(null)}
+        title={styleModal === 'avatar' ? 'Avatar flair' : styleModal === 'name' ? 'Name flair' : 'Style'}
+      >
+        {styleModal === 'avatar' && (
+          <div className="space-y-4">
+            <p className="text-sm text-muted">
+              Pick a frame for your avatar. Your real name stays the same — this is just style.
+            </p>
+            <div className="flex justify-center py-2">
+              <Avatar
+                {...(me || {})}
+                name={me?.name}
+                size="lg"
+                avatarFlairId={
+                  data.appearance?.[myId]?.avatarFlairId || me?.avatarFlairId
+                }
+              />
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {AVATAR_FLAIR.map((f) => {
+                const on = (data.appearance?.[myId]?.avatarFlairId || 'none') === f.id;
+                return (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => {
+                      update((d) => {
+                        const prev = d.appearance?.[myId] || {};
+                        return {
+                          ...d,
+                          appearance: {
+                            ...(d.appearance || {}),
+                            [myId]: {
+                              ...prev,
+                              avatarFlairId: f.id === 'none' ? undefined : f.id,
+                            },
+                          },
+                        };
+                      });
+                    }}
+                    className={cn(
+                      'rounded-xl border px-3 py-2.5 text-left text-sm transition-colors',
+                      on ? 'border-accent bg-accent/10' : 'border-border hover:bg-nav-hover',
+                    )}
+                  >
+                    <span className="text-lg mr-1.5">{f.preview}</span>
+                    {f.label}
+                  </button>
+                );
+              })}
+            </div>
+            <Button className="w-full" onClick={() => setStyleModal(null)}>
+              Done
+            </Button>
+          </div>
+        )}
+        {styleModal === 'name' && (
+          <div className="space-y-4">
+            <p className="text-sm text-muted">
+              A title under your name — not a rename. Everyone still sees you as{' '}
+              <span className="text-fg font-medium">{me?.name}</span>.
+            </p>
+            <div className="rounded-xl border border-border bg-inset px-4 py-3 text-center">
+              <p className="text-lg font-semibold text-fg">{me?.name}</p>
+              {nameFlairLabel(data.appearance?.[myId]?.nameFlairId) ? (
+                <p className="text-sm text-accent mt-0.5">
+                  {nameFlairLabel(data.appearance?.[myId]?.nameFlairId)}
+                </p>
+              ) : (
+                <p className="text-xs text-muted mt-0.5">No flair</p>
+              )}
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {NAME_FLAIR.map((f) => {
+                const on = (data.appearance?.[myId]?.nameFlairId || 'none') === f.id;
+                return (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => {
+                      update((d) => {
+                        const prev = d.appearance?.[myId] || {};
+                        return {
+                          ...d,
+                          appearance: {
+                            ...(d.appearance || {}),
+                            [myId]: {
+                              ...prev,
+                              nameFlairId: f.id === 'none' ? undefined : f.id,
+                            },
+                          },
+                        };
+                      });
+                    }}
+                    className={cn(
+                      'rounded-xl border px-3 py-2.5 text-left text-sm transition-colors',
+                      on ? 'border-accent bg-accent/10' : 'border-border hover:bg-nav-hover',
+                    )}
+                  >
+                    {f.label}
+                  </button>
+                );
+              })}
+            </div>
+            <Button className="w-full" onClick={() => setStyleModal(null)}>
+              Done
+            </Button>
+          </div>
+        )}
+      </Modal>
 
       {/* Create / edit quest modal */}
       <Modal

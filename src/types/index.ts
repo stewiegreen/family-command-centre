@@ -19,6 +19,8 @@ export type RewardKind =
   | 'choice'
   | 'late_bed'
   | 'allowance'
+  | 'avatar_flair'
+  | 'name_flair'
   | 'custom';
 export type RedemptionStatus = 'pending' | 'fulfilled' | 'cancelled';
 /** Simple presence — no GPS. */
@@ -51,6 +53,9 @@ export interface Member {
    * Used by Media to load that member's Continue Watching / Views via the proxy.
    */
   embyUserId?: string;
+  /** Display-only overlays from appearance (not stored on the member row). */
+  avatarFlairId?: string;
+  nameFlairId?: string;
 }
 
 export interface CalendarEvent {
@@ -528,6 +533,12 @@ export interface FamilyData {
       emoji?: string;
       color?: string;
       theme?: ThemeId;
+      /** Permanent shop unlocks */
+      unlockAvatarFlair?: boolean;
+      unlockNameFlair?: boolean;
+      /** Selected cosmetic ids (from curated lists) */
+      avatarFlairId?: string;
+      nameFlairId?: string;
       /** Ordered list of dashboard widget ids for this member only. */
       /** Ordered list of dashboard widget ids for this member only (legacy). */
       homescreenOrder?: string[];

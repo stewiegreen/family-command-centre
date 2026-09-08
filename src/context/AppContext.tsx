@@ -401,6 +401,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ...currentUserRaw,
         emoji: data.appearance?.[currentUserRaw.id]?.emoji ?? currentUserRaw.emoji,
         color: data.appearance?.[currentUserRaw.id]?.color ?? currentUserRaw.color,
+        avatarFlairId: data.appearance?.[currentUserRaw.id]?.avatarFlairId,
+        nameFlairId: data.appearance?.[currentUserRaw.id]?.nameFlairId,
       }
     : undefined;
   const getMember = useCallback(
@@ -409,7 +411,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (!m) return undefined;
       const a = data.appearance?.[id];
       if (!a) return m;
-      return { ...m, emoji: a.emoji ?? m.emoji, color: a.color ?? m.color };
+      return {
+        ...m,
+        emoji: a.emoji ?? m.emoji,
+        color: a.color ?? m.color,
+        avatarFlairId: a.avatarFlairId,
+        nameFlairId: a.nameFlairId,
+      };
     },
     [data.members, data.appearance],
   );

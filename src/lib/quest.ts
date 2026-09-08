@@ -291,11 +291,39 @@ export const DEFAULT_REWARD_CATALOG: RewardItem[] = [
     active: true,
     sort: 30,
   },
+  {
+    id: 'avatar-flair',
+    label: 'Avatar flair unlock',
+    icon: '🖼️',
+    kind: 'avatar_flair',
+    coinCost: 35,
+    active: true,
+    sort: 40,
+  },
+  {
+    id: 'name-flair',
+    label: 'Name flair unlock',
+    icon: '🏷️',
+    kind: 'name_flair',
+    coinCost: 30,
+    active: true,
+    sort: 41,
+  },
 ];
 
 export function ensureRewardCatalog(existing?: RewardItem[] | null): RewardItem[] {
-  if (existing && existing.length > 0) return existing;
-  return DEFAULT_REWARD_CATALOG.map((r) => ({ ...r }));
+  const base =
+    existing && existing.length > 0
+      ? existing.map((r) => ({ ...r }))
+      : DEFAULT_REWARD_CATALOG.map((r) => ({ ...r }));
+  // Soft-merge new default cosmetics so existing families get flair items
+  const ids = new Set(base.map((r) => r.id));
+  for (const d of DEFAULT_REWARD_CATALOG) {
+    if (!ids.has(d.id) && (d.kind === 'avatar_flair' || d.kind === 'name_flair')) {
+      base.push({ ...d });
+    }
+  }
+  return base;
 }
 
 
