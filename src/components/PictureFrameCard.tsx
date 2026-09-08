@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Frame, ImagePlus, Loader2, Trash2 } from 'lucide-react';
+import { ImagePlus, Loader2, Pencil, Trash2 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { getFirebaseAuth } from '../lib/firebase';
 import { cn } from '../lib/cn';
@@ -41,7 +41,7 @@ export function PictureFrameCard() {
   if (!unlocked) {
     return (
       <div className="flex flex-col items-center justify-center gap-2 py-6 text-center">
-        <Frame className="w-8 h-8 text-muted" />
+        <ImagePlus className="w-8 h-8 text-muted" />
         <p className="text-sm text-muted">
           Unlock a picture frame in the ChoreQuest shop to pin a photo here.
         </p>
@@ -102,37 +102,7 @@ export function PictureFrameCard() {
   };
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted flex items-center gap-1.5">
-          <Frame className="w-3.5 h-3.5" />
-          My frame
-        </p>
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => fileRef.current?.click()}
-            className="text-[11px] px-2 py-1 rounded-lg border border-border text-muted hover:text-fg hover:bg-nav-hover disabled:opacity-50"
-          >
-            {url ? 'Change' : 'Upload'}
-          </button>
-          {url && (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => {
-                if (confirm('Remove this picture from your frame?')) saveUrl(undefined);
-              }}
-              className="p-1.5 rounded-lg text-muted hover:text-warn hover:bg-warn/10 disabled:opacity-50"
-              title="Remove picture"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
-          )}
-        </div>
-      </div>
-
+    <div className="space-y-1.5">
       <input
         ref={fileRef}
         type="file"
@@ -143,14 +113,46 @@ export function PictureFrameCard() {
       />
 
       {url ? (
-        <div className="relative rounded-xl overflow-hidden border border-border bg-inset aspect-[4/3]">
+        <div className="relative group rounded-xl overflow-hidden border border-border bg-inset aspect-[4/3]">
+          {/* object-contain so the whole image fits inside the card */}
           <img
             src={url}
-            alt="My picture frame"
-            className="absolute inset-0 w-full h-full object-cover"
+            alt=""
+            className="absolute inset-0 w-full h-full object-contain"
           />
+
+          {/* Overlay controls — top-right, always reachable on touch */}
+          <div className="absolute top-2 right-2 flex items-center gap-1.5 z-10">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => fileRef.current?.click()}
+              className={cn(
+                'inline-flex items-center gap-1 text-[11px] font-medium px-2 py-1 rounded-lg',
+                'bg-black/55 text-white backdrop-blur-sm hover:bg-black/70 disabled:opacity-50',
+              )}
+            >
+              <Pencil className="w-3 h-3" />
+              Change
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                if (confirm('Remove this picture from your frame?')) saveUrl(undefined);
+              }}
+              className={cn(
+                'p-1.5 rounded-lg bg-black/55 text-white backdrop-blur-sm',
+                'hover:bg-red-600/80 disabled:opacity-50',
+              )}
+              title="Remove picture"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
           {busy && (
-            <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+            <div className="absolute inset-0 bg-black/40 flex items-center justify-center z-20">
               <Loader2 className="w-6 h-6 text-white animate-spin" />
             </div>
           )}
