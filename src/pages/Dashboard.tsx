@@ -1774,6 +1774,7 @@ export function Dashboard() {
     ),
 
     look: <ProfileLookCard />,
+    pictureframe: <PictureFrameCard />,
   };
 
   return (

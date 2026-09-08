@@ -88,7 +88,7 @@ const KIND_LABEL: Record<RewardKind, string> = {
 };
 
 export function ChoresPage() {
-  const { data, update, currentUser, isParent, getMember, familyId, setView } = useApp();
+  const { data, update, currentUser, isParent, getMember, setView } = useApp();
   const me = currentUser;
   const myId = me?.id || data.settings.currentUserId;
   const shopRecipients = useMemo(
