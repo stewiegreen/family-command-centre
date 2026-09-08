@@ -48,7 +48,13 @@ import {
   rewardsForDifficultyWithConfig,
 } from '../lib/quest';
 import { creditMemberForQuest } from '../lib/todoQuest';
-import { AVATAR_FLAIR, NAME_FLAIR, nameFlairLabel } from '../lib/flair';
+import {
+  AVATAR_FLAIR_COLORS,
+  AVATAR_FLAIR_SHAPES,
+  NAME_FLAIR_MAX,
+  nameFlairLabel,
+  sanitizeNameFlair,
+} from '../lib/flair';
 import {
   PARTY_REGIONS,
   advancePartyMapOnApprove,
@@ -1171,11 +1177,16 @@ export function ChoresPage() {
           {me && me.role !== 'media' && (
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <div className="flex items-center gap-2 min-w-0">
-                <Avatar {...me} size="sm" avatarFlairId={me.avatarFlairId} />
+                <Avatar
+                  {...me}
+                  size="sm"
+                  avatarFlairShape={me.avatarFlairShape}
+                  avatarFlairColor={me.avatarFlairColor}
+                />
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-fg truncate">{me.name}</p>
-                  {nameFlairLabel(me.nameFlairId) ? (
-                    <p className="text-[11px] text-accent truncate">{nameFlairLabel(me.nameFlairId)}</p>
+                  {nameFlairLabel(me.nameFlairText) ? (
+                    <p className="text-[11px] text-accent truncate">{nameFlairLabel(me.nameFlairText)}</p>
                   ) : null}
                 </div>
               </div>
@@ -2564,6 +2575,7 @@ export function ChoresPage() {
       })()}
 
 
+
       {/* Style picker — avatar / name flair (no separate page) */}
       <Modal
         open={styleModal !== null}
@@ -2573,51 +2585,102 @@ export function ChoresPage() {
         {styleModal === 'avatar' && (
           <div className="space-y-4">
             <p className="text-sm text-muted">
-              Pick a frame for your avatar. Your real name stays the same — this is just style.
+              Shape + ring colour around your avatar. Your profile emoji and name stay the same.
             </p>
             <div className="flex justify-center py-2">
               <Avatar
                 {...(me || {})}
                 name={me?.name}
                 size="lg"
-                avatarFlairId={
-                  data.appearance?.[myId]?.avatarFlairId || me?.avatarFlairId
-                }
+                avatarFlairShape={data.appearance?.[myId]?.avatarFlairShape || me?.avatarFlairShape}
+                avatarFlairColor={data.appearance?.[myId]?.avatarFlairColor || me?.avatarFlairColor}
               />
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {AVATAR_FLAIR.map((f) => {
-                const on = (data.appearance?.[myId]?.avatarFlairId || 'none') === f.id;
-                return (
-                  <button
-                    key={f.id}
-                    type="button"
-                    onClick={() => {
-                      update((d) => {
-                        const prev = d.appearance?.[myId] || {};
-                        return {
-                          ...d,
-                          appearance: {
-                            ...(d.appearance || {}),
-                            [myId]: {
-                              ...prev,
-                              avatarFlairId: f.id === 'none' ? undefined : f.id,
+
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">Shape</p>
+              <div className="grid grid-cols-2 gap-2">
+                {AVATAR_FLAIR_SHAPES.map((s) => {
+                  const on =
+                    (data.appearance?.[myId]?.avatarFlairShape || 'circle') === s.id;
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => {
+                        update((d) => {
+                          const prev = d.appearance?.[myId] || {};
+                          return {
+                            ...d,
+                            appearance: {
+                              ...(d.appearance || {}),
+                              [myId]: { ...prev, avatarFlairShape: s.id },
                             },
-                          },
-                        };
-                      });
-                    }}
-                    className={cn(
-                      'rounded-xl border px-3 py-2.5 text-left text-sm transition-colors',
-                      on ? 'border-accent bg-accent/10' : 'border-border hover:bg-nav-hover',
-                    )}
-                  >
-                    <span className="text-lg mr-1.5">{f.preview}</span>
-                    {f.label}
-                  </button>
-                );
-              })}
+                          };
+                        });
+                      }}
+                      className={cn(
+                        'rounded-xl border px-3 py-2.5 text-sm transition-colors',
+                        on ? 'border-accent bg-accent/10' : 'border-border hover:bg-nav-hover',
+                      )}
+                    >
+                      <span className="mr-1.5">{s.preview}</span>
+                      {s.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
+
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">
+                Ring colour
+              </p>
+              <div className="grid grid-cols-5 sm:grid-cols-6 gap-2">
+                {AVATAR_FLAIR_COLORS.map((c) => {
+                  const current = data.appearance?.[myId]?.avatarFlairColor || '';
+                  const on = current === c.hex || (!current && !c.hex);
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      title={c.label}
+                      onClick={() => {
+                        update((d) => {
+                          const prev = d.appearance?.[myId] || {};
+                          return {
+                            ...d,
+                            appearance: {
+                              ...(d.appearance || {}),
+                              [myId]: {
+                                ...prev,
+                                avatarFlairColor: c.hex || undefined,
+                              },
+                            },
+                          };
+                        });
+                      }}
+                      className={cn(
+                        'h-9 rounded-lg border-2 flex items-center justify-center text-[10px] font-medium',
+                        on ? 'border-accent scale-105' : 'border-border',
+                      )}
+                      style={
+                        c.hex
+                          ? { backgroundColor: c.hex }
+                          : undefined
+                      }
+                    >
+                      {!c.hex ? (
+                        <span className="text-muted">Off</span>
+                      ) : (
+                        <span className="sr-only">{c.label}</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             <Button className="w-full" onClick={() => setStyleModal(null)}>
               Done
             </Button>
@@ -2626,54 +2689,76 @@ export function ChoresPage() {
         {styleModal === 'name' && (
           <div className="space-y-4">
             <p className="text-sm text-muted">
-              A title under your name — not a rename. Everyone still sees you as{' '}
+              Write your own title under your name (max {NAME_FLAIR_MAX} characters). This is{' '}
+              <span className="text-fg font-medium">not</span> a rename — everyone still sees you as{' '}
               <span className="text-fg font-medium">{me?.name}</span>.
             </p>
             <div className="rounded-xl border border-border bg-inset px-4 py-3 text-center">
               <p className="text-lg font-semibold text-fg">{me?.name}</p>
-              {nameFlairLabel(data.appearance?.[myId]?.nameFlairId) ? (
+              {nameFlairLabel(data.appearance?.[myId]?.nameFlairText) ? (
                 <p className="text-sm text-accent mt-0.5">
-                  {nameFlairLabel(data.appearance?.[myId]?.nameFlairId)}
+                  {nameFlairLabel(data.appearance?.[myId]?.nameFlairText)}
                 </p>
               ) : (
-                <p className="text-xs text-muted mt-0.5">No flair</p>
+                <p className="text-xs text-muted mt-0.5">No flair yet</p>
               )}
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {NAME_FLAIR.map((f) => {
-                const on = (data.appearance?.[myId]?.nameFlairId || 'none') === f.id;
-                return (
-                  <button
-                    key={f.id}
-                    type="button"
-                    onClick={() => {
-                      update((d) => {
-                        const prev = d.appearance?.[myId] || {};
-                        return {
-                          ...d,
-                          appearance: {
-                            ...(d.appearance || {}),
-                            [myId]: {
-                              ...prev,
-                              nameFlairId: f.id === 'none' ? undefined : f.id,
-                            },
-                          },
-                        };
-                      });
-                    }}
-                    className={cn(
-                      'rounded-xl border px-3 py-2.5 text-left text-sm transition-colors',
-                      on ? 'border-accent bg-accent/10' : 'border-border hover:bg-nav-hover',
-                    )}
-                  >
-                    {f.label}
-                  </button>
-                );
-              })}
+            <div>
+              <label className="text-xs text-muted mb-1 block">
+                Your flair{' '}
+                <span className="tabular-nums">
+                  ({(data.appearance?.[myId]?.nameFlairText || '').length}/{NAME_FLAIR_MAX})
+                </span>
+              </label>
+              <input
+                className="w-full rounded-xl border border-border bg-inset px-3 py-2 text-fg text-sm outline-none focus:border-accent"
+                maxLength={NAME_FLAIR_MAX}
+                placeholder="e.g. Sock Slayer"
+                value={data.appearance?.[myId]?.nameFlairText || ''}
+                onChange={(e) => {
+                  const next = sanitizeNameFlair(e.target.value);
+                  update((d) => {
+                    const prev = d.appearance?.[myId] || {};
+                    return {
+                      ...d,
+                      appearance: {
+                        ...(d.appearance || {}),
+                        [myId]: {
+                          ...prev,
+                          nameFlairText: next || undefined,
+                        },
+                      },
+                    };
+                  });
+                }}
+              />
+              <p className="text-[11px] text-muted mt-1">
+                Tip: keep it fun. Parents can clear it if needed.
+              </p>
             </div>
-            <Button className="w-full" onClick={() => setStyleModal(null)}>
-              Done
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="secondary"
+                className="flex-1"
+                onClick={() => {
+                  update((d) => {
+                    const prev = d.appearance?.[myId] || {};
+                    return {
+                      ...d,
+                      appearance: {
+                        ...(d.appearance || {}),
+                        [myId]: { ...prev, nameFlairText: undefined },
+                      },
+                    };
+                  });
+                }}
+              >
+                Clear
+              </Button>
+              <Button className="flex-1" onClick={() => setStyleModal(null)}>
+                Done
+              </Button>
+            </div>
           </div>
         )}
       </Modal>

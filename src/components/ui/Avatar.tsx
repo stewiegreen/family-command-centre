@@ -1,5 +1,5 @@
 import { cn } from '../../lib/cn';
-import { avatarFlairClass } from '../../lib/flair';
+import { avatarFlairBoxShadow, avatarFlairShapeClass } from '../../lib/flair';
 
 interface AvatarProps {
   name?: string;
@@ -8,8 +8,10 @@ interface AvatarProps {
   initials?: string;
   size?: 'sm' | 'md' | 'lg';
   className?: string;
-  /** Shop-unlocked frame id */
+  /** @deprecated legacy preset id — ignored when shape/color set */
   avatarFlairId?: string;
+  avatarFlairShape?: string;
+  avatarFlairColor?: string;
 }
 
 export function Avatar({
@@ -19,20 +21,24 @@ export function Avatar({
   initials,
   size = 'md',
   className,
-  avatarFlairId,
+  avatarFlairShape,
+  avatarFlairColor,
 }: AvatarProps) {
-  // Emojis sized large enough to read at a glance (~⅓ bigger than typical UI avatars)
   const s = { sm: 'w-10 h-10 text-xl', md: 'w-12 h-12 text-2xl', lg: 'w-16 h-16 text-3xl' }[size];
-  const flair = avatarFlairClass(avatarFlairId);
+  const shape = avatarFlairShapeClass(avatarFlairShape || 'circle');
+  const glow = avatarFlairBoxShadow(avatarFlairColor);
   return (
     <div
       className={cn(
-        'rounded-full flex items-center justify-center font-semibold text-white shrink-0 leading-none',
+        'flex items-center justify-center font-semibold text-white shrink-0 leading-none',
         s,
-        flair,
+        shape,
         className,
       )}
-      style={{ backgroundColor: color }}
+      style={{
+        backgroundColor: color,
+        boxShadow: glow,
+      }}
       title={name}
     >
       {emoji || initials}

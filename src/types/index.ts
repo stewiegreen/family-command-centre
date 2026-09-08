@@ -56,6 +56,9 @@ export interface Member {
   /** Display-only overlays from appearance (not stored on the member row). */
   avatarFlairId?: string;
   nameFlairId?: string;
+  avatarFlairShape?: string;
+  avatarFlairColor?: string;
+  nameFlairText?: string;
 }
 
 export interface CalendarEvent {
@@ -536,9 +539,16 @@ export interface FamilyData {
       /** Permanent shop unlocks */
       unlockAvatarFlair?: boolean;
       unlockNameFlair?: boolean;
-      /** Selected cosmetic ids (from curated lists) */
+      /** @deprecated legacy preset frame id */
       avatarFlairId?: string;
+      /** @deprecated legacy preset title id */
       nameFlairId?: string;
+      /** circle | pixel */
+      avatarFlairShape?: string;
+      /** Hex colour for avatar ring */
+      avatarFlairColor?: string;
+      /** Custom title under real name (max ~24 chars) */
+      nameFlairText?: string;
       /** Ordered list of dashboard widget ids for this member only. */
       /** Ordered list of dashboard widget ids for this member only (legacy). */
       homescreenOrder?: string[];

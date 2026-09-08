@@ -403,6 +403,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         color: data.appearance?.[currentUserRaw.id]?.color ?? currentUserRaw.color,
         avatarFlairId: data.appearance?.[currentUserRaw.id]?.avatarFlairId,
         nameFlairId: data.appearance?.[currentUserRaw.id]?.nameFlairId,
+        avatarFlairShape: data.appearance?.[currentUserRaw.id]?.avatarFlairShape,
+        avatarFlairColor: data.appearance?.[currentUserRaw.id]?.avatarFlairColor,
+        nameFlairText: data.appearance?.[currentUserRaw.id]?.nameFlairText,
       }
     : undefined;
   const getMember = useCallback(
@@ -417,6 +420,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         color: a.color ?? m.color,
         avatarFlairId: a.avatarFlairId,
         nameFlairId: a.nameFlairId,
+        avatarFlairShape: a.avatarFlairShape,
+        avatarFlairColor: a.avatarFlairColor,
+        nameFlairText: a.nameFlairText,
       };
     },
     [data.members, data.appearance],
