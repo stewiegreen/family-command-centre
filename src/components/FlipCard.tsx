@@ -23,6 +23,9 @@ type Props = {
 /**
  * Two-faced home card. Fills parent height when paired (h-full chain).
  * Faces share max(content) min-height so front/back match each other.
+ *
+ * IMPORTANT: front/back are each mounted exactly once. A previous measure
+ * clone re-mounted ScreenTimerCard and caused every expiry to fire 2 pushes.
  */
 export function FlipCard({
   storageKey,
@@ -43,8 +46,8 @@ export function FlipCard({
   });
   const [reduceMotion, setReduceMotion] = useState(false);
   const [contentMinH, setContentMinH] = useState<number | undefined>(undefined);
-  const frontMeasureRef = useRef<HTMLDivElement>(null);
-  const backMeasureRef = useRef<HTMLDivElement>(null);
+  const frontRef = useRef<HTMLDivElement>(null);
+  const backRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -62,24 +65,23 @@ export function FlipCard({
     }
   }, [flipped, key]);
 
-  // Measure natural content height of both faces (hidden clones) so they match each other
   useLayoutEffect(() => {
     const measure = () => {
-      const fh = frontMeasureRef.current?.scrollHeight ?? 0;
-      const bh = backMeasureRef.current?.scrollHeight ?? 0;
+      const fh = frontRef.current?.scrollHeight ?? 0;
+      const bh = backRef.current?.scrollHeight ?? 0;
       const next = Math.max(fh, bh, 1);
       setContentMinH((prev) => (prev === next ? prev : next));
     };
     measure();
     const ro = new ResizeObserver(() => measure());
-    if (frontMeasureRef.current) ro.observe(frontMeasureRef.current);
-    if (backMeasureRef.current) ro.observe(backMeasureRef.current);
+    if (frontRef.current) ro.observe(frontRef.current);
+    if (backRef.current) ro.observe(backRef.current);
     window.addEventListener('resize', measure);
     return () => {
       ro.disconnect();
       window.removeEventListener('resize', measure);
     };
-  }, [front, back]);
+  }, [front, back, flipped]);
 
   const toggle = (e: MouseEvent) => {
     e.preventDefault();
@@ -90,7 +92,6 @@ export function FlipCard({
   const makeBtn = (side: 'front' | 'back') => {
     const onBack = side === 'back';
     const otherLabel = onBack ? frontLabel : backLabel;
-    // Only show frontBadge when leaving the front (Flip to Timer)
     const badge = onBack ? undefined : frontBadge;
     return (
       <button
@@ -117,52 +118,29 @@ export function FlipCard({
     );
   };
 
-  const faceShell = (
-    side: 'front' | 'back',
-    content: ReactNode,
-    hidden: boolean,
-  ) => (
-    <div
-      className={cn(
-        'hq-flip-face',
-        side === 'front' ? 'hq-flip-face--front' : 'hq-flip-face--back',
-        hidden && 'pointer-events-none',
-      )}
-      aria-hidden={hidden}
-    >
-      <div className="hq-flip-face-body">
-        {content}
-        {makeBtn(side)}
-      </div>
-    </div>
-  );
-
-  const measureTwins = (
-    <div
-      className="absolute opacity-0 pointer-events-none -z-10 w-full left-0 top-0 overflow-hidden"
-      aria-hidden
-      style={{ height: 0 }}
-    >
-      <div ref={frontMeasureRef} className="hq-flip-measure">
-        {front}
-      </div>
-      <div ref={backMeasureRef} className="hq-flip-measure">
-        {back}
-      </div>
-    </div>
-  );
-
   if (reduceMotion) {
+    // Still mount both faces (one visually hidden) so height matches and effects run once each max
     return (
       <div
-        className={cn('relative h-full min-h-0 flex flex-col', className)}
+        className={cn('relative h-full min-h-0', className)}
         style={contentMinH ? { minHeight: contentMinH } : undefined}
       >
-        <div className="hq-flip-face-body flex-1 min-h-0">
-          {flipped ? back : front}
-          {makeBtn(flipped ? 'back' : 'front')}
+        <div
+          ref={frontRef}
+          className={cn('hq-flip-face-body', flipped && 'hidden')}
+          aria-hidden={flipped}
+        >
+          {front}
+          {!flipped ? makeBtn('front') : null}
         </div>
-        {measureTwins}
+        <div
+          ref={backRef}
+          className={cn('hq-flip-face-body', !flipped && 'hidden')}
+          aria-hidden={!flipped}
+        >
+          {back}
+          {flipped ? makeBtn('back') : null}
+        </div>
       </div>
     );
   }
@@ -176,10 +154,33 @@ export function FlipCard({
         className={cn('hq-flip-inner h-full', flipped && 'hq-flip-inner--flipped')}
         style={contentMinH ? { minHeight: contentMinH } : undefined}
       >
-        {faceShell('front', front, flipped)}
-        {faceShell('back', back, !flipped)}
+        <div
+          ref={frontRef}
+          className={cn(
+            'hq-flip-face hq-flip-face--front',
+            flipped && 'pointer-events-none',
+          )}
+          aria-hidden={flipped}
+        >
+          <div className="hq-flip-face-body">
+            {front}
+            {makeBtn('front')}
+          </div>
+        </div>
+        <div
+          ref={backRef}
+          className={cn(
+            'hq-flip-face hq-flip-face--back',
+            !flipped && 'pointer-events-none',
+          )}
+          aria-hidden={!flipped}
+        >
+          <div className="hq-flip-face-body">
+            {back}
+            {makeBtn('back')}
+          </div>
+        </div>
       </div>
-      {measureTwins}
     </div>
   );
 }

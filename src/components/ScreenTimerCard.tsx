@@ -52,6 +52,15 @@ export function ScreenTimerCard() {
       if (end > Date.now()) continue;
       const key = `${memberId}:${sess.startedAt}`;
       if (expiredHandled.current.has(key)) continue;
+      // Cross-instance guard (FlipCard used to mount this card twice)
+      try {
+        const sk = `hq-timer-expired:${key}`;
+        if (sessionStorage.getItem(sk) === '1') {
+          expiredHandled.current.add(key);
+          continue;
+        }
+        sessionStorage.setItem(sk, '1');
+      } catch { /* ignore */ }
       expiredHandled.current.add(key);
 
       playTimeUpBeep();
