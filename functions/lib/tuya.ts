@@ -77,7 +77,7 @@ export type LightsGate =
   | { allow: false; reason: string };
 
 /** Should we turn lights OFF for this playback start? */
-export function shouldTurnLightsOff(sessionId?: string): LightsGate {
+export function shouldTurnLightsOff(_sessionId?: string): LightsGate {
   const now = Date.now();
   if (cinema.active) {
     return { allow: false, reason: 'already_cinema' };
@@ -98,7 +98,7 @@ export function shouldTurnLightsOff(sessionId?: string): LightsGate {
 }
 
 /** Should we restore lights for this pause/stop? */
-export function shouldRestoreLights(sessionId?: string): LightsGate {
+export function shouldRestoreLights(_sessionId?: string): LightsGate {
   const now = Date.now();
   if (!cinema.active) {
     // Only restore if we actually turned off for a film

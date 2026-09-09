@@ -422,7 +422,7 @@ export const onRequestPost: PagesFunction<Env> = async (
       const gate = shouldTurnLightsOff(ev.sessionId);
       if (!gate.allow) {
         lights.action = "skipped_cooldown";
-        lights.detail = { reason: gate.reason, cinema: getCinemaState() };
+        lights.detail = { reason: gate.allow === false ? gate.reason : "blocked", cinema: getCinemaState() };
       } else {
         try {
           const detail = await dimPlaybackLightingToOff(env);
@@ -439,7 +439,7 @@ export const onRequestPost: PagesFunction<Env> = async (
       const gate = shouldRestoreLights(ev.sessionId);
       if (!gate.allow) {
         lights.action = "skipped_cooldown";
-        lights.detail = { reason: gate.reason, cinema: getCinemaState() };
+        lights.detail = { reason: gate.allow === false ? gate.reason : "blocked", cinema: getCinemaState() };
       } else {
         try {
           const detail = await restorePlaybackLighting(env);
