@@ -12,6 +12,7 @@ const THEMES: { id: ThemeId; label: string }[] = [
   { id: 'dark', label: 'Warm dark' },
   { id: 'light', label: 'Warm light' },
   { id: 'neon', label: 'Neon' },
+  { id: 'spyfamily', label: 'Spy×Family' },
 ];
 
 export function ProfileSwitcher({

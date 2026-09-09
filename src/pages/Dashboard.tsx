@@ -551,6 +551,11 @@ export function Dashboard() {
   const shopOpen = shopping.filter((s) => !s.bought).length;
   const hour = now.getHours();
   const greeting = hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening';
+  const themeId =
+    (currentUser && data.appearance?.[currentUser.id]?.theme) ||
+    data.settings.theme ||
+    'dark';
+  const isSpyFamily = themeId === 'spyfamily';
   const household = members.filter((m) => m.role !== 'media');
 
   const setMyStatus = (status: PresenceStatus) => {
@@ -1814,6 +1819,36 @@ export function Dashboard() {
       </div>
 
       {heroOpen && (
+        isSpyFamily ? (
+          <section className="relative overflow-hidden rounded-3xl border border-hero-border shadow-card">
+            <img
+              src="/themes/spyfamily-banner.jpg"
+              alt=""
+              className="w-full h-36 sm:h-44 lg:h-52 object-cover object-[center_20%]"
+              draggable={false}
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/15 to-transparent pointer-events-none" />
+            <button
+              type="button"
+              onClick={dismissHero}
+              className="absolute top-3 right-3 z-10 p-1.5 rounded-lg text-white/90 hover:bg-black/30"
+              title="Dismiss"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-5 pr-12">
+              {announcement ? (
+                <p className="text-white/95 text-sm sm:text-base max-w-xl drop-shadow-md">
+                  {announcement}
+                </p>
+              ) : (
+                <p className="text-white/90 text-sm drop-shadow-md">
+                  Operation Strix is online, {currentUser?.name || 'Family'}.
+                </p>
+              )}
+            </div>
+          </section>
+        ) : (
         <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-hero-from via-hero-via to-hero-to border border-hero-border p-6 lg:p-8">
           <div className="absolute top-0 right-0 w-64 h-64 bg-accent/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
           <button
@@ -1837,6 +1872,7 @@ export function Dashboard() {
             )}
           </div>
         </section>
+        )
       )}
 
       {/* Fixed Home notes — not draggable / not hideable by kids */}

@@ -5,6 +5,7 @@
  * - .dark / :root  → Warm Precision (dark)
  * - .light         → Warm Precision (light)
  * - .neon          → Neon cyberpunk (unchanged)
+ * - .spyfamily     → Spy×Family (sage, pink, gold; banner hero)
  */
 
 /* Warm Precision — dark (default) */
@@ -176,6 +177,92 @@ html.neon :focus-visible {
 html.neon .bg-accent {
   box-shadow: 0 0 16px rgb(0 200 255 / 0.25);
 }
+
+/* Spy×Family — sage field, Anya pink, gold trim, glass cards */
+.spyfamily {
+  --app-page: #6b8f7a;
+  --app-surface: rgba(245, 240, 230, 0.55);
+  --app-surface-2: rgba(255, 252, 245, 0.45);
+  --app-surface-3: rgba(232, 220, 200, 0.55);
+  --app-inset: rgba(40, 55, 48, 0.25);
+  --app-elevated: rgba(255, 252, 247, 0.58);
+  --app-border: rgba(40, 50, 45, 0.18);
+  --app-border-strong: rgba(40, 50, 45, 0.32);
+  --app-fg: #1a1c1b;
+  --app-fg-secondary: #3d4a42;
+  --app-muted: #4a5c52;
+  --app-faint: #6a7d72;
+  --app-header: rgba(245, 240, 230, 0.82);
+  --app-sidebar: rgba(255, 252, 247, 0.72);
+  --app-nav-hover: rgba(255, 255, 255, 0.35);
+  --app-input: rgba(255, 255, 255, 0.75);
+  --app-scrollbar: rgba(40, 50, 45, 0.35);
+  --app-hero-from: rgba(255, 182, 193, 0.35);
+  --app-hero-via: rgba(212, 175, 55, 0.15);
+  --app-hero-to: rgba(255, 252, 247, 0.5);
+  --app-hero-border: rgba(212, 175, 55, 0.45);
+  --app-hero-title: #1a1c1b;
+  --app-hero-sub: #c45c7a;
+  --app-hero-body: #3d4a42;
+  --app-ring-offset: #6b8f7a;
+  /* Anya pink primary */
+  --app-accent: #e85a7a;
+  --app-accent-hover: #f07892;
+  --app-accent-tint: rgba(232, 90, 122, 0.18);
+  --app-accent-tint-strong: rgba(232, 90, 122, 0.28);
+  --app-accent-ink: #fff8f9;
+  --app-secondary: #c9a227;
+  --app-warn: #d4a017;
+  --app-warn-tint: rgba(212, 160, 23, 0.2);
+  --app-danger: #b91c1c;
+  --app-danger-tint: rgba(185, 28, 28, 0.15);
+  --app-success: #2f6f5e;
+  --app-shadow-card:
+    0 0 0 1px rgba(40, 50, 45, 0.08),
+    0 8px 28px rgba(30, 40, 35, 0.18);
+  --font-display: "Fraunces", "Iowan Old Style", Palatino, serif;
+  --font-ui: "Source Sans 3", "Source Sans Pro", system-ui, sans-serif;
+}
+
+/* Static sage field + soft paper bands — fixed so cards scroll over it */
+html.spyfamily body {
+  background-color: #6b8f7a;
+  background-image:
+    linear-gradient(165deg, #7a9e88 0%, #6b8f7a 40%, #5a7d6a 100%),
+    repeating-linear-gradient(
+      -12deg,
+      transparent,
+      transparent 48px,
+      rgba(255, 255, 255, 0.04) 48px,
+      rgba(255, 255, 255, 0.04) 50px
+    );
+  background-attachment: fixed, fixed;
+  background-size: cover, auto;
+}
+
+html.spyfamily :focus-visible {
+  outline: 2px solid var(--app-accent);
+  outline-offset: 2px;
+}
+
+/* Glass cards on this theme */
+html.spyfamily .bg-elevated,
+html.spyfamily [class*="bg-elevated"] {
+  background-color: rgba(255, 252, 247, 0.58) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+html.spyfamily .bg-surface {
+  background-color: rgba(245, 240, 230, 0.5) !important;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+html.spyfamily .bg-accent {
+  box-shadow: 0 2px 12px rgba(232, 90, 122, 0.35);
+}
+
 
 @theme {
   --color-page: var(--app-page);
