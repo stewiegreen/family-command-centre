@@ -88,6 +88,8 @@ type ParsedEvent = {
 
   itemName?: string;
   itemType?: string;
+  /** Item.RunTimeTicks — used to skip cinematic intros */
+  runTimeTicks?: number;
 };
 
 function json(data: unknown, status = 200): Response {
@@ -126,8 +128,10 @@ function normalizeEvent(raw: string): ParsedEvent["kind"] {
     return "stop";
   }
 
+  // Scrobble is a progress bookmark mid-watch, NOT end of playback.
+  // Treating it as "stop" restored lights every few minutes (bounce loop).
   if (e.includes("scrobble")) {
-    return "stop";
+    return "other";
   }
 
   return "other";
@@ -209,6 +213,13 @@ function parsePayload(body: unknown): ParsedEvent {
       : item.type
         ? String(item.type)
         : undefined,
+
+    runTimeTicks: (() => {
+      const v = item.RunTimeTicks ?? item.runTimeTicks;
+      if (v == null || v === "") return undefined;
+      const n = Number(v);
+      return Number.isFinite(n) ? n : undefined;
+    })(),
   };
 }
 
@@ -363,6 +374,10 @@ export const onRequestPost: PagesFunction<Env> = async (
   }
 
   // Genio / Tuya cinema lights — only for configured Emby device(s)
+  //
+  // Important: do NOT react to scrobble (handled as "other" now) or to
+  // very short items (cinematic intros ~1–2 min), or lights bounce
+  // dim → bright → dim for the whole film.
   let lights: {
     action?: string;
     matched?: boolean;
@@ -382,7 +397,23 @@ export const onRequestPost: PagesFunction<Env> = async (
       client: ev.client,
     };
 
-    if (matched && (ev.kind === "start" || ev.kind === "unpause")) {
+    const rawLower = (ev.rawEvent || "").toLowerCase();
+    const isScrobble = rawLower.includes("scrobble");
+    // Skip intros / bumpers under ~3 minutes (RunTimeTicks is 100ns units)
+    const INTRO_MAX_TICKS = 3 * 60 * 10_000_000; // 3 minutes
+    const isLikelyIntro =
+      typeof ev.runTimeTicks === "number" &&
+      ev.runTimeTicks > 0 &&
+      ev.runTimeTicks < INTRO_MAX_TICKS;
+
+    if (!matched) {
+      lights.action = "skipped_device";
+    } else if (isScrobble) {
+      lights.action = "skipped_scrobble";
+    } else if (isLikelyIntro) {
+      lights.action = "skipped_intro";
+      lights.detail = { runTimeTicks: ev.runTimeTicks };
+    } else if (ev.kind === "start" || ev.kind === "unpause") {
       try {
         const detail = await dimPlaybackLightingToOff(env);
         lights.action = "dim_to_off";
@@ -392,7 +423,7 @@ export const onRequestPost: PagesFunction<Env> = async (
         lights.action = "dim_to_off";
         lights.error = err instanceof Error ? err.message : String(err);
       }
-    } else if (matched && (ev.kind === "pause" || ev.kind === "stop")) {
+    } else if (ev.kind === "pause" || ev.kind === "stop") {
       try {
         const detail = await restorePlaybackLighting(env);
         lights.action = "restore";
@@ -402,8 +433,6 @@ export const onRequestPost: PagesFunction<Env> = async (
         lights.action = "restore";
         lights.error = err instanceof Error ? err.message : String(err);
       }
-    } else if (!matched) {
-      lights.action = "skipped_device";
     }
   }
 

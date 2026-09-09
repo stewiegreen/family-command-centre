@@ -209,7 +209,7 @@ export async function dimPlaybackLightingToOff(env: TuyaEnv): Promise<{
   );
   const stepMs = Math.max(
     200,
-    Math.min(3000, Number(env.TUYA_DIM_STEP_MS ?? '900') || 900),
+    Math.min(3000, Number(env.TUYA_DIM_STEP_MS ?? '700') || 700),
   );
 
   // e.g. 75 → 50 → 30 → 15 → off
