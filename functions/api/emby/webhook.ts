@@ -73,6 +73,11 @@ type ParsedEvent = {
 
   sessionId?: string;
 
+  // Emby client/device information.
+  deviceId?: string;
+  deviceName?: string;
+  client?: string;
+
   itemName?: string;
   itemType?: string;
 };
@@ -165,6 +170,24 @@ function parsePayload(body: unknown): ParsedEvent {
       ? String(session.Id)
       : session.id
         ? String(session.id)
+        : undefined,
+
+    deviceId: session.DeviceId
+      ? String(session.DeviceId)
+      : session.deviceId
+        ? String(session.deviceId)
+        : undefined,
+
+    deviceName: session.DeviceName
+      ? String(session.DeviceName)
+      : session.deviceName
+        ? String(session.deviceName)
+        : undefined,
+
+    client: session.Client
+      ? String(session.Client)
+      : session.client
+        ? String(session.client)
         : undefined,
 
     itemName: item.Name
@@ -312,26 +335,28 @@ export const onRequestPost: PagesFunction<Env> = async (
 
   /*
    * ---------------------------------------------------------------
-   * TUYA LIGHTING
+   * TEMPORARY TUYA DEVICE DIAGNOSTICS
    * ---------------------------------------------------------------
    *
-   * Start / resume:
-   *   Lights ON → white mode → configured brightness (15%)
-   *
-   * Pause:
-   *   Leave lights alone.
-   *
-   * Stop:
-   *   Lights OFF.
-   *
-   * Tuya failures are deliberately non-fatal. A lighting problem
-   * must never break GreenHQ's screen-time accounting.
+   * This tells us which Emby device generated the playback event.
+   * We'll use this information to restrict Tuya lighting to the
+   * desired device(s).
    */
 
   if (
     ev.kind === "start" ||
     ev.kind === "unpause"
   ) {
+    console.log("Emby playback device:", {
+      deviceId: ev.deviceId,
+      deviceName: ev.deviceName,
+      client: ev.client,
+      sessionId: ev.sessionId,
+      userId: ev.embyUserId,
+      userName: ev.embyUserName,
+      itemName: ev.itemName,
+    });
+
     try {
       await setPlaybackLighting(env);
     } catch (err) {
@@ -343,6 +368,16 @@ export const onRequestPost: PagesFunction<Env> = async (
   }
 
   if (ev.kind === "stop") {
+    console.log("Emby playback stopped:", {
+      deviceId: ev.deviceId,
+      deviceName: ev.deviceName,
+      client: ev.client,
+      sessionId: ev.sessionId,
+      userId: ev.embyUserId,
+      userName: ev.embyUserName,
+      itemName: ev.itemName,
+    });
+
     try {
       await turnPlaybackLightingOff(env);
     } catch (err) {
@@ -703,3 +738,4 @@ export const onRequestHead: PagesFunction<Env> =
       status: 200,
     });
   };
+```
