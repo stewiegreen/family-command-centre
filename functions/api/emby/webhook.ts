@@ -14,18 +14,21 @@
  *   EMBY_BASE_URL / EMBY_API_KEY optional — stop session when bank hits 0
  *   EMBY_SCREEN_MIN_SECONDS      default 30 — ignore shorter blips
  *
- * Tuya lighting:
- *   TUYA_CLIENT_ID
- *   TUYA_CLIENT_SECRET
- *   TUYA_DEVICE_IDS
- *   TUYA_ON_PLAYBACK
- *   TUYA_DIM_PERCENT
+ * Tuya lighting (Genio):
+ *   TUYA_CLIENT_ID / TUYA_CLIENT_SECRET / TUYA_DEVICE_IDS
  *   TUYA_ENDPOINT
+ *   TUYA_DIM_FROM_PERCENT     start of gradual dim (default 75)
+ *   TUYA_RESTORE_PERCENT      brightness on pause/stop (default 75)
+ *   TUYA_DIM_STEP_MS          ms between dim steps (default 900)
+ *   EMBY_LIGHTS_DEVICE_MATCH  comma substrings vs DeviceName/DeviceId/Client
+ *                             e.g. "Living Room,Shield,AndroidTv"
+ *                             if set, lights only run when a match is found
  */
 
 import {
-  setPlaybackLighting,
-  turnPlaybackLightingOff,
+  dimPlaybackLightingToOff,
+  restorePlaybackLighting,
+  tuyaConfigured,
 } from "../../lib/tuya";
 
 import {
@@ -60,7 +63,12 @@ type Env = {
   TUYA_DEVICE_IDS?: string;
   TUYA_ON_PLAYBACK?: string;
   TUYA_DIM_PERCENT?: string;
+  TUYA_DIM_FROM_PERCENT?: string;
+  TUYA_RESTORE_PERCENT?: string;
+  TUYA_DIM_STEP_MS?: string;
   TUYA_ENDPOINT?: string;
+  /** Comma-separated substrings matched against Emby Session DeviceName / DeviceId / Client */
+  EMBY_LIGHTS_DEVICE_MATCH?: string;
 };
 
 type ParsedEvent = {
@@ -277,6 +285,27 @@ function debitMinutes(
   );
 }
 
+
+/** True if this playback session is the living-room (or configured) TV. */
+function embyDeviceMatchesLights(
+  env: Env,
+  ev: Pick<ParsedEvent, "deviceId" | "deviceName" | "client">,
+): boolean {
+  const raw = (env.EMBY_LIGHTS_DEVICE_MATCH || "").trim();
+  // No filter configured → affect all devices (legacy behaviour)
+  if (!raw) return true;
+  const needles = raw
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+  if (!needles.length) return true;
+  const hay = [ev.deviceName, ev.deviceId, ev.client]
+    .filter(Boolean)
+    .map((s) => String(s).toLowerCase())
+    .join(" | ");
+  return needles.some((n) => hay.includes(n));
+}
+
 export const onRequestPost: PagesFunction<Env> = async (
   context,
 ) => {
@@ -333,58 +362,48 @@ export const onRequestPost: PagesFunction<Env> = async (
     });
   }
 
-  /*
-   * ---------------------------------------------------------------
-   * TEMPORARY TUYA DEVICE DIAGNOSTICS
-   * ---------------------------------------------------------------
-   *
-   * This tells us which Emby device generated the playback event.
-   * We'll use this information to restrict Tuya lighting to the
-   * desired device(s).
-   */
+  // Genio / Tuya cinema lights — only for configured Emby device(s)
+  let lights: {
+    action?: string;
+    matched?: boolean;
+    deviceName?: string;
+    deviceId?: string;
+    client?: string;
+    detail?: unknown;
+    error?: string;
+  } | undefined;
 
-  if (
-    ev.kind === "start" ||
-    ev.kind === "unpause"
-  ) {
-    console.log("Emby playback device:", {
-      deviceId: ev.deviceId,
+  if (tuyaConfigured(env)) {
+    const matched = embyDeviceMatchesLights(env, ev);
+    lights = {
+      matched,
       deviceName: ev.deviceName,
-      client: ev.client,
-      sessionId: ev.sessionId,
-      userId: ev.embyUserId,
-      userName: ev.embyUserName,
-      itemName: ev.itemName,
-    });
-
-    try {
-      await setPlaybackLighting(env);
-    } catch (err) {
-      console.error(
-        "Tuya playback lighting failed:",
-        err,
-      );
-    }
-  }
-
-  if (ev.kind === "stop") {
-    console.log("Emby playback stopped:", {
       deviceId: ev.deviceId,
-      deviceName: ev.deviceName,
       client: ev.client,
-      sessionId: ev.sessionId,
-      userId: ev.embyUserId,
-      userName: ev.embyUserName,
-      itemName: ev.itemName,
-    });
+    };
 
-    try {
-      await turnPlaybackLightingOff(env);
-    } catch (err) {
-      console.error(
-        "Tuya lighting-off failed:",
-        err,
-      );
+    if (matched && (ev.kind === "start" || ev.kind === "unpause")) {
+      try {
+        const detail = await dimPlaybackLightingToOff(env);
+        lights.action = "dim_to_off";
+        lights.detail = detail;
+      } catch (err) {
+        console.error("Tuya dim-to-off failed:", err);
+        lights.action = "dim_to_off";
+        lights.error = err instanceof Error ? err.message : String(err);
+      }
+    } else if (matched && (ev.kind === "pause" || ev.kind === "stop")) {
+      try {
+        const detail = await restorePlaybackLighting(env);
+        lights.action = "restore";
+        lights.detail = detail;
+      } catch (err) {
+        console.error("Tuya restore failed:", err);
+        lights.action = "restore";
+        lights.error = err instanceof Error ? err.message : String(err);
+      }
+    } else if (!matched) {
+      lights.action = "skipped_device";
     }
   }
 
@@ -404,6 +423,7 @@ export const onRequestPost: PagesFunction<Env> = async (
       message:
         "Set GREENHQ_FAMILY_ID + FIREBASE_SERVICE_ACCOUNT to meter screen time",
       parsed: ev,
+      lights,
     });
   }
 
@@ -666,6 +686,7 @@ export const onRequestPost: PagesFunction<Env> = async (
         screenTime[member.id] ?? 0,
 
       stopped: stopSession,
+      lights,
     });
   } catch (err) {
     console.error(
