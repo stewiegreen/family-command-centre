@@ -84,9 +84,6 @@ function percentToV2(percent: number): number {
   return Math.max(10, Math.min(1000, Math.round(percent * 10)));
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 async function getToken(env: TuyaEnv): Promise<string> {
   const clientId = env.TUYA_CLIENT_ID?.trim();
@@ -192,44 +189,19 @@ async function turnOffAll(env: TuyaEnv, token: string): Promise<void> {
 }
 
 /**
- * Gradual cinema dim: start ~75% → step down → off.
- * Steps are sequential so the room visibly dims instead of snapping off.
+ * Instant off when playback starts (Tuya cloud latency makes stepped
+ * "dim" feel choppy — hard off is cleaner).
  */
 export async function dimPlaybackLightingToOff(env: TuyaEnv): Promise<{
-  steps: number[];
+  mode: 'off';
 }> {
   const deviceIds = getDeviceIds(env);
   if (!deviceIds.length) {
     throw new Error('TUYA_DEVICE_IDS is empty');
   }
-
-  const from = clampPercent(
-    Number(env.TUYA_DIM_FROM_PERCENT ?? env.TUYA_DIM_PERCENT ?? '75'),
-    75,
-  );
-  const stepMs = Math.max(
-    200,
-    Math.min(3000, Number(env.TUYA_DIM_STEP_MS ?? '700') || 700),
-  );
-
-  // e.g. 75 → 50 → 30 → 15 → off
-  const steps: number[] = [];
-  let p = from;
-  while (p > 12) {
-    steps.push(p);
-    p = Math.round(p * 0.65);
-  }
-  if (steps[steps.length - 1] !== 15 && from > 15) {
-    steps.push(15);
-  }
-
   const token = await getToken(env);
-  for (let i = 0; i < steps.length; i++) {
-    await setBrightnessAll(env, token, steps[i]!);
-    await sleep(stepMs);
-  }
   await turnOffAll(env, token);
-  return { steps: [...steps, 0] };
+  return { mode: 'off' };
 }
 
 /** Restore room lights after pause/stop (default 75%). */

@@ -416,11 +416,11 @@ export const onRequestPost: PagesFunction<Env> = async (
     } else if (ev.kind === "start" || ev.kind === "unpause") {
       try {
         const detail = await dimPlaybackLightingToOff(env);
-        lights.action = "dim_to_off";
+        lights.action = "off";
         lights.detail = detail;
       } catch (err) {
-        console.error("Tuya dim-to-off failed:", err);
-        lights.action = "dim_to_off";
+        console.error("Tuya lights-off failed:", err);
+        lights.action = "off";
         lights.error = err instanceof Error ? err.message : String(err);
       }
     } else if (ev.kind === "pause" || ev.kind === "stop") {
