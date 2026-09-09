@@ -738,4 +738,3 @@ export const onRequestHead: PagesFunction<Env> =
       status: 200,
     });
   };
-```
