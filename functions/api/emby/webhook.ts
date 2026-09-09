@@ -29,6 +29,11 @@ import {
   dimPlaybackLightingToOff,
   restorePlaybackLighting,
   tuyaConfigured,
+  shouldTurnLightsOff,
+  shouldRestoreLights,
+  markLightsOff,
+  markLightsRestored,
+  getCinemaState,
 } from "../../lib/tuya";
 
 import {
@@ -414,24 +419,38 @@ export const onRequestPost: PagesFunction<Env> = async (
       lights.action = "skipped_intro";
       lights.detail = { runTimeTicks: ev.runTimeTicks };
     } else if (ev.kind === "start" || ev.kind === "unpause") {
-      try {
-        const detail = await dimPlaybackLightingToOff(env);
-        lights.action = "off";
-        lights.detail = detail;
-      } catch (err) {
-        console.error("Tuya lights-off failed:", err);
-        lights.action = "off";
-        lights.error = err instanceof Error ? err.message : String(err);
+      const gate = shouldTurnLightsOff(ev.sessionId);
+      if (!gate.allow) {
+        lights.action = "skipped_cooldown";
+        lights.detail = { reason: gate.reason, cinema: getCinemaState() };
+      } else {
+        try {
+          const detail = await dimPlaybackLightingToOff(env);
+          markLightsOff(ev.sessionId);
+          lights.action = "off";
+          lights.detail = { ...detail, cinema: getCinemaState() };
+        } catch (err) {
+          console.error("Tuya lights-off failed:", err);
+          lights.action = "off";
+          lights.error = err instanceof Error ? err.message : String(err);
+        }
       }
     } else if (ev.kind === "pause" || ev.kind === "stop") {
-      try {
-        const detail = await restorePlaybackLighting(env);
-        lights.action = "restore";
-        lights.detail = detail;
-      } catch (err) {
-        console.error("Tuya restore failed:", err);
-        lights.action = "restore";
-        lights.error = err instanceof Error ? err.message : String(err);
+      const gate = shouldRestoreLights(ev.sessionId);
+      if (!gate.allow) {
+        lights.action = "skipped_cooldown";
+        lights.detail = { reason: gate.reason, cinema: getCinemaState() };
+      } else {
+        try {
+          const detail = await restorePlaybackLighting(env);
+          markLightsRestored();
+          lights.action = "restore";
+          lights.detail = { ...detail, cinema: getCinemaState() };
+        } catch (err) {
+          console.error("Tuya restore failed:", err);
+          lights.action = "restore";
+          lights.error = err instanceof Error ? err.message : String(err);
+        }
       }
     }
   }

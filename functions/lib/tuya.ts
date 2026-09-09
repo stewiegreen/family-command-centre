@@ -49,6 +49,90 @@ const EMPTY_SHA256 =
 /** Last known brightness % per Tuya device id (warm-isolate cache). */
 const lastBrightnessPct: Record<string, number> = {};
 
+/**
+ * Cinema-mode latch + cooldowns (in-isolate).
+ * Emby often fires: stop → restore ON, then a phantom start (menu/next-up) → OFF,
+ * and can repeat. We only turn off when entering cinema mode, only restore when
+ * leaving it, and ignore spam for a while after each action.
+ */
+type CinemaState = {
+  active: boolean;
+  lastOffAt: number;
+  lastOnAt: number;
+  sessionId?: string;
+};
+let cinema: CinemaState = {
+  active: false,
+  lastOffAt: 0,
+  lastOnAt: 0,
+};
+
+/** Seconds after restore during which start/unpause is ignored */
+const COOLDOWN_AFTER_ON_MS = 60_000;
+/** Seconds after off during which another off is ignored */
+const COOLDOWN_AFTER_OFF_MS = 30_000;
+
+export type LightsGate =
+  | { allow: true }
+  | { allow: false; reason: string };
+
+/** Should we turn lights OFF for this playback start? */
+export function shouldTurnLightsOff(sessionId?: string): LightsGate {
+  const now = Date.now();
+  if (cinema.active) {
+    return { allow: false, reason: 'already_cinema' };
+  }
+  if (now - cinema.lastOnAt < COOLDOWN_AFTER_ON_MS) {
+    return {
+      allow: false,
+      reason: `cooldown_after_on_${Math.round((COOLDOWN_AFTER_ON_MS - (now - cinema.lastOnAt)) / 1000)}s`,
+    };
+  }
+  if (now - cinema.lastOffAt < COOLDOWN_AFTER_OFF_MS) {
+    return {
+      allow: false,
+      reason: `cooldown_after_off_${Math.round((COOLDOWN_AFTER_OFF_MS - (now - cinema.lastOffAt)) / 1000)}s`,
+    };
+  }
+  return { allow: true };
+}
+
+/** Should we restore lights for this pause/stop? */
+export function shouldRestoreLights(sessionId?: string): LightsGate {
+  const now = Date.now();
+  if (!cinema.active) {
+    // Only restore if we actually turned off for a film
+    return { allow: false, reason: 'not_in_cinema' };
+  }
+  if (now - cinema.lastOnAt < 10_000) {
+    return { allow: false, reason: 'cooldown_duplicate_on' };
+  }
+  return { allow: true };
+}
+
+export function markLightsOff(sessionId?: string): void {
+  cinema = {
+    active: true,
+    lastOffAt: Date.now(),
+    lastOnAt: cinema.lastOnAt,
+    sessionId,
+  };
+}
+
+export function markLightsRestored(): void {
+  cinema = {
+    active: false,
+    lastOffAt: cinema.lastOffAt,
+    lastOnAt: Date.now(),
+    sessionId: undefined,
+  };
+}
+
+export function getCinemaState(): CinemaState {
+  return { ...cinema };
+}
+
+
 function hex(bytes: ArrayBuffer): string {
   return [...new Uint8Array(bytes)]
     .map((b) => b.toString(16).padStart(2, '0'))
