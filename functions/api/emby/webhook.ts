@@ -18,7 +18,7 @@
  *   TUYA_CLIENT_ID / TUYA_CLIENT_SECRET / TUYA_DEVICE_IDS
  *   TUYA_ENDPOINT
  *   TUYA_DIM_FROM_PERCENT     start of gradual dim (default 75)
- *   TUYA_RESTORE_PERCENT      brightness on pause/stop (default 75)
+ *   TUYA_RESTORE_PERCENT      fallback brightness if last level unknown (default 30)
  *   TUYA_DIM_STEP_MS          ms between dim steps (default 900)
  *   EMBY_LIGHTS_DEVICE_MATCH  comma substrings vs DeviceName/DeviceId/Client
  *                             e.g. "Living Room,Shield,AndroidTv"

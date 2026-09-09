@@ -5,15 +5,13 @@ export interface TuyaEnv {
   TUYA_CLIENT_SECRET?: string;
   TUYA_DEVICE_IDS?: string;
   TUYA_ENDPOINT?: string;
-  /** Playback dim start percent (default 75). */
-  TUYA_DIM_FROM_PERCENT?: string;
-  /** Brightness when restoring on pause/stop (default 75). */
+  /** Fallback restore % when last brightness unknown (default 30). */
   TUYA_RESTORE_PERCENT?: string;
-  /** ms between gradual dim steps (default 900). */
-  TUYA_DIM_STEP_MS?: string;
-  /** @deprecated kept for compatibility */
-  TUYA_ON_PLAYBACK?: string;
+  /** @deprecated */
+  TUYA_DIM_FROM_PERCENT?: string;
   TUYA_DIM_PERCENT?: string;
+  TUYA_DIM_STEP_MS?: string;
+  TUYA_ON_PLAYBACK?: string;
 }
 
 interface TuyaTokenResponse {
@@ -33,8 +31,23 @@ interface TuyaCommandResponse {
   code?: number;
 }
 
+interface TuyaStatusItem {
+  code: string;
+  value: unknown;
+}
+
+interface TuyaStatusResponse {
+  success?: boolean;
+  result?: TuyaStatusItem[];
+  msg?: string;
+  code?: number;
+}
+
 const EMPTY_SHA256 =
   'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
+
+/** Last known brightness % per Tuya device id (warm-isolate cache). */
+const lastBrightnessPct: Record<string, number> = {};
 
 function hex(bytes: ArrayBuffer): string {
   return [...new Uint8Array(bytes)]
@@ -79,11 +92,28 @@ function clampPercent(n: number, fallback: number): number {
   return Math.max(1, Math.min(100, Math.round(n)));
 }
 
-/** Map 1–100% → Tuya bright_value_v2 (10–1000). */
 function percentToV2(percent: number): number {
   return Math.max(10, Math.min(1000, Math.round(percent * 10)));
 }
 
+function fallbackRestorePercent(env: TuyaEnv): number {
+  return clampPercent(Number(env.TUYA_RESTORE_PERCENT ?? '30'), 30);
+}
+
+/** Parse brightness % from Tuya status codes. */
+function brightnessFromStatus(items: TuyaStatusItem[]): number | undefined {
+  const map = new Map(items.map((i) => [i.code, i.value]));
+  const v2 = map.get('bright_value_v2');
+  if (typeof v2 === 'number' && v2 > 0) {
+    return clampPercent(v2 / 10, 50);
+  }
+  const v1 = map.get('bright_value');
+  if (typeof v1 === 'number' && v1 > 0) {
+    // typical 25–255 scale
+    return clampPercent((v1 / 255) * 100, 50);
+  }
+  return undefined;
+}
 
 async function getToken(env: TuyaEnv): Promise<string> {
   const clientId = env.TUYA_CLIENT_ID?.trim();
@@ -114,6 +144,35 @@ async function getToken(env: TuyaEnv): Promise<string> {
     );
   }
   return data.result.access_token;
+}
+
+async function signedGet(
+  env: TuyaEnv,
+  accessToken: string,
+  path: string,
+): Promise<unknown> {
+  const clientId = env.TUYA_CLIENT_ID?.trim();
+  const secret = env.TUYA_CLIENT_SECRET?.trim();
+  if (!clientId || !secret) throw new Error('Tuya credentials are not configured');
+
+  const timestamp = Date.now().toString();
+  const stringToSign = `GET\n${EMPTY_SHA256}\n\n${path}`;
+  const sign = await hmacSha256(
+    secret,
+    clientId + accessToken + timestamp + stringToSign,
+  );
+
+  const response = await fetch(`${endpoint(env)}${path}`, {
+    method: 'GET',
+    headers: {
+      client_id: clientId,
+      access_token: accessToken,
+      sign,
+      sign_method: 'HMAC-SHA256',
+      t: timestamp,
+    },
+  });
+  return response.json();
 }
 
 async function sendCommands(
@@ -159,74 +218,134 @@ async function sendCommands(
   }
 }
 
-async function setBrightnessAll(
+async function readDeviceBrightness(
   env: TuyaEnv,
   token: string,
+  deviceId: string,
+): Promise<number | undefined> {
+  const path = `/v1.0/devices/${encodeURIComponent(deviceId)}/status`;
+  const data = (await signedGet(env, token, path)) as TuyaStatusResponse;
+  if (!data.success || !Array.isArray(data.result)) {
+    return undefined;
+  }
+  return brightnessFromStatus(data.result);
+}
+
+async function setBrightnessOne(
+  env: TuyaEnv,
+  token: string,
+  deviceId: string,
   percent: number,
 ): Promise<void> {
   const v2 = percentToV2(percent);
-  const deviceIds = getDeviceIds(env);
-  await Promise.all(
-    deviceIds.map((deviceId) =>
-      sendCommands(env, token, deviceId, [
-        { code: 'switch_led', value: true },
-        { code: 'work_mode', value: 'white' },
-        { code: 'bright_value_v2', value: v2 },
-      ]),
-    ),
-  );
+  await sendCommands(env, token, deviceId, [
+    { code: 'switch_led', value: true },
+    { code: 'work_mode', value: 'white' },
+    { code: 'bright_value_v2', value: v2 },
+  ]);
 }
 
-async function turnOffAll(env: TuyaEnv, token: string): Promise<void> {
-  const deviceIds = getDeviceIds(env);
-  await Promise.all(
-    deviceIds.map((deviceId) =>
-      sendCommands(env, token, deviceId, [
-        { code: 'switch_led', value: false },
-      ]),
-    ),
-  );
+async function turnOffOne(
+  env: TuyaEnv,
+  token: string,
+  deviceId: string,
+): Promise<void> {
+  await sendCommands(env, token, deviceId, [
+    { code: 'switch_led', value: false },
+  ]);
 }
 
 /**
- * Instant off when playback starts (Tuya cloud latency makes stepped
- * "dim" feel choppy — hard off is cleaner).
+ * Snapshot current brightness, then turn lights off.
+ * Uses TUYA_RESTORE_PERCENT only later if snapshot failed.
  */
 export async function dimPlaybackLightingToOff(env: TuyaEnv): Promise<{
   mode: 'off';
+  saved: Record<string, number | null>;
 }> {
   const deviceIds = getDeviceIds(env);
   if (!deviceIds.length) {
     throw new Error('TUYA_DEVICE_IDS is empty');
   }
   const token = await getToken(env);
-  await turnOffAll(env, token);
-  return { mode: 'off' };
-}
+  const saved: Record<string, number | null> = {};
 
-/** Restore room lights after pause/stop (default 75%). */
-export async function restorePlaybackLighting(env: TuyaEnv): Promise<{
-  percent: number;
-}> {
-  const deviceIds = getDeviceIds(env);
-  if (!deviceIds.length) {
-    throw new Error('TUYA_DEVICE_IDS is empty');
-  }
-  const percent = clampPercent(
-    Number(env.TUYA_RESTORE_PERCENT ?? '75'),
-    75,
+  await Promise.all(
+    deviceIds.map(async (deviceId) => {
+      try {
+        const pct = await readDeviceBrightness(env, token, deviceId);
+        if (pct != null) {
+          lastBrightnessPct[deviceId] = pct;
+          saved[deviceId] = pct;
+        } else {
+          saved[deviceId] = lastBrightnessPct[deviceId] ?? null;
+        }
+      } catch {
+        saved[deviceId] = lastBrightnessPct[deviceId] ?? null;
+      }
+      await turnOffOne(env, token, deviceId);
+    }),
   );
-  const token = await getToken(env);
-  await setBrightnessAll(env, token, percent);
-  return { percent };
+
+  return { mode: 'off', saved };
 }
 
-/** @deprecated use dimPlaybackLightingToOff */
+/**
+ * Restore each light to its last known brightness.
+ * Fallback: TUYA_RESTORE_PERCENT (default 30).
+ */
+export async function restorePlaybackLighting(env: TuyaEnv): Promise<{
+  percent: Record<string, number>;
+  source: Record<string, 'snapshot' | 'status' | 'fallback'>;
+}> {
+  const deviceIds = getDeviceIds(env);
+  if (!deviceIds.length) {
+    throw new Error('TUYA_DEVICE_IDS is empty');
+  }
+  const fallback = fallbackRestorePercent(env);
+  const token = await getToken(env);
+  const percent: Record<string, number> = {};
+  const source: Record<string, 'snapshot' | 'status' | 'fallback'> = {};
+
+  await Promise.all(
+    deviceIds.map(async (deviceId) => {
+      let pct = lastBrightnessPct[deviceId];
+      let src: 'snapshot' | 'status' | 'fallback' =
+        pct != null ? 'snapshot' : 'fallback';
+
+      if (pct == null) {
+        try {
+          const fromStatus = await readDeviceBrightness(env, token, deviceId);
+          if (fromStatus != null) {
+            pct = fromStatus;
+            src = 'status';
+            lastBrightnessPct[deviceId] = fromStatus;
+          }
+        } catch {
+          /* use fallback */
+        }
+      }
+
+      if (pct == null) {
+        pct = fallback;
+        src = 'fallback';
+      }
+
+      percent[deviceId] = pct;
+      source[deviceId] = src;
+      await setBrightnessOne(env, token, deviceId, pct);
+    }),
+  );
+
+  return { percent, source };
+}
+
+/** @deprecated */
 export async function setPlaybackLighting(env: TuyaEnv): Promise<void> {
   await dimPlaybackLightingToOff(env);
 }
 
-/** @deprecated use restorePlaybackLighting — name was inverted historically */
+/** @deprecated */
 export async function turnPlaybackLightingOff(env: TuyaEnv): Promise<void> {
   await restorePlaybackLighting(env);
 }
