@@ -24,6 +24,13 @@ const CUSTOM_PROPS = [
 
 export function clearCustomThemeProperties(root: HTMLElement = document.documentElement): void {
   for (const p of CUSTOM_PROPS) root.style.removeProperty(p);
+  // Belt-and-braces: drop any other inline --app-* left on <html>
+  const toRemove: string[] = [];
+  for (let i = 0; i < root.style.length; i++) {
+    const name = root.style.item(i);
+    if (name && name.startsWith('--app-')) toRemove.push(name);
+  }
+  for (const name of toRemove) root.style.removeProperty(name);
   // Body may have been forced solid by a custom theme
   document.body.style.removeProperty('background-image');
   document.body.style.removeProperty('background-color');

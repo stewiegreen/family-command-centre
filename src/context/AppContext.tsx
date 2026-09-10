@@ -759,14 +759,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const id = d.settings.currentUserId;
         if (!id) return d;
         const prev = d.appearance?.[id] || {};
+        // Choosing a built-in preset must drop Theme Studio overrides — otherwise
+        // inline --app-* vars stay on <html> and mix with the new class.
         return {
           ...d,
           appearance: {
             ...(d.appearance || {}),
-            [id]: { ...prev, theme },
+            [id]: {
+              ...prev,
+              theme,
+              activeCustomThemeId: undefined,
+            },
           },
         };
       });
+      // Clear immediately so the UI doesn't flash a hybrid for one frame
+      // before the appearance effect re-runs.
+      clearCustomThemeProperties(document.documentElement);
     },
     [update],
   );

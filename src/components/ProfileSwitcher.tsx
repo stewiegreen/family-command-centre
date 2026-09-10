@@ -187,6 +187,7 @@ export function ProfileSwitcher({
               </div>
               <p className="text-[11px] text-faint mt-2">
                 Applies on this profile only. Family default stays in Settings.
+                Picking a preset clears any Theme Studio custom colours.
               </p>
             </div>
           </>
