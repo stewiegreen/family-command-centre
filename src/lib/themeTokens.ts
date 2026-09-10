@@ -13,13 +13,25 @@ const CUSTOM_PROPS = [
   '--app-elevated',
   '--app-surface',
   '--app-surface-2',
+  '--app-surface-3',
+  '--app-inset',
+  '--app-header',
+  '--app-sidebar',
+  '--app-nav-hover',
+  '--app-input',
+  '--app-border',
+  '--app-border-strong',
+  '--app-fg',
+  '--app-fg-secondary',
+  '--app-muted',
+  '--app-faint',
   '--app-accent',
   '--app-accent-hover',
   '--app-accent-tint',
   '--app-accent-tint-strong',
   '--app-accent-ink',
-  '--app-fg',
   '--app-secondary',
+  '--app-ring-offset',
 ] as const;
 
 export function clearCustomThemeProperties(root: HTMLElement = document.documentElement): void {
@@ -144,12 +156,35 @@ export function accentInk(accent: string): string {
   return l > 0.45 ? '#1a1a1a' : '#ffffff';
 }
 
+function rgbaOf(color: string, alpha: number): string {
+  const p = parseColor(color);
+  if (!p) return color;
+  return `rgba(${p[0]}, ${p[1]}, ${p[2]}, ${alpha})`;
+}
+
+/** Derive full chrome (sidebar/header/muted/borders) from the five Theme Studio tokens. */
 export function applyTokenSetToElement(el: HTMLElement, tokens: ThemeTokenSet): void {
   el.style.setProperty('--app-page', tokens.page);
   el.style.setProperty('--app-elevated', tokens.elevated);
-  // Keep nested surfaces readable relative to elevated
+  // Surfaces track the card colour so lists/inputs match
   el.style.setProperty('--app-surface', tokens.elevated);
-  el.style.setProperty('--app-surface-2', tokens.elevated);
+  el.style.setProperty('--app-surface-2', adjustLightness(tokens.elevated, 0.06));
+  el.style.setProperty('--app-surface-3', adjustLightness(tokens.elevated, 0.12));
+  el.style.setProperty('--app-inset', rgbaOf(tokens.page, 0.85));
+  // Sidebar + top bar — these were stuck on the preset before
+  el.style.setProperty('--app-sidebar', tokens.page);
+  el.style.setProperty('--app-header', rgbaOf(tokens.page, 0.94));
+  el.style.setProperty('--app-nav-hover', adjustLightness(tokens.elevated, 0.08));
+  el.style.setProperty('--app-input', adjustLightness(tokens.elevated, -0.04));
+  el.style.setProperty('--app-ring-offset', tokens.page);
+
+  el.style.setProperty('--app-fg', tokens.fg);
+  el.style.setProperty('--app-fg-secondary', rgbaOf(tokens.fg, 0.78));
+  el.style.setProperty('--app-muted', rgbaOf(tokens.fg, 0.62));
+  el.style.setProperty('--app-faint', rgbaOf(tokens.fg, 0.42));
+  el.style.setProperty('--app-border', rgbaOf(tokens.fg, 0.18));
+  el.style.setProperty('--app-border-strong', rgbaOf(tokens.fg, 0.32));
+
   el.style.setProperty('--app-accent', tokens.accent);
   el.style.setProperty('--app-accent-hover', adjustLightness(tokens.accent, 0.18));
   const a = parseColor(tokens.accent);
@@ -164,7 +199,6 @@ export function applyTokenSetToElement(el: HTMLElement, tokens: ThemeTokenSet): 
     );
   }
   el.style.setProperty('--app-accent-ink', accentInk(tokens.accent));
-  el.style.setProperty('--app-fg', tokens.fg);
   if (tokens.secondary) {
     el.style.setProperty('--app-secondary', tokens.secondary);
   } else {
