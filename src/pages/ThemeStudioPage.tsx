@@ -465,9 +465,14 @@ export function ThemeStudioPage() {
                 <div
                   key={theme.id}
                   className={cn(
-                    'rounded-2xl border bg-elevated p-4 space-y-3',
+                    'border bg-elevated p-4 space-y-3 studio-surface',
                     isActive ? 'border-accent ring-1 ring-accent/40' : 'border-border',
                   )}
+                  style={{
+                    borderRadius: 'var(--app-card-radius, 1rem)',
+                    backdropFilter: 'blur(var(--app-card-blur, 6px))',
+                    boxShadow: 'var(--app-shadow-card, none)',
+                  }}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div>
@@ -555,100 +560,46 @@ export function ThemeStudioPage() {
 
 
 
-      {/* Card style + accent glow — included with Theme Studio */}
-      <section className="space-y-3">
-        <h2 className="text-sm font-semibold text-muted uppercase tracking-wide">
-          Card style
-        </h2>
-        <div className="flex flex-wrap gap-2">
-          {CARD_STYLES.map((s) => {
-            const active = (appearance.cardStyle || 'soft') === s.id;
-            return (
-              <button
-                key={s.id}
-                type="button"
-                title={s.hint}
-                className={cn(
-                  'px-3 py-2 rounded-xl border text-sm text-left',
-                  active
-                    ? 'border-accent bg-accent/15 text-fg'
-                    : 'border-border text-muted hover:bg-nav-hover',
-                )}
-                onClick={() => {
-                  if (!myId) return;
-                  update((d) => {
-                    const prev = d.appearance?.[myId] || {};
-                    return {
-                      ...d,
-                      appearance: {
-                        ...(d.appearance || {}),
-                        [myId]: { ...prev, cardStyle: s.id },
-                      },
-                    };
-                  });
-                  setMsg(`Card style: ${s.label}`);
-                }}
-              >
-                <span className="font-medium text-fg block">{s.label}</span>
-                <span className="text-[11px] text-muted">{s.hint}</span>
-              </button>
-            );
-          })}
-        </div>
-        <label className="flex items-center gap-2 text-sm text-fg cursor-pointer select-none">
-          <input
-            type="checkbox"
-            className="rounded border-border"
-            checked={!!appearance.accentGlow}
-            onChange={(e) => {
-              if (!myId) return;
-              const on = e.target.checked;
-              update((d) => {
-                const prev = d.appearance?.[myId] || {};
-                return {
-                  ...d,
-                  appearance: {
-                    ...(d.appearance || {}),
-                    [myId]: { ...prev, accentGlow: on },
-                  },
-                };
-              });
-              setMsg(on ? 'Accent glow on' : 'Accent glow off');
-            }}
-          />
-          Accent glow on buttons &amp; highlights
-        </label>
-      </section>
 
-      {/* Font packs */}
-      <section className="space-y-3">
-        <h2 className="text-sm font-semibold text-muted uppercase tracking-wide">
-          Font vibe
-        </h2>
-        {!appearance.unlockFontPacks ? (
-          <p className="text-sm text-muted">
-            Unlock{' '}
-            <button type="button" className="text-accent underline" onClick={() => setView('chores')}>
-              Font vibe packs
-            </button>{' '}
-            in the shop (requires Theme Studio).
+      {/* ——— Look & feel (live on this page) ——— */}
+      <section className="space-y-5 rounded-2xl border border-border bg-inset/40 p-4 sm:p-5">
+        <div>
+          <h2 className="text-base font-semibold text-fg">Look &amp; feel</h2>
+          <p className="text-xs text-muted mt-0.5">
+            Changes apply instantly — your theme cards above update so you can see the difference here.
           </p>
-        ) : (
-          <div className="flex flex-wrap gap-2">
-            {FONT_PACKS.map((f) => {
-              const active =
-                (appearance.activeFontPackId || 'default') === f.id;
+        </div>
+
+        {/* Card style: three live sample cards */}
+        <div className="space-y-2">
+          <h3 className="text-xs font-semibold text-muted uppercase tracking-wide">
+            Card corners
+          </h3>
+          <div className="grid sm:grid-cols-3 gap-3">
+            {CARD_STYLES.map((s) => {
+              const active = (appearance.cardStyle || 'soft') === s.id;
+              const sampleStyle =
+                s.id === 'sharp'
+                  ? {
+                      borderRadius: '0.4rem',
+                      backdropFilter: 'blur(0px)',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.18)',
+                    }
+                  : s.id === 'glassy'
+                    ? {
+                        borderRadius: '1.25rem',
+                        backdropFilter: 'blur(14px)',
+                        boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
+                      }
+                    : {
+                        borderRadius: '1rem',
+                        backdropFilter: 'blur(6px)',
+                        boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+                      };
               return (
                 <button
-                  key={f.id}
+                  key={s.id}
                   type="button"
-                  className={cn(
-                    'px-3 py-2 rounded-xl border text-sm',
-                    active
-                      ? 'border-accent bg-accent/15 text-fg'
-                      : 'border-border text-muted hover:bg-nav-hover',
-                  )}
-                  style={{ fontFamily: f.ui }}
                   onClick={() => {
                     if (!myId) return;
                     update((d) => {
@@ -657,36 +608,160 @@ export function ThemeStudioPage() {
                         ...d,
                         appearance: {
                           ...(d.appearance || {}),
-                          [myId]: {
-                            ...prev,
-                            activeFontPackId: f.id === 'default' ? null : f.id,
-                          },
+                          [myId]: { ...prev, cardStyle: s.id },
                         },
                       };
                     });
-                    setMsg(`Font: ${f.label}`);
+                    setMsg(`Card style: ${s.label}`);
                   }}
+                  className={cn(
+                    'text-left border bg-elevated p-3 transition-all',
+                    active
+                      ? 'border-accent ring-2 ring-accent/40'
+                      : 'border-border hover:border-accent/40',
+                  )}
+                  style={sampleStyle}
                 >
-                  {f.label}
+                  <p className="text-sm font-semibold text-fg">{s.label}</p>
+                  <p className="text-[11px] text-muted mt-0.5">{s.hint}</p>
+                  <div
+                    className="mt-3 h-8 border border-border bg-page/50"
+                    style={{ borderRadius: sampleStyle.borderRadius }}
+                  />
                 </button>
               );
             })}
           </div>
-        )}
+        </div>
+
+        {/* Accent glow with live sample button */}
+        <div className="space-y-2">
+          <h3 className="text-xs font-semibold text-muted uppercase tracking-wide">
+            Accent glow
+          </h3>
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="flex items-center gap-2 text-sm text-fg cursor-pointer select-none">
+              <input
+                type="checkbox"
+                className="rounded border-border"
+                checked={!!appearance.accentGlow}
+                onChange={(e) => {
+                  if (!myId) return;
+                  const on = e.target.checked;
+                  update((d) => {
+                    const prev = d.appearance?.[myId] || {};
+                    return {
+                      ...d,
+                      appearance: {
+                        ...(d.appearance || {}),
+                        [myId]: { ...prev, accentGlow: on },
+                      },
+                    };
+                  });
+                  setMsg(on ? 'Accent glow on' : 'Accent glow off');
+                }}
+              />
+              Glow on buttons
+            </label>
+            <span
+              className="inline-flex px-3 py-1.5 rounded-xl text-sm font-medium bg-accent text-accent-ink"
+            >
+              Sample button
+            </span>
+            <span className="text-xs text-muted">← toggles with the checkbox</span>
+          </div>
+        </div>
+
+        {/* Fonts with live type samples */}
+        <div className="space-y-2">
+          <h3 className="text-xs font-semibold text-muted uppercase tracking-wide">
+            Fonts
+          </h3>
+          {!appearance.unlockFontPacks ? (
+            <p className="text-sm text-muted">
+              Unlock{' '}
+              <button
+                type="button"
+                className="text-accent underline"
+                onClick={() => setView('chores')}
+              >
+                Font vibe packs
+              </button>{' '}
+              in the shop to change typefaces.
+            </p>
+          ) : (
+            <div className="grid sm:grid-cols-2 gap-2">
+              {FONT_PACKS.map((f) => {
+                const active =
+                  (appearance.activeFontPackId || 'default') === f.id;
+                return (
+                  <button
+                    key={f.id}
+                    type="button"
+                    className={cn(
+                      'text-left px-3 py-2.5 rounded-xl border transition-colors',
+                      active
+                        ? 'border-accent bg-accent/15'
+                        : 'border-border hover:bg-nav-hover',
+                    )}
+                    onClick={() => {
+                      if (!myId) return;
+                      update((d) => {
+                        const prev = d.appearance?.[myId] || {};
+                        return {
+                          ...d,
+                          appearance: {
+                            ...(d.appearance || {}),
+                            [myId]: {
+                              ...prev,
+                              activeFontPackId:
+                                f.id === 'default' ? null : f.id,
+                            },
+                          },
+                        };
+                      });
+                      setMsg(`Font: ${f.label}`);
+                    }}
+                  >
+                    <span
+                      className="text-sm font-semibold text-fg block"
+                      style={{ fontFamily: f.display }}
+                    >
+                      {f.label}
+                    </span>
+                    <span
+                      className="text-xs text-muted"
+                      style={{ fontFamily: f.ui }}
+                    >
+                      The quick brown fox jumps — body text
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </section>
 
-      {/* Accent packs (shop add-on) */}
+      {/* ——— Colours (packs) ——— */}
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold text-muted uppercase tracking-wide">
-          Accent packs
-        </h2>
+        <div>
+          <h2 className="text-base font-semibold text-fg">Quick accent packs</h2>
+          <p className="text-xs text-muted mt-0.5">
+            One tap loads accent colours into the editor (save a theme to keep them).
+          </p>
+        </div>
         {!appearance.unlockAccentPacks ? (
           <p className="text-sm text-muted">
             Unlock{' '}
-            <button type="button" className="text-accent underline" onClick={() => setView('chores')}>
+            <button
+              type="button"
+              className="text-accent underline"
+              onClick={() => setView('chores')}
+            >
               Accent packs
             </button>{' '}
-            in the shop (requires Theme Studio).
+            in the shop.
           </p>
         ) : (
           <div className="flex flex-wrap gap-2">
@@ -700,7 +775,9 @@ export function ThemeStudioPage() {
                   setToken('accent', pack.accent);
                   setToken('secondary', pack.secondary);
                   if (editorMode == null) openNew();
-                  setMsg(`Accent pack “${pack.label}” loaded into the editor — save when ready.`);
+                  setMsg(
+                    `Accent pack “${pack.label}” loaded into the editor — save when ready.`,
+                  );
                 }}
               >
                 <span
@@ -718,47 +795,42 @@ export function ThemeStudioPage() {
         )}
       </section>
 
-      {/* Wallpapers (shop add-on) */}
+      {/* ——— Backgrounds ——— */}
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold text-muted uppercase tracking-wide">
-          Wallpapers
-        </h2>
-        {!appearance.unlockWallpapers ? (
-          <p className="text-sm text-muted">
-            Unlock{' '}
-            <button type="button" className="text-accent underline" onClick={() => setView('chores')}>
-              Wallpaper packs
-            </button>{' '}
-            in the shop (requires Theme Studio).
+        <div>
+          <h2 className="text-base font-semibold text-fg">Background</h2>
+          <p className="text-xs text-muted mt-0.5">
+            Pattern wallpapers or a photo from your picture frame.
           </p>
-        ) : (
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              className={cn(
-                'px-3 py-2 rounded-xl border text-sm',
-                !appearance.activeWallpaperId
-                  ? 'border-accent bg-accent/15 text-fg'
-                  : 'border-border text-muted hover:bg-nav-hover',
-              )}
-              onClick={() => {
-                if (!myId) return;
-                update((d) => {
-                  const prev = d.appearance?.[myId] || {};
-                  return {
-                    ...d,
-                    appearance: {
-                      ...(d.appearance || {}),
-                      [myId]: { ...prev, activeWallpaperId: null },
-                    },
-                  };
-                });
-                setMsg('Wallpaper cleared.');
-              }}
-            >
-              None
-            </button>
-            {WALLPAPERS.map((w) => {
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className={cn(
+              'px-3 py-2 rounded-xl border text-sm',
+              !appearance.activeWallpaperId
+                ? 'border-accent bg-accent/15 text-fg'
+                : 'border-border text-muted hover:bg-nav-hover',
+            )}
+            onClick={() => {
+              if (!myId) return;
+              update((d) => {
+                const prev = d.appearance?.[myId] || {};
+                return {
+                  ...d,
+                  appearance: {
+                    ...(d.appearance || {}),
+                    [myId]: { ...prev, activeWallpaperId: null },
+                  },
+                };
+              });
+              setMsg('Wallpaper cleared.');
+            }}
+          >
+            None
+          </button>
+          {appearance.unlockWallpapers &&
+            WALLPAPERS.map((w) => {
               const active = appearance.activeWallpaperId === w.id;
               return (
                 <button
@@ -789,143 +861,80 @@ export function ThemeStudioPage() {
                 </button>
               );
             })}
-
-            {(appearance.pictureFrameUrl || appearance.pictureFrameUrl2) && (
-              <>
-                {appearance.pictureFrameUrl && (
-                  <button
-                    type="button"
-                    className={cn(
-                      'px-3 py-2 rounded-xl border text-sm',
-                      appearance.activeWallpaperId === FRAME_WALLPAPER_1
-                        ? 'border-accent bg-accent/15 text-fg'
-                        : 'border-border text-muted hover:bg-nav-hover',
-                    )}
-                    onClick={() => {
-                      if (!myId) return;
-                      update((d) => {
-                        const prev = d.appearance?.[myId] || {};
-                        return {
-                          ...d,
-                          appearance: {
-                            ...(d.appearance || {}),
-                            [myId]: {
-                              ...prev,
-                              activeWallpaperId: FRAME_WALLPAPER_1,
-                            },
-                          },
-                        };
-                      });
-                      setMsg('Using picture frame 1 as wallpaper.');
-                    }}
-                  >
-                    My photo (frame 1)
-                  </button>
-                )}
-                {appearance.pictureFrameUrl2 && (
-                  <button
-                    type="button"
-                    className={cn(
-                      'px-3 py-2 rounded-xl border text-sm',
-                      appearance.activeWallpaperId === FRAME_WALLPAPER_2
-                        ? 'border-accent bg-accent/15 text-fg'
-                        : 'border-border text-muted hover:bg-nav-hover',
-                    )}
-                    onClick={() => {
-                      if (!myId) return;
-                      update((d) => {
-                        const prev = d.appearance?.[myId] || {};
-                        return {
-                          ...d,
-                          appearance: {
-                            ...(d.appearance || {}),
-                            [myId]: {
-                              ...prev,
-                              activeWallpaperId: FRAME_WALLPAPER_2,
-                            },
-                          },
-                        };
-                      });
-                      setMsg('Using picture frame 2 as wallpaper.');
-                    }}
-                  >
-                    My photo (frame 2)
-                  </button>
-                )}
-              </>
-            )}
-          </div>
-        )}
+          {!appearance.unlockWallpapers && (
+            <p className="text-sm text-muted w-full">
+              Pattern packs:{' '}
+              <button
+                type="button"
+                className="text-accent underline"
+                onClick={() => setView('chores')}
+              >
+                unlock Wallpaper packs
+              </button>
+            </p>
+          )}
+          {appearance.pictureFrameUrl && (
+            <button
+              type="button"
+              className={cn(
+                'px-3 py-2 rounded-xl border text-sm',
+                appearance.activeWallpaperId === FRAME_WALLPAPER_1
+                  ? 'border-accent bg-accent/15 text-fg'
+                  : 'border-border text-muted hover:bg-nav-hover',
+              )}
+              onClick={() => {
+                if (!myId) return;
+                update((d) => {
+                  const prev = d.appearance?.[myId] || {};
+                  return {
+                    ...d,
+                    appearance: {
+                      ...(d.appearance || {}),
+                      [myId]: {
+                        ...prev,
+                        activeWallpaperId: FRAME_WALLPAPER_1,
+                      },
+                    },
+                  };
+                });
+                setMsg('Using picture frame 1 as wallpaper.');
+              }}
+            >
+              Frame 1 photo
+            </button>
+          )}
+          {appearance.pictureFrameUrl2 && (
+            <button
+              type="button"
+              className={cn(
+                'px-3 py-2 rounded-xl border text-sm',
+                appearance.activeWallpaperId === FRAME_WALLPAPER_2
+                  ? 'border-accent bg-accent/15 text-fg'
+                  : 'border-border text-muted hover:bg-nav-hover',
+              )}
+              onClick={() => {
+                if (!myId) return;
+                update((d) => {
+                  const prev = d.appearance?.[myId] || {};
+                  return {
+                    ...d,
+                    appearance: {
+                      ...(d.appearance || {}),
+                      [myId]: {
+                        ...prev,
+                        activeWallpaperId: FRAME_WALLPAPER_2,
+                      },
+                    },
+                  };
+                });
+                setMsg('Using picture frame 2 as wallpaper.');
+              }}
+            >
+              Frame 2 photo
+            </button>
+          )}
+        </div>
       </section>
-
-
-      {/* Photo wallpaper from picture frame — no extra shop unlock */}
-      {(appearance.pictureFrameUrl || appearance.pictureFrameUrl2) && (
-        <section className="space-y-3">
-          <h2 className="text-sm font-semibold text-muted uppercase tracking-wide">
-            Photo wallpaper
-          </h2>
-          <p className="text-xs text-muted">
-            Use a picture-frame photo as a soft background (works without Wallpaper packs).
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {appearance.pictureFrameUrl && (
-              <button
-                type="button"
-                className={cn(
-                  'px-3 py-2 rounded-xl border text-sm',
-                  appearance.activeWallpaperId === FRAME_WALLPAPER_1
-                    ? 'border-accent bg-accent/15 text-fg'
-                    : 'border-border text-muted hover:bg-nav-hover',
-                )}
-                onClick={() => {
-                  if (!myId) return;
-                  update((d) => {
-                    const prev = d.appearance?.[myId] || {};
-                    return {
-                      ...d,
-                      appearance: {
-                        ...(d.appearance || {}),
-                        [myId]: { ...prev, activeWallpaperId: FRAME_WALLPAPER_1 },
-                      },
-                    };
-                  });
-                  setMsg('Using picture frame 1 as wallpaper.');
-                }}
-              >
-                Frame 1 photo
-              </button>
-            )}
-            {appearance.pictureFrameUrl2 && (
-              <button
-                type="button"
-                className={cn(
-                  'px-3 py-2 rounded-xl border text-sm',
-                  appearance.activeWallpaperId === FRAME_WALLPAPER_2
-                    ? 'border-accent bg-accent/15 text-fg'
-                    : 'border-border text-muted hover:bg-nav-hover',
-                )}
-                onClick={() => {
-                  if (!myId) return;
-                  update((d) => {
-                    const prev = d.appearance?.[myId] || {};
-                    return {
-                      ...d,
-                      appearance: {
-                        ...(d.appearance || {}),
-                        [myId]: { ...prev, activeWallpaperId: FRAME_WALLPAPER_2 },
-                      },
-                    };
-                  });
-                  setMsg('Using picture frame 2 as wallpaper.');
-                }}
-              >
-                Frame 2 photo
-              </button>
-            )}
-          </div>
-        </section>
-      )}
 
       {/* Copy from family */}
       <section className="space-y-3">
