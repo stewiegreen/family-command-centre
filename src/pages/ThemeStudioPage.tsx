@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Palette, Lock, Check } from 'lucide-react';
+import { Palette, Lock, Check, Plus, Trash2, Pencil } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Button } from '../components/ui/Button';
 import { uid } from '../lib/uid';
@@ -11,12 +11,30 @@ import {
 } from '../lib/themeTokens';
 import { cn } from '../lib/cn';
 
+/** Slots included with Theme Studio unlock. */
+export const THEME_SLOTS_BASE = 3;
+/** Hard cap including purchased extras. */
+export const THEME_SLOTS_MAX = 8;
+
+export function themeSlotLimit(extra?: number): number {
+  return Math.min(THEME_SLOTS_MAX, THEME_SLOTS_BASE + Math.max(0, extra || 0));
+}
+
 const PRESETS: { id: ThemeId; label: string }[] = [
   { id: 'dark', label: 'Warm dark' },
   { id: 'light', label: 'Warm light' },
   { id: 'neon', label: 'Neon' },
   { id: 'spyfamily', label: 'Spy×Family' },
 ];
+
+type SavedTheme = {
+  id: string;
+  name: string;
+  basedOn: ThemeId;
+  tokens: ThemeTokenSet;
+  createdAt: string;
+  updatedAt: string;
+};
 
 function ColorField({
   label,
@@ -61,25 +79,54 @@ function ColorField({
   );
 }
 
+function SwatchRow({ tokens }: { tokens: ThemeTokenSet }) {
+  const colours = [
+    tokens.page,
+    tokens.sidebar || tokens.page,
+    tokens.header || tokens.page,
+    tokens.elevated,
+    tokens.accent,
+    tokens.fg,
+  ];
+  return (
+    <div className="flex gap-1">
+      {colours.map((c, i) => (
+        <div
+          key={i}
+          className="w-5 h-5 rounded-md border border-border"
+          style={{ background: c }}
+        />
+      ))}
+    </div>
+  );
+}
+
+function emptyDraft(preset: ThemeId): ThemeTokenSet {
+  return { ...PRESET_START_TOKENS[preset] };
+}
+
 export function ThemeStudioPage() {
   const { data, update, currentUser, setView } = useApp();
   const myId = currentUser?.id || data.settings.currentUserId;
   const appearance = data.appearance?.[myId] || {};
   const unlocked = !!appearance.unlockThemeStudio;
 
+  const saved = (appearance.customThemes || []) as SavedTheme[];
+  const activeId = appearance.activeCustomThemeId || null;
+  const slotLimit = themeSlotLimit(appearance.extraThemeSlots);
+  const slotsUsed = saved.length;
+  const slotsFree = Math.max(0, slotLimit - slotsUsed);
+
   const currentPreset: ThemeId =
     appearance.theme || data.settings.theme || 'dark';
 
-  const existing = appearance.customThemes?.[0];
-
-  const [basedOn, setBasedOn] = useState<ThemeId>(
-    existing?.basedOn || currentPreset,
+  /** null = browsing library only; 'new' = creating; id = editing that theme */
+  const [editorMode, setEditorMode] = useState<'new' | string | null>(
+    saved.length === 0 ? 'new' : null,
   );
-  const [name, setName] = useState(existing?.name || 'My theme');
-  const [tokens, setTokens] = useState<ThemeTokenSet>(() => {
-    if (existing?.tokens) return { ...existing.tokens };
-    return { ...PRESET_START_TOKENS[currentPreset] };
-  });
+  const [name, setName] = useState('My theme');
+  const [basedOn, setBasedOn] = useState<ThemeId>(currentPreset);
+  const [tokens, setTokens] = useState<ThemeTokenSet>(() => emptyDraft(currentPreset));
   const [msg, setMsg] = useState('');
 
   const issues = useMemo(() => contrastIssues(tokens), [tokens]);
@@ -91,25 +138,42 @@ export function ThemeStudioPage() {
 
   const applyStartFrom = (preset: ThemeId) => {
     setBasedOn(preset);
-    setTokens({ ...PRESET_START_TOKENS[preset] });
+    setTokens(emptyDraft(preset));
     setMsg('');
   };
 
-  const saveAndApply = () => {
-    if (!unlocked || !myId) return;
-    // Contrast is advisory only — preview is the source of truth
-    const cleanName = name.trim() || 'My theme';
-    const now = new Date().toISOString();
-    const slot = appearance.customThemes?.[0];
-
-    if (slot && slot.id) {
-      if (!confirm('Replace your saved theme with this one?')) return;
+  const openNew = () => {
+    if (slotsFree <= 0) {
+      setMsg(
+        `No free slots (${slotsUsed}/${slotLimit}). Buy “Theme slot +1” in the shop or delete a theme.`,
+      );
+      return;
     }
+    setEditorMode('new');
+    setName('My theme');
+    setBasedOn(currentPreset);
+    setTokens(emptyDraft(currentPreset));
+    setMsg('');
+  };
 
-    const id = slot?.id || uid();
-    const entry = {
+  const openEdit = (theme: SavedTheme) => {
+    setEditorMode(theme.id);
+    setName(theme.name);
+    setBasedOn(theme.basedOn || currentPreset);
+    setTokens({ ...emptyDraft(theme.basedOn || currentPreset), ...theme.tokens });
+    setMsg('');
+  };
+
+  const cancelEditor = () => {
+    setEditorMode(null);
+    setMsg('');
+  };
+
+  const buildEntry = (id: string, createdAt: string): SavedTheme => {
+    const now = new Date().toISOString();
+    return {
       id,
-      name: cleanName,
+      name: name.trim() || 'My theme',
       basedOn,
       tokens: {
         page: tokens.page.trim(),
@@ -122,10 +186,54 @@ export function ThemeStudioPage() {
         ...(tokens.sidebar?.trim() ? { sidebar: tokens.sidebar.trim() } : {}),
         ...(tokens.header?.trim() ? { header: tokens.header.trim() } : {}),
       },
-      createdAt: slot?.createdAt || now,
+      createdAt,
       updatedAt: now,
     };
+  };
 
+  const saveTheme = (andApply: boolean) => {
+    if (!unlocked || !myId) return;
+
+    if (editorMode === 'new' && slotsFree <= 0) {
+      setMsg(`No free slots (${slotsUsed}/${slotLimit}).`);
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const existing =
+      editorMode && editorMode !== 'new'
+        ? saved.find((t) => t.id === editorMode)
+        : undefined;
+    const id = existing?.id || uid();
+    const entry = buildEntry(id, existing?.createdAt || now);
+
+    update((d) => {
+      const prev = d.appearance?.[myId] || {};
+      const list = [...((prev.customThemes || []) as SavedTheme[])];
+      const idx = list.findIndex((t) => t.id === id);
+      if (idx >= 0) list[idx] = entry;
+      else list.push(entry);
+
+      return {
+        ...d,
+        appearance: {
+          ...(d.appearance || {}),
+          [myId]: {
+            ...prev,
+            customThemes: list,
+            theme: basedOn,
+            ...(andApply ? { activeCustomThemeId: id } : {}),
+          },
+        },
+      };
+    });
+
+    setEditorMode(null);
+    setMsg(andApply ? 'Saved and applied!' : 'Saved to library.');
+  };
+
+  const applySaved = (theme: SavedTheme) => {
+    if (!myId) return;
     update((d) => {
       const prev = d.appearance?.[myId] || {};
       return {
@@ -134,15 +242,38 @@ export function ThemeStudioPage() {
           ...(d.appearance || {}),
           [myId]: {
             ...prev,
-            customThemes: [entry],
-            activeCustomThemeId: id,
-            // Keep basedOn preset as the underlying class
-            theme: basedOn,
+            theme: theme.basedOn,
+            activeCustomThemeId: theme.id,
           },
         },
       };
     });
-    setMsg('Saved and applied!');
+    setMsg(`Applied “${theme.name}”.`);
+  };
+
+  const deleteSaved = (theme: SavedTheme) => {
+    if (!myId) return;
+    if (!confirm(`Delete “${theme.name}”?`)) return;
+    update((d) => {
+      const prev = d.appearance?.[myId] || {};
+      const list = ((prev.customThemes || []) as SavedTheme[]).filter(
+        (t) => t.id !== theme.id,
+      );
+      const clearingActive = prev.activeCustomThemeId === theme.id;
+      return {
+        ...d,
+        appearance: {
+          ...(d.appearance || {}),
+          [myId]: {
+            ...prev,
+            customThemes: list,
+            ...(clearingActive ? { activeCustomThemeId: null } : {}),
+          },
+        },
+      };
+    });
+    if (editorMode === theme.id) setEditorMode(null);
+    setMsg(`Deleted “${theme.name}”.`);
   };
 
   const usePresetInstead = () => {
@@ -180,276 +311,287 @@ export function ThemeStudioPage() {
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 pb-10">
-      <div className="flex items-center gap-3">
-        <Palette className="w-6 h-6 text-accent" />
-        <div>
-          <h1 className="text-xl font-semibold text-fg">Theme Studio</h1>
-          <p className="text-sm text-muted">
-            Build a custom look on top of a preset. One save slot.
-          </p>
-        </div>
-      </div>
-
-      <div className="grid lg:grid-cols-2 gap-6">
-        {/* Live preview — colours forced inline so they always match the pickers */}
-        <div>
-          <h2 className="text-sm font-semibold text-muted uppercase tracking-wide mb-2">
-            Preview
-          </h2>
-          <div
-            className="rounded-2xl border border-border overflow-hidden"
-            style={{
-              background: tokens.page,
-              color: tokens.fg,
-              // Scope CSS vars for any child utilities that still read them
-              ...Object.fromEntries(
-                Object.entries({
-                  ['--app-page']: tokens.page,
-                  ['--app-elevated']: tokens.elevated,
-                  ['--app-surface']: tokens.elevated,
-                  ['--app-surface-2']: tokens.elevated,
-                  ['--app-sidebar']: tokens.sidebar || tokens.page,
-                  ['--app-header']: tokens.header || tokens.page,
-                  ['--app-accent']: tokens.accent,
-                  ['--app-accent-hover']: tokens.accent,
-                  ['--app-accent-ink']: undefined as unknown as string,
-                  ['--app-fg']: tokens.fg,
-                  ['--app-secondary']: tokens.secondary || tokens.accent,
-                  ['--app-border']: 'rgba(128,128,128,0.35)',
-                  ['--app-muted']: tokens.fg,
-                }).filter(([, v]) => v != null),
-              ),
-            }}
-          >
-            <div className="flex min-h-[200px]">
-              {/* Mini sidebar */}
-              <div
-                className="w-10 shrink-0 flex flex-col items-center gap-2 py-3 border-r border-black/10"
-                style={{ background: tokens.sidebar || tokens.page }}
-                title="Sidebar"
-              >
-                <div
-                  className="w-5 h-5 rounded-md"
-                  style={{ background: tokens.accent }}
-                />
-                <div
-                  className="w-5 h-5 rounded-md opacity-40"
-                  style={{ background: tokens.fg }}
-                />
-                <div
-                  className="w-5 h-5 rounded-md opacity-25"
-                  style={{ background: tokens.fg }}
-                />
-              </div>
-              <div className="flex-1 flex flex-col min-w-0">
-                {/* Mini header */}
-                <div
-                  className="h-9 shrink-0 flex items-center px-3 text-xs font-medium border-b border-black/10"
-                  style={{
-                    background: tokens.header || tokens.page,
-                    color: tokens.fg,
-                  }}
-                  title="Header"
-                >
-                  Hey, you
-                </div>
-                <div className="p-3 space-y-3 flex-1">
-              <p className="text-sm font-medium" style={{ color: tokens.fg }}>
-                Sample home card
-              </p>
-              {/* Explicit card fill — does not rely on Tailwind/spyfamily !important */}
-              <div
-                className="rounded-2xl border p-4"
-                style={{
-                  background: tokens.elevated,
-                  color: tokens.fg,
-                  borderColor: 'rgba(128,128,128,0.35)',
-                }}
-              >
-                <p className="text-sm font-semibold mb-1" style={{ color: tokens.fg }}>
-                  Quest ready
-                </p>
-                <p className="text-xs mb-3" style={{ color: tokens.fg, opacity: 0.85 }}>
-                  This is a real card + button using your colours.
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    className="px-3 py-1.5 text-sm font-medium rounded-xl"
-                    style={{
-                      background: tokens.accent,
-                      color:
-                        // simple ink: light text on dark accent
-                        (() => {
-                          const m = tokens.accent.trim().match(/^#([0-9a-f]{6})$/i);
-                          if (!m) return '#fff';
-                          const n = parseInt(m[1]!, 16);
-                          const r = (n >> 16) & 255;
-                          const g = (n >> 8) & 255;
-                          const b = n & 255;
-                          const lum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
-                          return lum > 0.55 ? '#1a1a1a' : '#ffffff';
-                        })(),
-                    }}
-                  >
-                    Primary action
-                  </button>
-                  <button
-                    type="button"
-                    className="px-3 py-1.5 text-sm font-medium rounded-xl border"
-                    style={{
-                      background: tokens.secondary?.trim()
-                        ? tokens.secondary
-                        : 'transparent',
-                      color: tokens.secondary?.trim() ? '#fff' : tokens.fg,
-                      borderColor: tokens.secondary?.trim()
-                        ? tokens.secondary
-                        : 'rgba(128,128,128,0.45)',
-                    }}
-                  >
-                    Secondary
-                  </button>
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-3 pt-1">
-                {(
-                  [
-                    ['page', 'Page', tokens.page],
-                    ['sidebar', 'Sidebar', tokens.sidebar || tokens.page],
-                    ['header', 'Header', tokens.header || tokens.page],
-                    ['elevated', 'Card', tokens.elevated],
-                    ['accent', 'Accent', tokens.accent],
-                    ['fg', 'Text', tokens.fg],
-                    ...(tokens.secondary?.trim()
-                      ? ([['secondary', '2nd', tokens.secondary]] as const)
-                      : []),
-                  ] as const
-                ).map(([k, label, color]) => (
-                  <div key={k} className="flex items-center gap-1.5">
-                    <div
-                      className="w-8 h-8 rounded-lg border border-white/20 shadow-sm"
-                      style={{ background: color }}
-                      title={`${label}: ${color}`}
-                    />
-                    <span className="text-[10px] opacity-80" style={{ color: tokens.fg }}>
-                      {label}
-                    </span>
-                  </div>
-                ))}
-              </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Controls */}
-        <div className="space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <Palette className="w-6 h-6 text-accent" />
           <div>
-            <label className="text-xs text-muted mb-1 block">Theme name</label>
-            <input
-              className="w-full rounded-xl border border-border bg-inset px-3 py-2 text-fg text-sm outline-none focus:border-accent"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              maxLength={40}
-            />
-          </div>
-
-          <div>
-            <label className="text-xs text-muted mb-1 block">Start from preset</label>
-            <div className="flex flex-wrap gap-2">
-              {PRESETS.map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => applyStartFrom(p.id)}
-                  className={cn(
-                    'px-3 py-1.5 rounded-xl text-sm border transition-colors',
-                    basedOn === p.id
-                      ? 'border-accent bg-accent/15 text-fg'
-                      : 'border-border text-muted hover:bg-nav-hover',
-                  )}
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <ColorField
-            label="Page background"
-            value={tokens.page}
-            onChange={(v) => setToken('page', v)}
-          />
-          <ColorField
-            label="Sidebar"
-            value={tokens.sidebar || tokens.page}
-            onChange={(v) => setToken('sidebar', v)}
-          />
-          <ColorField
-            label="Top header"
-            value={tokens.header || tokens.page}
-            onChange={(v) => setToken('header', v)}
-          />
-          <ColorField
-            label="Card fill"
-            value={tokens.elevated}
-            onChange={(v) => setToken('elevated', v)}
-          />
-          <ColorField
-            label="Accent"
-            value={tokens.accent}
-            onChange={(v) => setToken('accent', v)}
-          />
-          <ColorField
-            label="Text"
-            value={tokens.fg}
-            onChange={(v) => setToken('fg', v)}
-          />
-          <ColorField
-            label="Secondary accent"
-            value={tokens.secondary || ''}
-            onChange={(v) => setToken('secondary', v)}
-            optional
-          />
-
-          {issues.length > 0 && (
-            <div className="rounded-xl border border-border bg-inset px-3 py-2 text-sm text-muted">
-              {issues.map((i) => (
-                <p key={i}>{i}</p>
-              ))}
-            </div>
-          )}
-
-          {msg && (
-            <p className="text-sm text-accent flex items-center gap-1">
-              {msg.startsWith('Saved') && <Check className="w-4 h-4" />}
-              {msg}
-            </p>
-          )}
-
-          <div className="flex flex-wrap gap-2 pt-1">
-            <Button
-              type="button"
-              onClick={saveAndApply}
-            >
-              Save &amp; apply
-            </Button>
-            <Button type="button" variant="secondary" onClick={usePresetInstead}>
-              Use a preset instead
-            </Button>
-          </div>
-
-          {existing && (
-            <p className="text-xs text-muted">
-              Saved theme: <span className="text-fg">{existing.name}</span>
-              {appearance.activeCustomThemeId === existing.id
-                ? ' · currently applied'
+            <h1 className="text-xl font-semibold text-fg">Theme Studio</h1>
+            <p className="text-sm text-muted">
+              Library {slotsUsed}/{slotLimit} slots
+              {appearance.extraThemeSlots
+                ? ` · +${appearance.extraThemeSlots} bought`
                 : ''}
             </p>
-          )}
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="secondary" onClick={usePresetInstead}>
+            Use a preset instead
+          </Button>
+          <Button type="button" onClick={openNew} disabled={slotsFree <= 0}>
+            <Plus className="w-4 h-4" />
+            New theme
+          </Button>
         </div>
       </div>
+
+      {msg && (
+        <p className="text-sm text-accent flex items-center gap-1">
+          {msg.startsWith('Saved') || msg.startsWith('Applied') ? (
+            <Check className="w-4 h-4" />
+          ) : null}
+          {msg}
+        </p>
+      )}
+
+      {/* Library */}
+      <section className="space-y-3">
+        <h2 className="text-sm font-semibold text-muted uppercase tracking-wide">
+          Your themes
+        </h2>
+        {saved.length === 0 ? (
+          <p className="text-sm text-muted">
+            No saved themes yet — create one below.
+          </p>
+        ) : (
+          <div className="grid sm:grid-cols-2 gap-3">
+            {saved.map((theme) => {
+              const isActive = activeId === theme.id;
+              return (
+                <div
+                  key={theme.id}
+                  className={cn(
+                    'rounded-2xl border bg-elevated p-4 space-y-3',
+                    isActive ? 'border-accent ring-1 ring-accent/40' : 'border-border',
+                  )}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="font-medium text-fg">{theme.name}</p>
+                      <p className="text-[11px] text-muted capitalize">
+                        from {theme.basedOn}
+                        {isActive ? ' · applied' : ''}
+                      </p>
+                    </div>
+                    <SwatchRow tokens={theme.tokens} />
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => applySaved(theme)}
+                      disabled={isActive}
+                    >
+                      Apply
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => openEdit(theme)}
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                      Edit
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => deleteSaved(theme)}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {slotsFree <= 0 && (
+          <p className="text-xs text-muted">
+            Slot limit reached. Delete a theme or buy{' '}
+            <button
+              type="button"
+              className="text-accent underline"
+              onClick={() => setView('chores')}
+            >
+              Theme slot +1
+            </button>{' '}
+            in the shop (max {THEME_SLOTS_MAX}).
+          </p>
+        )}
+      </section>
+
+      {/* Editor */}
+      {editorMode != null && (
+        <section className="space-y-4 rounded-2xl border border-border bg-elevated p-4 sm:p-5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold text-fg">
+              {editorMode === 'new' ? 'New theme' : 'Edit theme'}
+            </h2>
+            <Button type="button" size="sm" variant="ghost" onClick={cancelEditor}>
+              Cancel
+            </Button>
+          </div>
+
+          <div className="grid lg:grid-cols-2 gap-6">
+            {/* Preview */}
+            <div>
+              <h3 className="text-xs text-muted uppercase tracking-wide mb-2">
+                Preview
+              </h3>
+              <div
+                className="rounded-2xl border border-border overflow-hidden"
+                style={{ background: tokens.page, color: tokens.fg }}
+              >
+                <div className="flex min-h-[180px]">
+                  <div
+                    className="w-10 shrink-0 flex flex-col items-center gap-2 py-3 border-r border-black/10"
+                    style={{ background: tokens.sidebar || tokens.page }}
+                  >
+                    <div
+                      className="w-5 h-5 rounded-md"
+                      style={{ background: tokens.accent }}
+                    />
+                    <div
+                      className="w-5 h-5 rounded-md opacity-40"
+                      style={{ background: tokens.fg }}
+                    />
+                  </div>
+                  <div className="flex-1 flex flex-col min-w-0">
+                    <div
+                      className="h-9 shrink-0 flex items-center px-3 text-xs font-medium border-b border-black/10"
+                      style={{
+                        background: tokens.header || tokens.page,
+                        color: tokens.fg,
+                      }}
+                    >
+                      Hey, you
+                    </div>
+                    <div className="p-3 space-y-3">
+                      <div
+                        className="rounded-2xl border p-3"
+                        style={{
+                          background: tokens.elevated,
+                          color: tokens.fg,
+                          borderColor: 'rgba(128,128,128,0.35)',
+                        }}
+                      >
+                        <p className="text-sm font-semibold mb-1">Quest ready</p>
+                        <p className="text-xs opacity-85 mb-2">
+                          Card + buttons using your colours.
+                        </p>
+                        <button
+                          type="button"
+                          className="px-3 py-1.5 text-sm font-medium rounded-xl"
+                          style={{
+                            background: tokens.accent,
+                            color: '#fff',
+                          }}
+                        >
+                          Primary action
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Controls */}
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-muted mb-1 block">Theme name</label>
+                <input
+                  className="w-full rounded-xl border border-border bg-inset px-3 py-2 text-fg text-sm outline-none focus:border-accent"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  maxLength={40}
+                />
+              </div>
+
+              <div>
+                <label className="text-xs text-muted mb-1 block">Start from preset</label>
+                <div className="flex flex-wrap gap-2">
+                  {PRESETS.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => applyStartFrom(p.id)}
+                      className={cn(
+                        'px-3 py-1.5 rounded-xl text-sm border transition-colors',
+                        basedOn === p.id
+                          ? 'border-accent bg-accent/15 text-fg'
+                          : 'border-border text-muted hover:bg-nav-hover',
+                      )}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <ColorField
+                label="Page background"
+                value={tokens.page}
+                onChange={(v) => setToken('page', v)}
+              />
+              <ColorField
+                label="Sidebar"
+                value={tokens.sidebar || tokens.page}
+                onChange={(v) => setToken('sidebar', v)}
+              />
+              <ColorField
+                label="Top header"
+                value={tokens.header || tokens.page}
+                onChange={(v) => setToken('header', v)}
+              />
+              <ColorField
+                label="Card fill"
+                value={tokens.elevated}
+                onChange={(v) => setToken('elevated', v)}
+              />
+              <ColorField
+                label="Accent"
+                value={tokens.accent}
+                onChange={(v) => setToken('accent', v)}
+              />
+              <ColorField
+                label="Text"
+                value={tokens.fg}
+                onChange={(v) => setToken('fg', v)}
+              />
+              <ColorField
+                label="Secondary accent"
+                value={tokens.secondary || ''}
+                onChange={(v) => setToken('secondary', v)}
+                optional
+              />
+
+              {issues.length > 0 && (
+                <div className="rounded-xl border border-border bg-inset px-3 py-2 text-sm text-muted">
+                  {issues.map((i) => (
+                    <p key={i}>{i}</p>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex flex-wrap gap-2 pt-1">
+                <Button type="button" onClick={() => saveTheme(true)}>
+                  Save &amp; apply
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => saveTheme(false)}
+                >
+                  Save only
+                </Button>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
     </div>
   );
 }

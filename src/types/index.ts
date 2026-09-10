@@ -23,6 +23,7 @@ export type RewardKind =
   | 'name_flair'
   | 'picture_frame'
   | 'theme_studio'
+  | 'theme_slot'
   | 'custom';
 export type RedemptionStatus = 'pending' | 'fulfilled' | 'cancelled';
 /** Simple presence — no GPS. */
@@ -536,7 +537,7 @@ export interface FamilyData {
       unlockPictureFrame?: boolean;
       /** Shop unlock: Theme Studio (custom colour themes) */
       unlockThemeStudio?: boolean;
-      /** Saved custom themes (v1: one slot) */
+      /** Saved custom themes (v2: multiple slots) */
       customThemes?: {
         id: string;
         name: string;
@@ -557,6 +558,11 @@ export interface FamilyData {
       }[];
       /** Active custom theme id — layered on top of `theme` preset. null = cleared (must persist to Firestore). */
       activeCustomThemeId?: string | null;
+      /**
+       * Extra Theme Studio save slots purchased in the shop.
+       * Total slots = 3 (included with Studio) + extraThemeSlots, capped at 8.
+       */
+      extraThemeSlots?: number;
       /** Public URL of the framed image (R2 via messages upload) */
       pictureFrameUrl?: string;
       /** Ordered list of dashboard widget ids for this member only. */

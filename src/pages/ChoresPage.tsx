@@ -85,6 +85,7 @@ const KIND_LABEL: Record<RewardKind, string> = {
   name_flair: 'Name flair',
   picture_frame: 'Picture frame',
   theme_studio: 'Theme Studio',
+  theme_slot: 'Theme slot +1',
   custom: 'Custom',
 };
 
@@ -666,7 +667,8 @@ export function ChoresPage() {
       const isFlair = item.kind === 'avatar_flair' || item.kind === 'name_flair';
       const isPictureFrame = item.kind === 'picture_frame';
       const isThemeStudio = item.kind === 'theme_studio';
-      const autoDone = isScreen || isFlair || isPictureFrame || isThemeStudio;
+      const isThemeSlot = item.kind === 'theme_slot';
+      const autoDone = isScreen || isFlair || isPictureFrame || isThemeStudio || isThemeSlot;
 
       const record: RedemptionRecord = {
         id: redemptionId,
@@ -708,7 +710,7 @@ export function ChoresPage() {
       }
 
       let nextAppearance = d.appearance || {};
-      if (isFlair || isPictureFrame || isThemeStudio) {
+      if (isFlair || isPictureFrame || isThemeStudio || isThemeSlot) {
         const prev = nextAppearance[myId] || {};
         let homescreenRows = prev.homescreenRows;
         if (isPictureFrame) {
@@ -730,6 +732,14 @@ export function ChoresPage() {
             ...(item.kind === 'name_flair' ? { unlockNameFlair: true } : {}),
             ...(isPictureFrame ? { unlockPictureFrame: true } : {}),
             ...(isThemeStudio ? { unlockThemeStudio: true } : {}),
+            ...(isThemeSlot
+              ? {
+                  extraThemeSlots: Math.min(
+                    5,
+                    (typeof prev.extraThemeSlots === 'number' ? prev.extraThemeSlots : 0) + 1,
+                  ),
+                }
+              : {}),
             ...(homescreenRows ? { homescreenRows } : {}),
           },
         };
@@ -750,7 +760,7 @@ export function ChoresPage() {
     // After unlock, open the picker so they can choose immediately
     if (item.kind === 'avatar_flair') setStyleModal('avatar');
     if (item.kind === 'name_flair') setStyleModal('name');
-    if (item.kind === 'theme_studio') setView('themestudio');
+    if (item.kind === 'theme_studio' || item.kind === 'theme_slot') setView('themestudio');
   };
 
   const fulfillRedemption = (r: RedemptionRecord) => {
