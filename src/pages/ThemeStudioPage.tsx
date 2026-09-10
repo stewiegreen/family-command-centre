@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Palette, Lock, Check } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { uid } from '../lib/uid';
 import type { ThemeId } from '../types';
