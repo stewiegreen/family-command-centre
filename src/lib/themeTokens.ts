@@ -1,3 +1,4 @@
+import { wallpaperById } from './themePacks';
 /** Color helpers for Theme Studio custom overrides. */
 
 export type ThemeTokenSet = {
@@ -266,3 +267,24 @@ export const PRESET_START_TOKENS: Record<string, ThemeTokenSet> = {
     header: '#6b8f7a',
   },
 };
+
+/** Apply or clear a wallpaper layer on body (Theme Studio add-on). */
+export function applyWallpaperToDocument(wallpaperId: string | null | undefined): void {
+  const body = document.body;
+  const pack = wallpaperById(wallpaperId || undefined);
+  if (!pack) {
+    if (body.dataset.hqWallpaper === '1') {
+      body.style.removeProperty('background-image');
+      body.style.removeProperty('background-size');
+      body.style.removeProperty('background-attachment');
+      body.style.removeProperty('background-repeat');
+      delete body.dataset.hqWallpaper;
+    }
+    return;
+  }
+  body.dataset.hqWallpaper = '1';
+  body.style.backgroundImage = pack.image;
+  body.style.backgroundSize = pack.size || 'cover';
+  body.style.backgroundAttachment = 'fixed';
+  body.style.backgroundRepeat = pack.size ? 'repeat' : 'no-repeat';
+}

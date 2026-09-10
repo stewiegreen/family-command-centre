@@ -24,6 +24,8 @@ export type RewardKind =
   | 'picture_frame'
   | 'theme_studio'
   | 'theme_slot'
+  | 'theme_accents'
+  | 'theme_wallpapers'
   | 'custom';
 export type RedemptionStatus = 'pending' | 'fulfilled' | 'cancelled';
 /** Simple presence — no GPS. */
@@ -563,6 +565,12 @@ export interface FamilyData {
        * Total slots = 3 (included with Studio) + extraThemeSlots, capped at 8.
        */
       extraThemeSlots?: number;
+      /** Shop: unlock curated accent colour packs in Theme Studio */
+      unlockAccentPacks?: boolean;
+      /** Shop: unlock wallpaper patterns in Theme Studio */
+      unlockWallpapers?: boolean;
+      /** Active wallpaper id (null clears). Only applied with a custom/preset theme. */
+      activeWallpaperId?: string | null;
       /** Public URL of the framed image (R2 via messages upload) */
       pictureFrameUrl?: string;
       /** Ordered list of dashboard widget ids for this member only. */

@@ -25,6 +25,7 @@ import {
 } from '../lib/homescreen';
 import {
   applyCustomThemeToDocument,
+  applyWallpaperToDocument,
   clearCustomThemeProperties,
 } from '../lib/themeTokens';
 import {
@@ -411,6 +412,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } else {
       clearCustomThemeProperties(root);
     }
+    // Wallpaper add-on (independent of custom colour tokens)
+    applyWallpaperToDocument(appearance?.activeWallpaperId);
   }, [data.settings.theme, data.settings.currentUserId, data.appearance]);
 
   const currentUserRaw = data.members.find((m) => m.id === data.settings.currentUserId);

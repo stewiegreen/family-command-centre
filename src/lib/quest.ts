@@ -336,6 +336,24 @@ export const DEFAULT_REWARD_CATALOG: RewardItem[] = [
     active: true,
     sort: 44,
   },
+  {
+    id: 'theme-accents',
+    label: 'Accent packs',
+    icon: '🎨',
+    kind: 'theme_accents',
+    coinCost: 30,
+    active: true,
+    sort: 45,
+  },
+  {
+    id: 'theme-wallpapers',
+    label: 'Wallpaper packs',
+    icon: '🖼️',
+    kind: 'theme_wallpapers',
+    coinCost: 35,
+    active: true,
+    sort: 46,
+  },
 ];
 
 export function ensureRewardCatalog(existing?: RewardItem[] | null): RewardItem[] {
@@ -348,7 +366,7 @@ export function ensureRewardCatalog(existing?: RewardItem[] | null): RewardItem[
   for (const d of DEFAULT_REWARD_CATALOG) {
     if (
       !ids.has(d.id) &&
-      (d.kind === 'avatar_flair' || d.kind === 'name_flair' || d.kind === 'picture_frame' || d.kind === 'theme_studio' || d.kind === 'theme_slot')
+      (d.kind === 'avatar_flair' || d.kind === 'name_flair' || d.kind === 'picture_frame' || d.kind === 'theme_studio' || d.kind === 'theme_slot' || d.kind === 'theme_accents' || d.kind === 'theme_wallpapers')
     ) {
       base.push({ ...d });
     }

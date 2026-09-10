@@ -9,6 +9,7 @@ import {
   contrastIssues,
   type ThemeTokenSet,
 } from '../lib/themeTokens';
+import { ACCENT_PACKS, WALLPAPERS } from '../lib/themePacks';
 import { cn } from '../lib/cn';
 
 /** Slots included with Theme Studio unlock. */
@@ -392,7 +393,7 @@ export function ThemeStudioPage() {
 
   if (!unlocked) {
     return (
-      <div className="max-w-lg mx-auto py-12 px-4 text-center space-y-4">
+      <div className="p-4 lg:p-8 max-w-lg mx-auto py-12 text-center space-y-4">
         <div className="inline-flex p-4 rounded-2xl bg-inset border border-border">
           <Lock className="w-8 h-8 text-muted" />
         </div>
@@ -406,19 +407,19 @@ export function ThemeStudioPage() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6 pb-10">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <Palette className="w-6 h-6 text-accent" />
-          <div>
-            <h1 className="text-xl font-semibold text-fg">Theme Studio</h1>
-            <p className="text-sm text-muted">
-              Library {slotsUsed}/{slotLimit} slots
-              {appearance.extraThemeSlots
-                ? ` · +${appearance.extraThemeSlots} bought`
-                : ''}
-            </p>
-          </div>
+    <div className="p-4 lg:p-8 max-w-5xl mx-auto space-y-6 pb-10">
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2 text-fg">
+            <Palette className="w-6 h-6 text-accent" />
+            Theme Studio
+          </h1>
+          <p className="text-sm text-muted mt-1">
+            Library {slotsUsed}/{slotLimit} slots
+            {appearance.extraThemeSlots
+              ? ` · +${appearance.extraThemeSlots} bought`
+              : ''}
+          </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button type="button" variant="secondary" onClick={usePresetInstead}>
@@ -544,6 +545,125 @@ export function ThemeStudioPage() {
         )}
       </section>
 
+
+
+      {/* Accent packs (shop add-on) */}
+      <section className="space-y-3">
+        <h2 className="text-sm font-semibold text-muted uppercase tracking-wide">
+          Accent packs
+        </h2>
+        {!appearance.unlockAccentPacks ? (
+          <p className="text-sm text-muted">
+            Unlock{' '}
+            <button type="button" className="text-accent underline" onClick={() => setView('chores')}>
+              Accent packs
+            </button>{' '}
+            in the shop (requires Theme Studio).
+          </p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {ACCENT_PACKS.map((pack) => (
+              <button
+                key={pack.id}
+                type="button"
+                className="flex items-center gap-2 px-3 py-2 rounded-xl border border-border bg-elevated hover:border-accent/50 text-sm text-fg"
+                title={`${pack.accent} / ${pack.secondary}`}
+                onClick={() => {
+                  setToken('accent', pack.accent);
+                  setToken('secondary', pack.secondary);
+                  if (editorMode == null) openNew();
+                  setMsg(`Accent pack “${pack.label}” loaded into the editor — save when ready.`);
+                }}
+              >
+                <span
+                  className="w-4 h-4 rounded-full border border-border"
+                  style={{ background: pack.accent }}
+                />
+                <span
+                  className="w-4 h-4 rounded-full border border-border"
+                  style={{ background: pack.secondary }}
+                />
+                {pack.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Wallpapers (shop add-on) */}
+      <section className="space-y-3">
+        <h2 className="text-sm font-semibold text-muted uppercase tracking-wide">
+          Wallpapers
+        </h2>
+        {!appearance.unlockWallpapers ? (
+          <p className="text-sm text-muted">
+            Unlock{' '}
+            <button type="button" className="text-accent underline" onClick={() => setView('chores')}>
+              Wallpaper packs
+            </button>{' '}
+            in the shop (requires Theme Studio).
+          </p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              className={cn(
+                'px-3 py-2 rounded-xl border text-sm',
+                !appearance.activeWallpaperId
+                  ? 'border-accent bg-accent/15 text-fg'
+                  : 'border-border text-muted hover:bg-nav-hover',
+              )}
+              onClick={() => {
+                if (!myId) return;
+                update((d) => {
+                  const prev = d.appearance?.[myId] || {};
+                  return {
+                    ...d,
+                    appearance: {
+                      ...(d.appearance || {}),
+                      [myId]: { ...prev, activeWallpaperId: null },
+                    },
+                  };
+                });
+                setMsg('Wallpaper cleared.');
+              }}
+            >
+              None
+            </button>
+            {WALLPAPERS.map((w) => {
+              const active = appearance.activeWallpaperId === w.id;
+              return (
+                <button
+                  key={w.id}
+                  type="button"
+                  className={cn(
+                    'px-3 py-2 rounded-xl border text-sm',
+                    active
+                      ? 'border-accent bg-accent/15 text-fg'
+                      : 'border-border text-muted hover:bg-nav-hover',
+                  )}
+                  onClick={() => {
+                    if (!myId) return;
+                    update((d) => {
+                      const prev = d.appearance?.[myId] || {};
+                      return {
+                        ...d,
+                        appearance: {
+                          ...(d.appearance || {}),
+                          [myId]: { ...prev, activeWallpaperId: w.id },
+                        },
+                      };
+                    });
+                    setMsg(`Wallpaper “${w.label}” applied.`);
+                  }}
+                >
+                  {w.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </section>
 
       {/* Copy from family */}
       <section className="space-y-3">

@@ -86,6 +86,8 @@ const KIND_LABEL: Record<RewardKind, string> = {
   picture_frame: 'Picture frame',
   theme_studio: 'Theme Studio',
   theme_slot: 'Theme slot +1',
+  theme_accents: 'Accent packs',
+  theme_wallpapers: 'Wallpaper packs',
   custom: 'Custom',
 };
 
@@ -634,6 +636,16 @@ export function ChoresPage() {
     const forName = forMember?.name || 'them';
     const isGift = isScreen && forId !== myId;
 
+    if (
+      (item.kind === 'theme_slot' ||
+        item.kind === 'theme_accents' ||
+        item.kind === 'theme_wallpapers') &&
+      !data.appearance?.[myId]?.unlockThemeStudio
+    ) {
+      alert('Unlock Theme Studio first — these are Studio add-ons.');
+      return;
+    }
+
     const confirmMsg = isGift
       ? `Spend ${item.coinCost} coins on “${item.label}” for ${forName}?`
       : `Spend ${item.coinCost} coins on “${item.label}”?`;
@@ -668,7 +680,9 @@ export function ChoresPage() {
       const isPictureFrame = item.kind === 'picture_frame';
       const isThemeStudio = item.kind === 'theme_studio';
       const isThemeSlot = item.kind === 'theme_slot';
-      const autoDone = isScreen || isFlair || isPictureFrame || isThemeStudio || isThemeSlot;
+      const isThemeAccents = item.kind === 'theme_accents';
+      const isThemeWallpapers = item.kind === 'theme_wallpapers';
+      const autoDone = isScreen || isFlair || isPictureFrame || isThemeStudio || isThemeSlot || isThemeAccents || isThemeWallpapers;
 
       const record: RedemptionRecord = {
         id: redemptionId,
@@ -710,7 +724,7 @@ export function ChoresPage() {
       }
 
       let nextAppearance = d.appearance || {};
-      if (isFlair || isPictureFrame || isThemeStudio || isThemeSlot) {
+      if (isFlair || isPictureFrame || isThemeStudio || isThemeSlot || isThemeAccents || isThemeWallpapers) {
         const prev = nextAppearance[myId] || {};
         let homescreenRows = prev.homescreenRows;
         if (isPictureFrame) {
@@ -740,6 +754,8 @@ export function ChoresPage() {
                   ),
                 }
               : {}),
+            ...(isThemeAccents ? { unlockAccentPacks: true } : {}),
+            ...(isThemeWallpapers ? { unlockWallpapers: true } : {}),
             ...(homescreenRows ? { homescreenRows } : {}),
           },
         };
@@ -760,7 +776,7 @@ export function ChoresPage() {
     // After unlock, open the picker so they can choose immediately
     if (item.kind === 'avatar_flair') setStyleModal('avatar');
     if (item.kind === 'name_flair') setStyleModal('name');
-    if (item.kind === 'theme_studio' || item.kind === 'theme_slot') setView('themestudio');
+    if (item.kind === 'theme_studio' || item.kind === 'theme_slot' || item.kind === 'theme_accents' || item.kind === 'theme_wallpapers') setView('themestudio');
   };
 
   const fulfillRedemption = (r: RedemptionRecord) => {
@@ -1903,6 +1919,12 @@ export function ChoresPage() {
                         const unlockedStudio =
                           item.kind === 'theme_studio' &&
                           !!data.appearance?.[myId]?.unlockThemeStudio;
+                        const unlockedAccents =
+                          item.kind === 'theme_accents' &&
+                          !!data.appearance?.[myId]?.unlockAccentPacks;
+                        const unlockedWalls =
+                          item.kind === 'theme_wallpapers' &&
+                          !!data.appearance?.[myId]?.unlockWallpapers;
                         if (unlockedAvatar || unlockedName) {
                           return (
                             <Button
@@ -1929,7 +1951,7 @@ export function ChoresPage() {
                             </Button>
                           );
                         }
-                        if (unlockedStudio) {
+                        if (unlockedStudio || unlockedAccents || unlockedWalls) {
                           return (
                             <Button
                               size="sm"
