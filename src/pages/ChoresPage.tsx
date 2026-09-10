@@ -1056,6 +1056,8 @@ export function ChoresPage() {
     const meta = DIFFICULTY_REWARDS[diff] || DIFFICULTY_REWARDS.medium;
     const submitter = quest.submittedById ? getMember(quest.submittedById) : undefined;
     const forMember = quest.approvedForId ? getMember(quest.approvedForId) : submitter;
+    const creditId = creditMemberForQuest(data, quest) || quest.submittedById;
+    const creditMember = creditId ? getMember(creditId) : undefined;
 
     return (
       <Card className="!p-4 flex flex-col gap-3 h-full">
@@ -1119,6 +1121,12 @@ export function ChoresPage() {
           <div className="mt-auto space-y-2">
             <p className="text-xs text-muted">
               {submitter ? `${submitter.name} is waiting` : 'Waiting for approval'}
+              {creditMember && (
+                <span className="text-fg font-medium">
+                  {' '}
+                  · rewards → {creditMember.name}
+                </span>
+              )}
               <span className="text-fg font-medium">
                 {' '}
                 · +{quest.xp ?? meta.xp} XP · +{quest.coins ?? meta.coins} coins

@@ -156,7 +156,7 @@ export function ThemeStudioPage() {
           ...(d.appearance || {}),
           [myId]: {
             ...prev,
-            activeCustomThemeId: undefined,
+            activeCustomThemeId: null,
           },
         },
       };

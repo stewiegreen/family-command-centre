@@ -402,7 +402,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Custom Theme Studio overrides (layered on the preset class above)
     const appearance = data.appearance?.[uid];
     const customId = appearance?.activeCustomThemeId;
-    const custom = appearance?.customThemes?.find((c) => c.id === customId);
+    const custom =
+      customId && typeof customId === 'string'
+        ? appearance?.customThemes?.find((c) => c.id === customId)
+        : undefined;
     if (custom?.tokens) {
       applyCustomThemeToDocument(custom.tokens);
     } else {
@@ -768,7 +771,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
             [id]: {
               ...prev,
               theme,
-              activeCustomThemeId: undefined,
+              // null (not undefined) so Firestore merge actually clears the field
+              activeCustomThemeId: null,
             },
           },
         };

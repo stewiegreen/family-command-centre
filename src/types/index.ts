@@ -551,8 +551,8 @@ export interface FamilyData {
         createdAt: string;
         updatedAt: string;
       }[];
-      /** Active custom theme id — layered on top of `theme` preset */
-      activeCustomThemeId?: string;
+      /** Active custom theme id — layered on top of `theme` preset. null = cleared (must persist to Firestore). */
+      activeCustomThemeId?: string | null;
       /** Public URL of the framed image (R2 via messages upload) */
       pictureFrameUrl?: string;
       /** Ordered list of dashboard widget ids for this member only. */

@@ -666,7 +666,7 @@ export function SettingsPage() {
                               ...(d.appearance || {}),
                               [m.id]: {
                                 ...prev,
-                                activeCustomThemeId: undefined,
+                                activeCustomThemeId: null,
                               },
                             },
                           };

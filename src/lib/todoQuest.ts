@@ -91,11 +91,18 @@ export function findQuestForTodo(data: FamilyData, todo: Todo): Quest | undefine
 
 /**
  * Resolve who should receive XP/coins on quest approval.
- * Prefers submittedById, but if that points at a parent (bug from older
- * todo-complete paths), fall back to the linked todo's assignee.
+ *
+ * Rules:
+ * 1. Prefer submittedById (who tapped "I finished this" / todo complete).
+ * 2. Only if that person is a *parent* AND this quest is tied to a specific
+ *    todoId (todo-driven path), credit the todo's assignee instead — parents
+ *    dragging a kid's board must not keep the rewards.
+ * 3. Never scan "any todo with this questId" — that stole rewards from a parent
+ *    (or another kid) who submitted the *board* quest themselves whenever Lucy
+ *    (etc.) had a linked todo for the same quest.
  */
 export function creditMemberForQuest(data: FamilyData, quest: Quest): string | undefined {
-  let forId = quest.submittedById || quest.approvedForId;
+  const forId = quest.submittedById || quest.approvedForId;
   if (!forId) return undefined;
   const member = data.members.find((m) => m.id === forId);
   if (member?.role === 'parent' && quest.todoId) {
@@ -103,13 +110,6 @@ export function creditMemberForQuest(data: FamilyData, quest: Quest): string | u
     if (todo?.memberId && todo.memberId !== FAMILY_LIST_ID) {
       return todo.memberId;
     }
-  }
-  // submittedById was parent without a usable todo link — try any todo pointing at this quest
-  if (member?.role === 'parent') {
-    const linked = data.todos.find(
-      (t) => t.questId === quest.id && t.memberId && t.memberId !== FAMILY_LIST_ID,
-    );
-    if (linked) return linked.memberId;
   }
   return forId;
 }
