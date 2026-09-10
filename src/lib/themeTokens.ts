@@ -41,11 +41,18 @@ const CUSTOM_PROPS = [
 
 export function clearCustomThemeProperties(root: HTMLElement = document.documentElement): void {
   for (const p of CUSTOM_PROPS) root.style.removeProperty(p);
-  // Belt-and-braces: drop any other inline --app-* left on <html>
+  // Belt-and-braces: drop other inline --app-* left on <html>,
+  // but keep wallpaper vars (re-applied after this, and must survive mid-frame).
   const toRemove: string[] = [];
   for (let i = 0; i < root.style.length; i++) {
     const name = root.style.item(i);
-    if (name && name.startsWith('--app-')) toRemove.push(name);
+    if (
+      name &&
+      name.startsWith('--app-') &&
+      !name.startsWith('--app-wallpaper-')
+    ) {
+      toRemove.push(name);
+    }
   }
   for (const name of toRemove) root.style.removeProperty(name);
   // Body may have been forced solid by a custom theme
@@ -268,23 +275,26 @@ export const PRESET_START_TOKENS: Record<string, ThemeTokenSet> = {
   },
 };
 
-/** Apply or clear a wallpaper layer on body (Theme Studio add-on). */
+/**
+ * Wallpaper is applied as CSS variables on <html>.
+ * The app shell (Layout) reads them — painting on body is invisible because
+ * Layout's full-viewport `bg-page` div sits on top of body.
+ */
 export function applyWallpaperToDocument(wallpaperId: string | null | undefined): void {
-  const body = document.body;
+  const root = document.documentElement;
   const pack = wallpaperById(wallpaperId || undefined);
   if (!pack) {
-    if (body.dataset.hqWallpaper === '1') {
-      body.style.removeProperty('background-image');
-      body.style.removeProperty('background-size');
-      body.style.removeProperty('background-attachment');
-      body.style.removeProperty('background-repeat');
-      delete body.dataset.hqWallpaper;
-    }
+    root.style.removeProperty('--app-wallpaper-image');
+    root.style.removeProperty('--app-wallpaper-size');
+    root.style.removeProperty('--app-wallpaper-repeat');
+    root.style.removeProperty('--app-wallpaper-attachment');
     return;
   }
-  body.dataset.hqWallpaper = '1';
-  body.style.backgroundImage = pack.image;
-  body.style.backgroundSize = pack.size || 'cover';
-  body.style.backgroundAttachment = 'fixed';
-  body.style.backgroundRepeat = pack.size ? 'repeat' : 'no-repeat';
+  root.style.setProperty('--app-wallpaper-image', pack.image);
+  root.style.setProperty('--app-wallpaper-size', pack.size || 'cover');
+  root.style.setProperty(
+    '--app-wallpaper-repeat',
+    pack.size ? 'repeat' : 'no-repeat',
+  );
+  root.style.setProperty('--app-wallpaper-attachment', 'fixed');
 }

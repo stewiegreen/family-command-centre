@@ -154,7 +154,16 @@ export function Layout({ children }: { children: ReactNode }) {
     );
 
   return (
-    <div className="h-dvh max-h-dvh flex overflow-hidden bg-page text-fg">
+    <div
+      className="h-dvh max-h-dvh flex overflow-hidden bg-page text-fg"
+      style={{
+        // Theme Studio wallpaper (CSS vars set on <html> by applyWallpaperToDocument)
+        backgroundImage: 'var(--app-wallpaper-image, none)',
+        backgroundSize: 'var(--app-wallpaper-size, auto)',
+        backgroundRepeat: 'var(--app-wallpaper-repeat, repeat)',
+        backgroundAttachment: 'var(--app-wallpaper-attachment, scroll)',
+      }}
+    >
       {cloudError && (
         <div className="fixed top-0 inset-x-0 z-[100] bg-red-500 text-white text-sm font-medium px-4 py-2 flex items-center justify-center gap-2 shadow-lg">
           <span>⚠️ Something didn't save: {cloudError}. Don't close this yet — trying again.</span>
