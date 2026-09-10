@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Palette, Lock, Check, Plus, Trash2, Pencil } from 'lucide-react';
+import { Palette, Lock, Check, Plus, Trash2, Pencil, Copy, Users } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Button } from '../components/ui/Button';
 import { uid } from '../lib/uid';
@@ -276,6 +276,102 @@ export function ThemeStudioPage() {
     setMsg(`Deleted “${theme.name}”.`);
   };
 
+  /** Clone a theme into this member's library (new id). Returns false if no slot. */
+  const cloneIntoMyLibrary = (
+    source: SavedTheme,
+    nameOverride?: string,
+  ): boolean => {
+    if (!myId) return false;
+    if (slotsFree <= 0) {
+      setMsg(
+        `No free slots (${slotsUsed}/${slotLimit}). Buy “Theme slot +1” or delete a theme.`,
+      );
+      return false;
+    }
+    const now = new Date().toISOString();
+    const entry: SavedTheme = {
+      id: uid(),
+      name: nameOverride || source.name,
+      basedOn: source.basedOn,
+      tokens: { ...source.tokens },
+      createdAt: now,
+      updatedAt: now,
+    };
+    update((d) => {
+      const prev = d.appearance?.[myId] || {};
+      const list = [...((prev.customThemes || []) as SavedTheme[]), entry];
+      return {
+        ...d,
+        appearance: {
+          ...(d.appearance || {}),
+          [myId]: { ...prev, customThemes: list },
+        },
+      };
+    });
+    setMsg(`Copied “${entry.name}” into your library.`);
+    return true;
+  };
+
+  const duplicateSaved = (theme: SavedTheme) => {
+    const base = theme.name.replace(/\s*\(copy\)$/i, '').trim() || theme.name;
+    cloneIntoMyLibrary(theme, `${base} (copy)`);
+  };
+
+  /** Push one of my themes into another member's library (they need Studio + a free slot). */
+  const shareToMember = (theme: SavedTheme, memberId: string, memberName: string) => {
+    if (!myId) return;
+    const theirApp = data.appearance?.[memberId] || {};
+    if (!theirApp.unlockThemeStudio) {
+      setMsg(`${memberName} hasn't unlocked Theme Studio yet.`);
+      return;
+    }
+    const theirSaved = (theirApp.customThemes || []) as SavedTheme[];
+    const theirLimit = themeSlotLimit(theirApp.extraThemeSlots);
+    if (theirSaved.length >= theirLimit) {
+      setMsg(`${memberName}'s theme library is full (${theirSaved.length}/${theirLimit}).`);
+      return;
+    }
+    const now = new Date().toISOString();
+    const entry: SavedTheme = {
+      id: uid(),
+      name: theme.name,
+      basedOn: theme.basedOn,
+      tokens: { ...theme.tokens },
+      createdAt: now,
+      updatedAt: now,
+    };
+    update((d) => {
+      const prev = d.appearance?.[memberId] || {};
+      const list = [...((prev.customThemes || []) as SavedTheme[]), entry];
+      return {
+        ...d,
+        appearance: {
+          ...(d.appearance || {}),
+          [memberId]: { ...prev, customThemes: list },
+        },
+      };
+    });
+    setMsg(`Shared “${theme.name}” with ${memberName}.`);
+  };
+
+  const familySources = (data.members || [])
+    .filter((m) => m.id !== myId && m.role !== 'media')
+    .flatMap((m) => {
+      const themes = (data.appearance?.[m.id]?.customThemes || []) as SavedTheme[];
+      return themes.map((theme) => ({
+        memberId: m.id,
+        memberName: m.name,
+        theme,
+      }));
+    });
+
+  const shareTargets = (data.members || []).filter(
+    (m) =>
+      m.id !== myId &&
+      m.role !== 'media' &&
+      !!data.appearance?.[m.id]?.unlockThemeStudio,
+  );
+
   const usePresetInstead = () => {
     if (!myId) return;
     update((d) => {
@@ -396,12 +492,38 @@ export function ThemeStudioPage() {
                     <Button
                       type="button"
                       size="sm"
+                      variant="secondary"
+                      onClick={() => duplicateSaved(theme)}
+                      disabled={slotsFree <= 0}
+                      title={slotsFree <= 0 ? 'No free slots' : 'Duplicate into a new slot'}
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                      Duplicate
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
                       variant="ghost"
                       onClick={() => deleteSaved(theme)}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </Button>
                   </div>
+                  {shareTargets.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-border">
+                      <span className="text-[11px] text-muted">Share with</span>
+                      {shareTargets.map((m) => (
+                        <button
+                          key={m.id}
+                          type="button"
+                          className="text-[11px] px-2 py-1 rounded-lg border border-border text-muted hover:text-fg hover:bg-nav-hover"
+                          onClick={() => shareToMember(theme, m.id, m.name)}
+                        >
+                          {m.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -419,6 +541,52 @@ export function ThemeStudioPage() {
             </button>{' '}
             in the shop (max {THEME_SLOTS_MAX}).
           </p>
+        )}
+      </section>
+
+
+      {/* Copy from family */}
+      <section className="space-y-3">
+        <h2 className="text-sm font-semibold text-muted uppercase tracking-wide flex items-center gap-2">
+          <Users className="w-4 h-4" />
+          From family
+        </h2>
+        {familySources.length === 0 ? (
+          <p className="text-sm text-muted">
+            When someone else saves a custom theme, you can copy it here.
+          </p>
+        ) : (
+          <div className="grid sm:grid-cols-2 gap-3">
+            {familySources.map(({ memberId, memberName, theme }) => (
+              <div
+                key={`${memberId}-${theme.id}`}
+                className="rounded-2xl border border-border bg-elevated p-4 space-y-3"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="font-medium text-fg">{theme.name}</p>
+                    <p className="text-[11px] text-muted">
+                      {memberName}
+                      <span className="capitalize"> · from {theme.basedOn}</span>
+                    </p>
+                  </div>
+                  <SwatchRow tokens={theme.tokens} />
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  disabled={slotsFree <= 0}
+                  onClick={() =>
+                    cloneIntoMyLibrary(theme, `${theme.name} (${memberName})`)
+                  }
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                  Copy to my library
+                </Button>
+              </div>
+            ))}
+          </div>
         )}
       </section>
 
