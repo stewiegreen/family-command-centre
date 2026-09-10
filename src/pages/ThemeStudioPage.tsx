@@ -672,6 +672,80 @@ export function ThemeStudioPage() {
           </div>
         </div>
 
+        {/* Card opacity + background blur */}
+        <div className="grid sm:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-xs font-semibold text-muted uppercase tracking-wide">
+                Card opacity
+              </h3>
+              <span className="text-xs text-muted tabular-nums">
+                {Math.round((appearance.cardOpacity ?? 1) * 100)}%
+              </span>
+            </div>
+            <input
+              type="range"
+              min={50}
+              max={100}
+              step={1}
+              value={Math.round((appearance.cardOpacity ?? 1) * 100)}
+              className="w-full accent-[var(--app-accent)]"
+              onChange={(e) => {
+                if (!myId) return;
+                const o = Number(e.target.value) / 100;
+                update((d) => {
+                  const prev = d.appearance?.[myId] || {};
+                  return {
+                    ...d,
+                    appearance: {
+                      ...(d.appearance || {}),
+                      [myId]: { ...prev, cardOpacity: o },
+                    },
+                  };
+                });
+              }}
+            />
+            <p className="text-[11px] text-muted">
+              Lower = more see-through cards (wallpaper shows through).
+            </p>
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-xs font-semibold text-muted uppercase tracking-wide">
+                Background blur
+              </h3>
+              <span className="text-xs text-muted tabular-nums">
+                {appearance.wallpaperBlur ?? 28}px
+              </span>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={40}
+              step={1}
+              value={appearance.wallpaperBlur ?? 28}
+              className="w-full accent-[var(--app-accent)]"
+              onChange={(e) => {
+                if (!myId) return;
+                const v = Number(e.target.value);
+                update((d) => {
+                  const prev = d.appearance?.[myId] || {};
+                  return {
+                    ...d,
+                    appearance: {
+                      ...(d.appearance || {}),
+                      [myId]: { ...prev, wallpaperBlur: v },
+                    },
+                  };
+                });
+              }}
+            />
+            <p className="text-[11px] text-muted">
+              Softens photo wallpapers (0 = sharp, 40 = very soft).
+            </p>
+          </div>
+        </div>
+
         {/* Fonts with live type samples */}
         <div className="space-y-2">
           <h3 className="text-xs font-semibold text-muted uppercase tracking-wide">

@@ -579,6 +579,10 @@ export interface FamilyData {
       cardStyle?: 'soft' | 'sharp' | 'glassy' | null;
       /** Soft neon-style glow on accent controls */
       accentGlow?: boolean;
+      /** Card surface opacity 0.5–1 (default 1) */
+      cardOpacity?: number | null;
+      /** Wallpaper / background blur in px 0–40 (default 28 for photos) */
+      wallpaperBlur?: number | null;
       /** Shop: unlock font vibe packs */
       unlockFontPacks?: boolean;
       /** Active font pack id (null / default = app fonts) */

@@ -249,9 +249,13 @@ html.spyfamily :focus-visible {
 html.spyfamily .bg-elevated,
 html.spyfamily [class*="bg-elevated"] {
   /* Use tokens so Theme Studio overrides on --app-elevated actually apply */
-  background-color: var(--app-elevated) !important;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background-color: color-mix(
+    in srgb,
+    var(--app-elevated) var(--app-card-opacity-pct, 100%),
+    transparent
+  ) !important;
+  backdrop-filter: blur(var(--app-card-blur, 8px));
+  -webkit-backdrop-filter: blur(var(--app-card-blur, 8px));
 }
 
 html.spyfamily .bg-surface {
@@ -462,4 +466,14 @@ html[data-accent-glow="1"] .text-accent {
 
 html[data-wallpaper-photo="1"] .hq-shell {
   background-image: none !important;
+}
+
+
+/* Theme Studio: card surface opacity (text stays full strength) */
+.bg-elevated {
+  background-color: color-mix(
+    in srgb,
+    var(--app-elevated) var(--app-card-opacity-pct, 100%),
+    transparent
+  );
 }

@@ -359,6 +359,28 @@ export function applyAccentGlowToDocument(on: boolean | undefined): void {
   document.documentElement.dataset.accentGlow = on ? '1' : '0';
 }
 
+/** Card fill opacity 0.5–1 (does not fade text — only surface colour). */
+export function applyCardOpacityToDocument(opacity: number | null | undefined): void {
+  const root = document.documentElement;
+  const o =
+    typeof opacity === 'number' && Number.isFinite(opacity)
+      ? Math.min(1, Math.max(0.5, opacity))
+      : 1;
+  root.style.setProperty('--app-card-opacity', String(o));
+  // Percentage for color-mix
+  root.style.setProperty('--app-card-opacity-pct', `${Math.round(o * 100)}%`);
+}
+
+/** Background / wallpaper photo blur in px (0–40). */
+export function applyWallpaperBlurToDocument(px: number | null | undefined): void {
+  const root = document.documentElement;
+  const v =
+    typeof px === 'number' && Number.isFinite(px)
+      ? Math.min(40, Math.max(0, Math.round(px)))
+      : 28;
+  root.style.setProperty('--app-wallpaper-blur', `${v}px`);
+}
+
 const FONT_LINK_ID = 'hq-font-pack';
 
 /** Load a font pack (Google Fonts) and set CSS variables. */

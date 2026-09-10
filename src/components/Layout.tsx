@@ -180,7 +180,7 @@ export function Layout({ children }: { children: ReactNode }) {
             backgroundImage: 'var(--app-wallpaper-image, none)',
             backgroundSize: 'cover',
             backgroundPosition: 'center',
-            filter: 'blur(28px)',
+            filter: 'blur(var(--app-wallpaper-blur, 28px))',
           }}
         />
       </div>

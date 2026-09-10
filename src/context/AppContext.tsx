@@ -28,6 +28,8 @@ import {
   applyWallpaperToDocument,
   applyCardStyleToDocument,
   applyAccentGlowToDocument,
+  applyCardOpacityToDocument,
+  applyWallpaperBlurToDocument,
   applyFontPackToDocument,
   clearCustomThemeProperties,
 } from '../lib/themeTokens';
@@ -427,6 +429,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     applyCardStyleToDocument(appearance?.cardStyle || 'soft');
     applyAccentGlowToDocument(!!appearance?.accentGlow);
+    applyCardOpacityToDocument(appearance?.cardOpacity);
+    applyWallpaperBlurToDocument(appearance?.wallpaperBlur);
     applyFontPackToDocument(
       appearance?.unlockFontPacks ? appearance?.activeFontPackId : 'default',
     );
