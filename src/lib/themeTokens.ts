@@ -6,6 +6,10 @@ export type ThemeTokenSet = {
   accent: string;
   fg: string;
   secondary?: string;
+  /** Left nav / mobile drawer */
+  sidebar?: string;
+  /** Sticky top bar */
+  header?: string;
 };
 
 const CUSTOM_PROPS = [
@@ -178,9 +182,11 @@ export function applyTokenSetToElement(el: HTMLElement, tokens: ThemeTokenSet): 
   el.style.setProperty('--app-surface-2', adjustLightness(tokens.elevated, 0.06));
   el.style.setProperty('--app-surface-3', adjustLightness(tokens.elevated, 0.12));
   el.style.setProperty('--app-inset', rgbaOf(tokens.page, 0.85));
-  // Sidebar + top bar — these were stuck on the preset before
-  el.style.setProperty('--app-sidebar', tokens.page);
-  el.style.setProperty('--app-header', rgbaOf(tokens.page, 0.94));
+  // Sidebar + top bar — explicit pickers, else fall back to page
+  const sidebar = (tokens.sidebar || '').trim() || tokens.page;
+  const header = (tokens.header || '').trim() || tokens.page;
+  el.style.setProperty('--app-sidebar', sidebar);
+  el.style.setProperty('--app-header', rgbaOf(header, 0.94));
   el.style.setProperty('--app-nav-hover', adjustLightness(tokens.elevated, 0.08));
   el.style.setProperty('--app-input', adjustLightness(tokens.elevated, -0.04));
   el.style.setProperty('--app-ring-offset', tokens.page);
@@ -229,6 +235,8 @@ export const PRESET_START_TOKENS: Record<string, ThemeTokenSet> = {
     accent: '#ea580c',
     fg: '#fafaf9',
     secondary: '#a8a29e',
+    sidebar: '#181512',
+    header: '#141210',
   },
   light: {
     page: '#f5f5f0',
@@ -236,6 +244,8 @@ export const PRESET_START_TOKENS: Record<string, ThemeTokenSet> = {
     accent: '#e8614a',
     fg: '#1c1c1e',
     secondary: '#8a8a8e',
+    sidebar: '#fffcf8',
+    header: '#fffcf8',
   },
   neon: {
     page: '#07070f',
@@ -243,6 +253,8 @@ export const PRESET_START_TOKENS: Record<string, ThemeTokenSet> = {
     accent: '#00c8ff',
     fg: '#e8f4ff',
     secondary: '#ff2db8',
+    sidebar: '#080812',
+    header: '#06060e',
   },
   spyfamily: {
     page: '#6b8f7a',
@@ -250,5 +262,7 @@ export const PRESET_START_TOKENS: Record<string, ThemeTokenSet> = {
     accent: '#e85a7a',
     fg: '#1a1c1b',
     secondary: '#c9a227',
+    sidebar: '#5a7d6a',
+    header: '#6b8f7a',
   },
 };

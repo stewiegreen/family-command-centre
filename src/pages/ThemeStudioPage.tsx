@@ -119,6 +119,8 @@ export function ThemeStudioPage() {
         ...(tokens.secondary?.trim()
           ? { secondary: tokens.secondary.trim() }
           : {}),
+        ...(tokens.sidebar?.trim() ? { sidebar: tokens.sidebar.trim() } : {}),
+        ...(tokens.header?.trim() ? { header: tokens.header.trim() } : {}),
       },
       createdAt: slot?.createdAt || now,
       updatedAt: now,
@@ -206,6 +208,8 @@ export function ThemeStudioPage() {
                   ['--app-elevated']: tokens.elevated,
                   ['--app-surface']: tokens.elevated,
                   ['--app-surface-2']: tokens.elevated,
+                  ['--app-sidebar']: tokens.sidebar || tokens.page,
+                  ['--app-header']: tokens.header || tokens.page,
                   ['--app-accent']: tokens.accent,
                   ['--app-accent-hover']: tokens.accent,
                   ['--app-accent-ink']: undefined as unknown as string,
@@ -217,7 +221,39 @@ export function ThemeStudioPage() {
               ),
             }}
           >
-            <div className="p-4 space-y-3">
+            <div className="flex min-h-[200px]">
+              {/* Mini sidebar */}
+              <div
+                className="w-10 shrink-0 flex flex-col items-center gap-2 py-3 border-r border-black/10"
+                style={{ background: tokens.sidebar || tokens.page }}
+                title="Sidebar"
+              >
+                <div
+                  className="w-5 h-5 rounded-md"
+                  style={{ background: tokens.accent }}
+                />
+                <div
+                  className="w-5 h-5 rounded-md opacity-40"
+                  style={{ background: tokens.fg }}
+                />
+                <div
+                  className="w-5 h-5 rounded-md opacity-25"
+                  style={{ background: tokens.fg }}
+                />
+              </div>
+              <div className="flex-1 flex flex-col min-w-0">
+                {/* Mini header */}
+                <div
+                  className="h-9 shrink-0 flex items-center px-3 text-xs font-medium border-b border-black/10"
+                  style={{
+                    background: tokens.header || tokens.page,
+                    color: tokens.fg,
+                  }}
+                  title="Header"
+                >
+                  Hey, you
+                </div>
+                <div className="p-3 space-y-3 flex-1">
               <p className="text-sm font-medium" style={{ color: tokens.fg }}>
                 Sample home card
               </p>
@@ -279,6 +315,8 @@ export function ThemeStudioPage() {
                 {(
                   [
                     ['page', 'Page', tokens.page],
+                    ['sidebar', 'Sidebar', tokens.sidebar || tokens.page],
+                    ['header', 'Header', tokens.header || tokens.page],
                     ['elevated', 'Card', tokens.elevated],
                     ['accent', 'Accent', tokens.accent],
                     ['fg', 'Text', tokens.fg],
@@ -298,6 +336,8 @@ export function ThemeStudioPage() {
                     </span>
                   </div>
                 ))}
+              </div>
+                </div>
               </div>
             </div>
           </div>
@@ -340,6 +380,16 @@ export function ThemeStudioPage() {
             label="Page background"
             value={tokens.page}
             onChange={(v) => setToken('page', v)}
+          />
+          <ColorField
+            label="Sidebar"
+            value={tokens.sidebar || tokens.page}
+            onChange={(v) => setToken('sidebar', v)}
+          />
+          <ColorField
+            label="Top header"
+            value={tokens.header || tokens.page}
+            onChange={(v) => setToken('header', v)}
           />
           <ColorField
             label="Card fill"

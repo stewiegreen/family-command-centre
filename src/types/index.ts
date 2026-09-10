@@ -547,6 +547,10 @@ export interface FamilyData {
           accent: string;
           fg: string;
           secondary?: string;
+          /** Sidebar / nav rail */
+          sidebar?: string;
+          /** Top header bar */
+          header?: string;
         };
         createdAt: string;
         updatedAt: string;
