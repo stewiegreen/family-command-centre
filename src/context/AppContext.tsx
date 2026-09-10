@@ -26,6 +26,9 @@ import {
 import {
   applyCustomThemeToDocument,
   applyWallpaperToDocument,
+  applyCardStyleToDocument,
+  applyAccentGlowToDocument,
+  applyFontPackToDocument,
   clearCustomThemeProperties,
 } from '../lib/themeTokens';
 import {
@@ -412,8 +415,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } else {
       clearCustomThemeProperties(root);
     }
-    // Wallpaper add-on (independent of custom colour tokens)
-    applyWallpaperToDocument(appearance?.activeWallpaperId);
+    // Wallpaper add-on (pack id or picture-frame photo)
+    const wallId = appearance?.activeWallpaperId;
+    const frameUrl =
+      wallId === 'frame:1'
+        ? appearance?.pictureFrameUrl
+        : wallId === 'frame:2'
+          ? appearance?.pictureFrameUrl2
+          : undefined;
+    applyWallpaperToDocument(wallId, frameUrl);
+
+    applyCardStyleToDocument(appearance?.cardStyle || 'soft');
+    applyAccentGlowToDocument(!!appearance?.accentGlow);
+    applyFontPackToDocument(
+      appearance?.unlockFontPacks ? appearance?.activeFontPackId : 'default',
+    );
   }, [data.settings.theme, data.settings.currentUserId, data.appearance]);
 
   const currentUserRaw = data.members.find((m) => m.id === data.settings.currentUserId);

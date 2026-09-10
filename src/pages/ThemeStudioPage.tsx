@@ -9,7 +9,14 @@ import {
   contrastIssues,
   type ThemeTokenSet,
 } from '../lib/themeTokens';
-import { ACCENT_PACKS, WALLPAPERS } from '../lib/themePacks';
+import {
+  ACCENT_PACKS,
+  WALLPAPERS,
+  FONT_PACKS,
+  CARD_STYLES,
+  FRAME_WALLPAPER_1,
+  FRAME_WALLPAPER_2,
+} from '../lib/themePacks';
 import { cn } from '../lib/cn';
 
 /** Slots included with Theme Studio unlock. */
@@ -547,6 +554,127 @@ export function ThemeStudioPage() {
 
 
 
+
+      {/* Card style + accent glow — included with Theme Studio */}
+      <section className="space-y-3">
+        <h2 className="text-sm font-semibold text-muted uppercase tracking-wide">
+          Card style
+        </h2>
+        <div className="flex flex-wrap gap-2">
+          {CARD_STYLES.map((s) => {
+            const active = (appearance.cardStyle || 'soft') === s.id;
+            return (
+              <button
+                key={s.id}
+                type="button"
+                title={s.hint}
+                className={cn(
+                  'px-3 py-2 rounded-xl border text-sm text-left',
+                  active
+                    ? 'border-accent bg-accent/15 text-fg'
+                    : 'border-border text-muted hover:bg-nav-hover',
+                )}
+                onClick={() => {
+                  if (!myId) return;
+                  update((d) => {
+                    const prev = d.appearance?.[myId] || {};
+                    return {
+                      ...d,
+                      appearance: {
+                        ...(d.appearance || {}),
+                        [myId]: { ...prev, cardStyle: s.id },
+                      },
+                    };
+                  });
+                  setMsg(`Card style: ${s.label}`);
+                }}
+              >
+                <span className="font-medium text-fg block">{s.label}</span>
+                <span className="text-[11px] text-muted">{s.hint}</span>
+              </button>
+            );
+          })}
+        </div>
+        <label className="flex items-center gap-2 text-sm text-fg cursor-pointer select-none">
+          <input
+            type="checkbox"
+            className="rounded border-border"
+            checked={!!appearance.accentGlow}
+            onChange={(e) => {
+              if (!myId) return;
+              const on = e.target.checked;
+              update((d) => {
+                const prev = d.appearance?.[myId] || {};
+                return {
+                  ...d,
+                  appearance: {
+                    ...(d.appearance || {}),
+                    [myId]: { ...prev, accentGlow: on },
+                  },
+                };
+              });
+              setMsg(on ? 'Accent glow on' : 'Accent glow off');
+            }}
+          />
+          Accent glow on buttons &amp; highlights
+        </label>
+      </section>
+
+      {/* Font packs */}
+      <section className="space-y-3">
+        <h2 className="text-sm font-semibold text-muted uppercase tracking-wide">
+          Font vibe
+        </h2>
+        {!appearance.unlockFontPacks ? (
+          <p className="text-sm text-muted">
+            Unlock{' '}
+            <button type="button" className="text-accent underline" onClick={() => setView('chores')}>
+              Font vibe packs
+            </button>{' '}
+            in the shop (requires Theme Studio).
+          </p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {FONT_PACKS.map((f) => {
+              const active =
+                (appearance.activeFontPackId || 'default') === f.id;
+              return (
+                <button
+                  key={f.id}
+                  type="button"
+                  className={cn(
+                    'px-3 py-2 rounded-xl border text-sm',
+                    active
+                      ? 'border-accent bg-accent/15 text-fg'
+                      : 'border-border text-muted hover:bg-nav-hover',
+                  )}
+                  style={{ fontFamily: f.ui }}
+                  onClick={() => {
+                    if (!myId) return;
+                    update((d) => {
+                      const prev = d.appearance?.[myId] || {};
+                      return {
+                        ...d,
+                        appearance: {
+                          ...(d.appearance || {}),
+                          [myId]: {
+                            ...prev,
+                            activeFontPackId: f.id === 'default' ? null : f.id,
+                          },
+                        },
+                      };
+                    });
+                    setMsg(`Font: ${f.label}`);
+                  }}
+                >
+                  {f.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
       {/* Accent packs (shop add-on) */}
       <section className="space-y-3">
         <h2 className="text-sm font-semibold text-muted uppercase tracking-wide">
@@ -661,9 +789,143 @@ export function ThemeStudioPage() {
                 </button>
               );
             })}
+
+            {(appearance.pictureFrameUrl || appearance.pictureFrameUrl2) && (
+              <>
+                {appearance.pictureFrameUrl && (
+                  <button
+                    type="button"
+                    className={cn(
+                      'px-3 py-2 rounded-xl border text-sm',
+                      appearance.activeWallpaperId === FRAME_WALLPAPER_1
+                        ? 'border-accent bg-accent/15 text-fg'
+                        : 'border-border text-muted hover:bg-nav-hover',
+                    )}
+                    onClick={() => {
+                      if (!myId) return;
+                      update((d) => {
+                        const prev = d.appearance?.[myId] || {};
+                        return {
+                          ...d,
+                          appearance: {
+                            ...(d.appearance || {}),
+                            [myId]: {
+                              ...prev,
+                              activeWallpaperId: FRAME_WALLPAPER_1,
+                            },
+                          },
+                        };
+                      });
+                      setMsg('Using picture frame 1 as wallpaper.');
+                    }}
+                  >
+                    My photo (frame 1)
+                  </button>
+                )}
+                {appearance.pictureFrameUrl2 && (
+                  <button
+                    type="button"
+                    className={cn(
+                      'px-3 py-2 rounded-xl border text-sm',
+                      appearance.activeWallpaperId === FRAME_WALLPAPER_2
+                        ? 'border-accent bg-accent/15 text-fg'
+                        : 'border-border text-muted hover:bg-nav-hover',
+                    )}
+                    onClick={() => {
+                      if (!myId) return;
+                      update((d) => {
+                        const prev = d.appearance?.[myId] || {};
+                        return {
+                          ...d,
+                          appearance: {
+                            ...(d.appearance || {}),
+                            [myId]: {
+                              ...prev,
+                              activeWallpaperId: FRAME_WALLPAPER_2,
+                            },
+                          },
+                        };
+                      });
+                      setMsg('Using picture frame 2 as wallpaper.');
+                    }}
+                  >
+                    My photo (frame 2)
+                  </button>
+                )}
+              </>
+            )}
           </div>
         )}
       </section>
+
+
+      {/* Photo wallpaper from picture frame — no extra shop unlock */}
+      {(appearance.pictureFrameUrl || appearance.pictureFrameUrl2) && (
+        <section className="space-y-3">
+          <h2 className="text-sm font-semibold text-muted uppercase tracking-wide">
+            Photo wallpaper
+          </h2>
+          <p className="text-xs text-muted">
+            Use a picture-frame photo as a soft background (works without Wallpaper packs).
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {appearance.pictureFrameUrl && (
+              <button
+                type="button"
+                className={cn(
+                  'px-3 py-2 rounded-xl border text-sm',
+                  appearance.activeWallpaperId === FRAME_WALLPAPER_1
+                    ? 'border-accent bg-accent/15 text-fg'
+                    : 'border-border text-muted hover:bg-nav-hover',
+                )}
+                onClick={() => {
+                  if (!myId) return;
+                  update((d) => {
+                    const prev = d.appearance?.[myId] || {};
+                    return {
+                      ...d,
+                      appearance: {
+                        ...(d.appearance || {}),
+                        [myId]: { ...prev, activeWallpaperId: FRAME_WALLPAPER_1 },
+                      },
+                    };
+                  });
+                  setMsg('Using picture frame 1 as wallpaper.');
+                }}
+              >
+                Frame 1 photo
+              </button>
+            )}
+            {appearance.pictureFrameUrl2 && (
+              <button
+                type="button"
+                className={cn(
+                  'px-3 py-2 rounded-xl border text-sm',
+                  appearance.activeWallpaperId === FRAME_WALLPAPER_2
+                    ? 'border-accent bg-accent/15 text-fg'
+                    : 'border-border text-muted hover:bg-nav-hover',
+                )}
+                onClick={() => {
+                  if (!myId) return;
+                  update((d) => {
+                    const prev = d.appearance?.[myId] || {};
+                    return {
+                      ...d,
+                      appearance: {
+                        ...(d.appearance || {}),
+                        [myId]: { ...prev, activeWallpaperId: FRAME_WALLPAPER_2 },
+                      },
+                    };
+                  });
+                  setMsg('Using picture frame 2 as wallpaper.');
+                }}
+              >
+                Frame 2 photo
+              </button>
+            )}
+          </div>
+        </section>
+      )}
 
       {/* Copy from family */}
       <section className="space-y-3">

@@ -363,6 +363,15 @@ export const DEFAULT_REWARD_CATALOG: RewardItem[] = [
     active: true,
     sort: 46,
   },
+  {
+    id: 'theme-fonts',
+    label: 'Font vibe packs',
+    icon: '🔤',
+    kind: 'theme_fonts',
+    coinCost: 30,
+    active: true,
+    sort: 47,
+  },
 ];
 
 export function ensureRewardCatalog(existing?: RewardItem[] | null): RewardItem[] {
@@ -375,7 +384,7 @@ export function ensureRewardCatalog(existing?: RewardItem[] | null): RewardItem[
   for (const d of DEFAULT_REWARD_CATALOG) {
     if (
       !ids.has(d.id) &&
-      (d.kind === 'avatar_flair' || d.kind === 'name_flair' || d.kind === 'picture_frame' || d.kind === 'picture_frame_2' || d.kind === 'theme_studio' || d.kind === 'theme_slot' || d.kind === 'theme_accents' || d.kind === 'theme_wallpapers')
+      (d.kind === 'avatar_flair' || d.kind === 'name_flair' || d.kind === 'picture_frame' || d.kind === 'picture_frame_2' || d.kind === 'theme_studio' || d.kind === 'theme_slot' || d.kind === 'theme_accents' || d.kind === 'theme_wallpapers' || d.kind === 'theme_fonts')
     ) {
       base.push({ ...d });
     }

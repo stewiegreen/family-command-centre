@@ -1,4 +1,4 @@
-/** Curated Theme Studio add-ons (accent packs + wallpapers). */
+/** Curated Theme Studio add-ons. */
 
 export type AccentPack = {
   id: string;
@@ -14,7 +14,32 @@ export type WallpaperPack = {
   image: string;
   /** Optional background-size */
   size?: string;
+  /** True for photo-based wallpapers (blurred in Layout) */
+  photo?: boolean;
 };
+
+export type FontPack = {
+  id: string;
+  label: string;
+  /** Google Fonts CSS2 URL fragment after css2? — null = app default */
+  googleHref: string | null;
+  /** CSS font-family for UI / body */
+  ui: string;
+  /** CSS font-family for headings */
+  display: string;
+};
+
+export type CardStyleId = 'soft' | 'sharp' | 'glassy';
+
+export const CARD_STYLES: {
+  id: CardStyleId;
+  label: string;
+  hint: string;
+}[] = [
+  { id: 'soft', label: 'Soft', hint: 'Rounded, gentle' },
+  { id: 'sharp', label: 'Sharp', hint: 'Tighter corners' },
+  { id: 'glassy', label: 'Glassy', hint: 'More blur & float' },
+];
 
 export const ACCENT_PACKS: AccentPack[] = [
   { id: 'spy-pink', label: 'Spy pink', accent: '#e85a7a', secondary: '#c9a227' },
@@ -59,7 +84,53 @@ export const WALLPAPERS: WallpaperPack[] = [
   },
 ];
 
+/** Special wallpaper ids for picture-frame photos (not in WALLPAPERS list). */
+export const FRAME_WALLPAPER_1 = 'frame:1';
+export const FRAME_WALLPAPER_2 = 'frame:2';
+
+export function isFrameWallpaperId(id: string | null | undefined): id is typeof FRAME_WALLPAPER_1 | typeof FRAME_WALLPAPER_2 {
+  return id === FRAME_WALLPAPER_1 || id === FRAME_WALLPAPER_2;
+}
+
+export const FONT_PACKS: FontPack[] = [
+  {
+    id: 'default',
+    label: 'Default',
+    googleHref: null,
+    ui: '"Inter", system-ui, sans-serif',
+    display: '"Fraunces", Georgia, serif',
+  },
+  {
+    id: 'playful',
+    label: 'Playful',
+    googleHref:
+      'https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&family=Fredoka:wght@500;600&display=swap',
+    ui: '"Nunito", system-ui, sans-serif',
+    display: '"Fredoka", system-ui, sans-serif',
+  },
+  {
+    id: 'tech',
+    label: 'Tech',
+    googleHref:
+      'https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap',
+    ui: '"IBM Plex Sans", system-ui, sans-serif',
+    display: '"Space Grotesk", system-ui, sans-serif',
+  },
+  {
+    id: 'story',
+    label: 'Storybook',
+    googleHref:
+      'https://fonts.googleapis.com/css2?family=Literata:opsz,wght@7..72,400;7..72,600&family=Source+Sans+3:wght@400;600;700&display=swap',
+    ui: '"Source Sans 3", system-ui, sans-serif',
+    display: '"Literata", Georgia, serif',
+  },
+];
+
 export function wallpaperById(id: string | null | undefined): WallpaperPack | undefined {
-  if (!id) return undefined;
+  if (!id || isFrameWallpaperId(id)) return undefined;
   return WALLPAPERS.find((w) => w.id === id);
+}
+
+export function fontPackById(id: string | null | undefined): FontPack {
+  return FONT_PACKS.find((f) => f.id === id) || FONT_PACKS[0]!;
 }

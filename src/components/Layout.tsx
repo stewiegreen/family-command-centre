@@ -155,15 +155,35 @@ export function Layout({ children }: { children: ReactNode }) {
 
   return (
     <div
-      className="h-dvh max-h-dvh flex overflow-hidden bg-page text-fg"
+      className="hq-shell h-dvh max-h-dvh flex overflow-hidden bg-page text-fg relative"
       style={{
-        // Theme Studio wallpaper (CSS vars set on <html> by applyWallpaperToDocument)
-        backgroundImage: 'var(--app-wallpaper-image, none)',
+        // Pattern wallpapers paint here; photo wallpapers use the blur layer below
+        backgroundImage:
+          'var(--app-wallpaper-image, none)',
         backgroundSize: 'var(--app-wallpaper-size, auto)',
         backgroundRepeat: 'var(--app-wallpaper-repeat, repeat)',
         backgroundAttachment: 'var(--app-wallpaper-attachment, scroll)',
       }}
     >
+      {/* Soft blur under content when wallpaper is a picture-frame photo */}
+      <div
+        className="pointer-events-none absolute inset-0 overflow-hidden opacity-[0.92]"
+        style={{
+          display: 'var(--app-wallpaper-photo-layer, none)',
+          zIndex: 0,
+        }}
+        aria-hidden
+      >
+        <div
+          className="absolute inset-[-24px]"
+          style={{
+            backgroundImage: 'var(--app-wallpaper-image, none)',
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            filter: 'blur(28px)',
+          }}
+        />
+      </div>
       {cloudError && (
         <div className="fixed top-0 inset-x-0 z-[100] bg-red-500 text-white text-sm font-medium px-4 py-2 flex items-center justify-center gap-2 shadow-lg">
           <span>⚠️ Something didn't save: {cloudError}. Don't close this yet — trying again.</span>
@@ -172,6 +192,7 @@ export function Layout({ children }: { children: ReactNode }) {
       {/* Desktop sidebar */}
       <aside
         className={cn(
+          'relative z-10',
           'hidden lg:flex flex-col shrink-0 h-full max-h-dvh border-r border-border bg-sidebar transition-[width] duration-200 ease-out',
           collapsed ? 'w-[4.25rem]' : 'w-64',
         )}
@@ -349,7 +370,7 @@ export function Layout({ children }: { children: ReactNode }) {
         </div>
       </aside>
 
-      <div className="flex-1 flex flex-col min-w-0 min-h-0 h-full">
+      <div className="relative z-10 flex-1 flex flex-col min-w-0 min-h-0 h-full">
         <header className="sticky top-0 z-30 flex items-center justify-between gap-3 px-4 lg:px-6 h-14 border-b border-border bg-header backdrop-blur-xl">
           <div className="flex items-center gap-3 min-w-0">
             <button

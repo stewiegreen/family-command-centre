@@ -27,6 +27,7 @@ export type RewardKind =
   | 'theme_slot'
   | 'theme_accents'
   | 'theme_wallpapers'
+  | 'theme_fonts'
   | 'custom';
 export type RedemptionStatus = 'pending' | 'fulfilled' | 'cancelled';
 /** Simple presence — no GPS. */
@@ -572,8 +573,16 @@ export interface FamilyData {
       unlockAccentPacks?: boolean;
       /** Shop: unlock wallpaper patterns in Theme Studio */
       unlockWallpapers?: boolean;
-      /** Active wallpaper id (null clears). Only applied with a custom/preset theme. */
+      /** Active wallpaper id (null clears). Pack id or frame:1 / frame:2. */
       activeWallpaperId?: string | null;
+      /** Card look: soft (default) | sharp | glassy — Theme Studio */
+      cardStyle?: 'soft' | 'sharp' | 'glassy' | null;
+      /** Soft neon-style glow on accent controls */
+      accentGlow?: boolean;
+      /** Shop: unlock font vibe packs */
+      unlockFontPacks?: boolean;
+      /** Active font pack id (null / default = app fonts) */
+      activeFontPackId?: string | null;
       /** Public URL of the framed image (R2 via messages upload) */
       pictureFrameUrl?: string;
       /** Second frame image URL */

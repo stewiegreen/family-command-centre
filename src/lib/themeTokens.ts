@@ -1,4 +1,9 @@
-import { wallpaperById } from './themePacks';
+import {
+  wallpaperById,
+  isFrameWallpaperId,
+  fontPackById,
+  type CardStyleId,
+} from './themePacks';
 /** Color helpers for Theme Studio custom overrides. */
 
 export type ThemeTokenSet = {
@@ -280,14 +285,42 @@ export const PRESET_START_TOKENS: Record<string, ThemeTokenSet> = {
  * The app shell (Layout) reads them — painting on body is invisible because
  * Layout's full-viewport `bg-page` div sits on top of body.
  */
-export function applyWallpaperToDocument(wallpaperId: string | null | undefined): void {
+export function applyWallpaperToDocument(
+  wallpaperId: string | null | undefined,
+  frameUrl?: string | null,
+): void {
   const root = document.documentElement;
-  const pack = wallpaperById(wallpaperId || undefined);
-  if (!pack) {
+  if (!wallpaperId) {
     root.style.removeProperty('--app-wallpaper-image');
     root.style.removeProperty('--app-wallpaper-size');
     root.style.removeProperty('--app-wallpaper-repeat');
     root.style.removeProperty('--app-wallpaper-attachment');
+    root.dataset.wallpaperPhoto = '0';
+    return;
+  }
+
+  if (isFrameWallpaperId(wallpaperId)) {
+    if (!frameUrl) {
+      root.style.removeProperty('--app-wallpaper-image');
+      root.dataset.wallpaperPhoto = '0';
+      root.style.setProperty('--app-wallpaper-photo-layer', 'none');
+      return;
+    }
+    // Photo for blur layer; shell stays solid page colour
+    const safe = frameUrl.replace(/"/g, '%22');
+    root.style.setProperty('--app-wallpaper-image', `url("${safe}")`);
+    root.style.setProperty('--app-wallpaper-size', 'cover');
+    root.style.setProperty('--app-wallpaper-repeat', 'no-repeat');
+    root.style.setProperty('--app-wallpaper-attachment', 'fixed');
+    root.style.setProperty('--app-wallpaper-photo-layer', 'block');
+    root.dataset.wallpaperPhoto = '1';
+    return;
+  }
+
+  const pack = wallpaperById(wallpaperId);
+  if (!pack) {
+    root.style.removeProperty('--app-wallpaper-image');
+    root.dataset.wallpaperPhoto = '0';
     return;
   }
   root.style.setProperty('--app-wallpaper-image', pack.image);
@@ -297,4 +330,56 @@ export function applyWallpaperToDocument(wallpaperId: string | null | undefined)
     pack.size ? 'repeat' : 'no-repeat',
   );
   root.style.setProperty('--app-wallpaper-attachment', 'fixed');
+  root.dataset.wallpaperPhoto = pack.photo ? '1' : '0';
+  root.style.setProperty('--app-wallpaper-photo-layer', pack.photo ? 'block' : 'none');
+}
+
+/** Card corner / glass style for Theme Studio. */
+export function applyCardStyleToDocument(style: CardStyleId | null | undefined): void {
+  const root = document.documentElement;
+  const id = style || 'soft';
+  root.dataset.cardStyle = id;
+  if (id === 'sharp') {
+    root.style.setProperty('--app-card-radius', '0.4rem');
+    root.style.setProperty('--app-card-blur', '0px');
+    root.style.setProperty('--app-shadow-card', '0 1px 3px rgba(0,0,0,0.18)');
+  } else if (id === 'glassy') {
+    root.style.setProperty('--app-card-radius', '1.25rem');
+    root.style.setProperty('--app-card-blur', '14px');
+    root.style.setProperty('--app-shadow-card', '0 8px 32px rgba(0,0,0,0.18)');
+  } else {
+    root.style.setProperty('--app-card-radius', '1rem');
+    root.style.setProperty('--app-card-blur', '6px');
+    root.style.removeProperty('--app-shadow-card');
+  }
+}
+
+/** Soft glow on accent buttons / chips. */
+export function applyAccentGlowToDocument(on: boolean | undefined): void {
+  document.documentElement.dataset.accentGlow = on ? '1' : '0';
+}
+
+const FONT_LINK_ID = 'hq-font-pack';
+
+/** Load a font pack (Google Fonts) and set CSS variables. */
+export function applyFontPackToDocument(packId: string | null | undefined): void {
+  const pack = fontPackById(packId || 'default');
+  const root = document.documentElement;
+  root.style.setProperty('--font-ui', pack.ui);
+  root.style.setProperty('--font-display', pack.display);
+
+  let link = document.getElementById(FONT_LINK_ID) as HTMLLinkElement | null;
+  if (!pack.googleHref) {
+    if (link) link.remove();
+    return;
+  }
+  if (!link) {
+    link = document.createElement('link');
+    link.id = FONT_LINK_ID;
+    link.rel = 'stylesheet';
+    document.head.appendChild(link);
+  }
+  if (link.href !== pack.googleHref) {
+    link.href = pack.googleHref;
+  }
 }

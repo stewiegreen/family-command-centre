@@ -447,3 +447,19 @@ h3,
     transition-duration: 0.01ms !important;
   }
 }
+
+
+/* Theme Studio: accent glow */
+html[data-accent-glow="1"] .bg-accent {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--app-accent) 35%, transparent),
+    0 0 18px color-mix(in srgb, var(--app-accent) 45%, transparent),
+    0 0 36px color-mix(in srgb, var(--app-accent) 25%, transparent);
+}
+html[data-accent-glow="1"] .text-accent {
+  text-shadow: 0 0 12px color-mix(in srgb, var(--app-accent) 40%, transparent);
+}
+
+html[data-wallpaper-photo="1"] .hq-shell {
+  background-image: none !important;
+}

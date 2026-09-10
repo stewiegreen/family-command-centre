@@ -15,7 +15,10 @@ export function Card({ children, className, onClick, style, ...rest }: CardProps
       onClick={onClick}
       style={{ boxShadow: 'var(--app-shadow-card)', ...style }}
       className={cn(
-        'bg-elevated backdrop-blur-sm border border-border rounded-2xl p-4 sm:p-[1.15rem] transition-shadow duration-150',
+        'bg-elevated border border-border p-4 sm:p-[1.15rem] transition-shadow duration-150',
+        // radius + blur from Theme Studio (--app-card-*)
+        '[border-radius:var(--app-card-radius,1rem)]',
+        '[backdrop-filter:blur(var(--app-card-blur,6px))]',
         onClick && 'cursor-pointer hover:border-border-strong transition-colors',
         className,
       )}
