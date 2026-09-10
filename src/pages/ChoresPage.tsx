@@ -84,6 +84,7 @@ const KIND_LABEL: Record<RewardKind, string> = {
   avatar_flair: 'Avatar flair',
   name_flair: 'Name flair',
   picture_frame: 'Picture frame',
+  theme_studio: 'Theme Studio',
   custom: 'Custom',
 };
 
@@ -664,7 +665,8 @@ export function ChoresPage() {
 
       const isFlair = item.kind === 'avatar_flair' || item.kind === 'name_flair';
       const isPictureFrame = item.kind === 'picture_frame';
-      const autoDone = isScreen || isFlair || isPictureFrame;
+      const isThemeStudio = item.kind === 'theme_studio';
+      const autoDone = isScreen || isFlair || isPictureFrame || isThemeStudio;
 
       const record: RedemptionRecord = {
         id: redemptionId,
@@ -706,7 +708,7 @@ export function ChoresPage() {
       }
 
       let nextAppearance = d.appearance || {};
-      if (isFlair || isPictureFrame) {
+      if (isFlair || isPictureFrame || isThemeStudio) {
         const prev = nextAppearance[myId] || {};
         let homescreenRows = prev.homescreenRows;
         if (isPictureFrame) {
@@ -727,6 +729,7 @@ export function ChoresPage() {
             ...(item.kind === 'avatar_flair' ? { unlockAvatarFlair: true } : {}),
             ...(item.kind === 'name_flair' ? { unlockNameFlair: true } : {}),
             ...(isPictureFrame ? { unlockPictureFrame: true } : {}),
+            ...(isThemeStudio ? { unlockThemeStudio: true } : {}),
             ...(homescreenRows ? { homescreenRows } : {}),
           },
         };
@@ -747,6 +750,7 @@ export function ChoresPage() {
     // After unlock, open the picker so they can choose immediately
     if (item.kind === 'avatar_flair') setStyleModal('avatar');
     if (item.kind === 'name_flair') setStyleModal('name');
+    if (item.kind === 'theme_studio') setView('themestudio');
   };
 
   const fulfillRedemption = (r: RedemptionRecord) => {
@@ -1878,6 +1882,9 @@ export function ChoresPage() {
                         const unlockedFrame =
                           item.kind === 'picture_frame' &&
                           !!data.appearance?.[myId]?.unlockPictureFrame;
+                        const unlockedStudio =
+                          item.kind === 'theme_studio' &&
+                          !!data.appearance?.[myId]?.unlockThemeStudio;
                         if (unlockedAvatar || unlockedName) {
                           return (
                             <Button
@@ -1901,6 +1908,18 @@ export function ChoresPage() {
                               onClick={() => setView('dashboard')}
                             >
                               Open on Home
+                            </Button>
+                          );
+                        }
+                        if (unlockedStudio) {
+                          return (
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              className="flex-1"
+                              onClick={() => setView('themestudio')}
+                            >
+                              Open Studio
                             </Button>
                           );
                         }

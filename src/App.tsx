@@ -14,6 +14,7 @@ import { JournalPage } from './pages/JournalPage';
 import { MessagesPage } from './pages/MessagesPage';
 import { MediaPage } from './pages/MediaPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { ThemeStudioPage } from './pages/ThemeStudioPage';
 import { KidPinGate } from './components/PinGate';
 import { NotificationWatcher } from './components/NotificationWatcher';
 import { QuickAddFab } from './components/QuickAddFab';
@@ -89,6 +90,7 @@ function AppShell() {
             {view === 'journal' && <JournalPage />}
             {view === 'messages' && <MessagesPage />}
             {view === 'media' && <MediaPage />}
+            {view === 'themestudio' && <ThemeStudioPage />}
             {view === 'settings' && isParent && <SettingsPage />}
           </>
         )}

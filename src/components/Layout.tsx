@@ -9,6 +9,7 @@ import {
   ChefHat,
   MessageCircle,
   Film,
+  Palette,
   Settings,
   Menu,
   X,
@@ -45,6 +46,7 @@ const NAV: { id: ViewId; label: string; icon: typeof Home }[] = [
   { id: 'journal', label: 'Journal', icon: BookOpen },
   { id: 'messages', label: 'Messages', icon: MessageCircle },
   { id: 'media', label: 'Media', icon: Film },
+  { id: 'themestudio', label: 'Theme Studio', icon: Palette },
 ];
 
 const SIDEBAR_KEY = 'fcc-sidebar-collapsed';
@@ -137,7 +139,12 @@ export function Layout({ children }: { children: ReactNode }) {
   };
 
   const unread = data.messages.filter((m) => m.toId === settings.currentUserId && !m.read).length;
-  const navItems = isMediaOnly ? NAV.filter((i) => i.id === 'media') : NAV;
+  const themeStudioUnlocked = !!(
+    currentUser && data.appearance?.[currentUser.id]?.unlockThemeStudio
+  );
+  const navItems = isMediaOnly
+    ? NAV.filter((i) => i.id === 'media')
+    : NAV.filter((i) => i.id !== 'themestudio' || themeStudioUnlocked);
 
   const navBtn = (active: boolean) =>
     cn(

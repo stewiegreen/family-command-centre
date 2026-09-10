@@ -1,6 +1,6 @@
 export type Role = 'parent' | 'kid' | 'media';
 export type Priority = 'low' | 'medium' | 'high';
-export type ViewId = 'dashboard' | 'calendar' | 'todos' | 'chores' | 'shopping' | 'recipes' | 'notes' | 'journal' | 'messages' | 'media' | 'settings';
+export type ViewId = 'dashboard' | 'calendar' | 'todos' | 'chores' | 'shopping' | 'recipes' | 'notes' | 'journal' | 'messages' | 'media' | 'themestudio' | 'settings';
 export type SyncStatus = 'local' | 'connecting' | 'live' | 'error' | 'auth';
 export type ChoreCadence = 'daily' | 'weekly' | 'once'; // legacy
 export type ChoreStatus = 'open' | 'pending' | 'done';
@@ -22,6 +22,7 @@ export type RewardKind =
   | 'avatar_flair'
   | 'name_flair'
   | 'picture_frame'
+  | 'theme_studio'
   | 'custom';
 export type RedemptionStatus = 'pending' | 'fulfilled' | 'cancelled';
 /** Simple presence — no GPS. */
@@ -533,6 +534,25 @@ export interface FamilyData {
       nameFlairColor?: string;
       /** Shop unlock: personal dashboard picture-frame card */
       unlockPictureFrame?: boolean;
+      /** Shop unlock: Theme Studio (custom colour themes) */
+      unlockThemeStudio?: boolean;
+      /** Saved custom themes (v1: one slot) */
+      customThemes?: {
+        id: string;
+        name: string;
+        basedOn: ThemeId;
+        tokens: {
+          page: string;
+          elevated: string;
+          accent: string;
+          fg: string;
+          secondary?: string;
+        };
+        createdAt: string;
+        updatedAt: string;
+      }[];
+      /** Active custom theme id — layered on top of `theme` preset */
+      activeCustomThemeId?: string;
       /** Public URL of the framed image (R2 via messages upload) */
       pictureFrameUrl?: string;
       /** Ordered list of dashboard widget ids for this member only. */

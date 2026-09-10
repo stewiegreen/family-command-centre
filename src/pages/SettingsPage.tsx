@@ -614,6 +614,74 @@ export function SettingsPage() {
         </div>
       </Card>
 
+      <Card>
+        <h2 className="font-semibold mb-1">Kids&apos; custom themes</h2>
+        <p className="text-xs text-muted mb-3">
+          Theme Studio unlocks and colour overrides. Restore clears a kid&apos;s active custom
+          theme (preset remains).
+        </p>
+        <div className="space-y-3">
+          {members
+            .filter((m) => m.role === 'kid')
+            .map((m) => {
+              const a = data.appearance?.[m.id];
+              const custom = a?.customThemes?.find((c) => c.id === a?.activeCustomThemeId)
+                || a?.customThemes?.[0];
+              return (
+                <div
+                  key={m.id}
+                  className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-inset px-3 py-2"
+                >
+                  <span className="text-sm font-medium text-fg min-w-[5rem]">{m.name}</span>
+                  {a?.unlockThemeStudio ? (
+                    <span className="text-[11px] text-accent">Studio unlocked</span>
+                  ) : (
+                    <span className="text-[11px] text-muted">No Studio</span>
+                  )}
+                  {custom ? (
+                    <div className="flex items-center gap-1.5">
+                      {(['page', 'elevated', 'accent', 'fg'] as const).map((k) => (
+                        <span
+                          key={k}
+                          className="w-5 h-5 rounded-md border border-border"
+                          style={{ background: custom.tokens[k] }}
+                          title={`${k}: ${custom.tokens[k]}`}
+                        />
+                      ))}
+                      <span className="text-xs text-muted">{custom.name}</span>
+                    </div>
+                  ) : (
+                    <span className="text-xs text-muted">No saved custom theme</span>
+                  )}
+                  {a?.activeCustomThemeId && (
+                    <button
+                      type="button"
+                      className="ml-auto text-xs px-2.5 py-1 rounded-lg border border-border text-muted hover:bg-nav-hover hover:text-fg"
+                      onClick={() => {
+                        update((d) => {
+                          const prev = d.appearance?.[m.id] || {};
+                          return {
+                            ...d,
+                            appearance: {
+                              ...(d.appearance || {}),
+                              [m.id]: {
+                                ...prev,
+                                activeCustomThemeId: undefined,
+                              },
+                            },
+                          };
+                        });
+                      }}
+                    >
+                      Restore default
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+        </div>
+      </Card>
+
       
       <div className="rounded-2xl border border-border bg-surface p-4 space-y-3">
         <h2 className="font-semibold text-fg">Weather location</h2>

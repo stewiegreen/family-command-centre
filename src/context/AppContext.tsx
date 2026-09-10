@@ -24,6 +24,10 @@ import {
   type HomescreenRow,
 } from '../lib/homescreen';
 import {
+  applyCustomThemeToDocument,
+  clearCustomThemeProperties,
+} from '../lib/themeTokens';
+import {
   cloudCreateInvite,
   cloudDeleteMessage,
   cloudJoinWithInvite,
@@ -394,6 +398,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     root.classList.toggle('light', t === 'light');
     root.classList.toggle('neon', t === 'neon');
     root.classList.toggle('spyfamily', t === 'spyfamily');
+
+    // Custom Theme Studio overrides (layered on the preset class above)
+    const appearance = data.appearance?.[uid];
+    const customId = appearance?.activeCustomThemeId;
+    const custom = appearance?.customThemes?.find((c) => c.id === customId);
+    if (custom?.tokens) {
+      applyCustomThemeToDocument(custom.tokens);
+    } else {
+      clearCustomThemeProperties(root);
+    }
   }, [data.settings.theme, data.settings.currentUserId, data.appearance]);
 
   const currentUserRaw = data.members.find((m) => m.id === data.settings.currentUserId);
