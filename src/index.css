@@ -226,9 +226,9 @@ html.neon .bg-accent {
 
 /* Static sage field + soft paper bands — fixed so cards scroll over it */
 html.spyfamily body {
-  background-color: #6b8f7a;
+  background-color: var(--app-page);
   background-image:
-    linear-gradient(165deg, #7a9e88 0%, #6b8f7a 40%, #5a7d6a 100%),
+    linear-gradient(165deg, color-mix(in srgb, var(--app-page) 88%, white) 0%, var(--app-page) 40%, color-mix(in srgb, var(--app-page) 85%, black) 100%),
     repeating-linear-gradient(
       -12deg,
       transparent,
@@ -248,13 +248,14 @@ html.spyfamily :focus-visible {
 /* Glass cards on this theme */
 html.spyfamily .bg-elevated,
 html.spyfamily [class*="bg-elevated"] {
-  background-color: rgba(255, 252, 247, 0.92) !important;
+  /* Use tokens so Theme Studio overrides on --app-elevated actually apply */
+  background-color: var(--app-elevated) !important;
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
 }
 
 html.spyfamily .bg-surface {
-  background-color: rgba(245, 240, 230, 0.90) !important;
+  background-color: var(--app-surface) !important;
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
 }

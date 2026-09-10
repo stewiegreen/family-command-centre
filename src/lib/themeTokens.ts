@@ -24,6 +24,9 @@ const CUSTOM_PROPS = [
 
 export function clearCustomThemeProperties(root: HTMLElement = document.documentElement): void {
   for (const p of CUSTOM_PROPS) root.style.removeProperty(p);
+  // Body may have been forced solid by a custom theme
+  document.body.style.removeProperty('background-image');
+  document.body.style.removeProperty('background-color');
 }
 
 /** Parse #rgb, #rrggbb, #rrggbbaa, rgb(), rgba() → [r,g,b,a] 0–255 / 0–1 */
@@ -164,6 +167,10 @@ export function applyTokenSetToElement(el: HTMLElement, tokens: ThemeTokenSet): 
 
 export function applyCustomThemeToDocument(tokens: ThemeTokenSet): void {
   applyTokenSetToElement(document.documentElement, tokens);
+  // Spy×Family (and similar) hard-code body background-image; force the page
+  // colour so "Page background" in Theme Studio actually shows up.
+  document.body.style.backgroundImage = 'none';
+  document.body.style.backgroundColor = tokens.page;
 }
 
 /** Sensible starting tokens when “start from” a preset (approximate). */

@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties } from 'react';
+import { useMemo, useState } from 'react';
 import { Palette, Lock, Check } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Card } from '../components/ui/Card';
@@ -7,7 +7,6 @@ import { uid } from '../lib/uid';
 import type { ThemeId } from '../types';
 import {
   PRESET_START_TOKENS,
-  applyTokenSetToElement,
   contrastIssues,
   type ThemeTokenSet,
 } from '../lib/themeTokens';
@@ -96,41 +95,6 @@ export function ThemeStudioPage() {
     setTokens({ ...PRESET_START_TOKENS[preset] });
     setMsg('');
   };
-
-  const previewStyle = useMemo(() => {
-    // Build a style object for the scoped preview (same vars Card/Button use)
-    const el = document.createElement('div');
-    applyTokenSetToElement(el, tokens);
-    const style: Record<string, string> = {
-      background: tokens.page,
-      color: tokens.fg,
-      padding: '1rem',
-      borderRadius: '1rem',
-    };
-    for (const prop of [
-      '--app-page',
-      '--app-elevated',
-      '--app-surface',
-      '--app-surface-2',
-      '--app-accent',
-      '--app-accent-hover',
-      '--app-accent-tint',
-      '--app-accent-tint-strong',
-      '--app-accent-ink',
-      '--app-fg',
-      '--app-secondary',
-      '--app-border',
-      '--app-muted',
-    ] as const) {
-      const v = el.style.getPropertyValue(prop);
-      if (v) style[prop] = v;
-    }
-    // Ensure text tokens inside preview resolve
-    style['--app-fg'] = tokens.fg;
-    style['--app-muted'] = tokens.fg;
-    style['--app-border'] = 'rgba(128,128,128,0.25)';
-    return style as CSSProperties;
-  }, [tokens]);
 
   const saveAndApply = () => {
     if (!unlocked || !myId) return;
@@ -229,43 +193,114 @@ export function ThemeStudioPage() {
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
-        {/* Live preview — scoped only */}
+        {/* Live preview — colours forced inline so they always match the pickers */}
         <div>
           <h2 className="text-sm font-semibold text-muted uppercase tracking-wide mb-2">
             Preview
           </h2>
           <div
             className="rounded-2xl border border-border overflow-hidden"
-            style={previewStyle}
+            style={{
+              background: tokens.page,
+              color: tokens.fg,
+              // Scope CSS vars for any child utilities that still read them
+              ...Object.fromEntries(
+                Object.entries({
+                  ['--app-page']: tokens.page,
+                  ['--app-elevated']: tokens.elevated,
+                  ['--app-surface']: tokens.elevated,
+                  ['--app-surface-2']: tokens.elevated,
+                  ['--app-accent']: tokens.accent,
+                  ['--app-accent-hover']: tokens.accent,
+                  ['--app-accent-ink']: undefined as unknown as string,
+                  ['--app-fg']: tokens.fg,
+                  ['--app-secondary']: tokens.secondary || tokens.accent,
+                  ['--app-border']: 'rgba(128,128,128,0.35)',
+                  ['--app-muted']: tokens.fg,
+                }).filter(([, v]) => v != null),
+              ),
+            }}
           >
             <div className="p-4 space-y-3">
               <p className="text-sm font-medium" style={{ color: tokens.fg }}>
                 Sample home card
               </p>
-              <Card className="!shadow-none">
+              {/* Explicit card fill — does not rely on Tailwind/spyfamily !important */}
+              <div
+                className="rounded-2xl border p-4"
+                style={{
+                  background: tokens.elevated,
+                  color: tokens.fg,
+                  borderColor: 'rgba(128,128,128,0.35)',
+                }}
+              >
                 <p className="text-sm font-semibold mb-1" style={{ color: tokens.fg }}>
                   Quest ready
                 </p>
-                <p className="text-xs mb-3 opacity-80" style={{ color: tokens.fg }}>
+                <p className="text-xs mb-3" style={{ color: tokens.fg, opacity: 0.85 }}>
                   This is a real card + button using your colours.
                 </p>
                 <div className="flex flex-wrap gap-2">
-                  <Button type="button" size="sm">
+                  <button
+                    type="button"
+                    className="px-3 py-1.5 text-sm font-medium rounded-xl"
+                    style={{
+                      background: tokens.accent,
+                      color:
+                        // simple ink: light text on dark accent
+                        (() => {
+                          const m = tokens.accent.trim().match(/^#([0-9a-f]{6})$/i);
+                          if (!m) return '#fff';
+                          const n = parseInt(m[1]!, 16);
+                          const r = (n >> 16) & 255;
+                          const g = (n >> 8) & 255;
+                          const b = n & 255;
+                          const lum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+                          return lum > 0.55 ? '#1a1a1a' : '#ffffff';
+                        })(),
+                    }}
+                  >
                     Primary action
-                  </Button>
-                  <Button type="button" size="sm" variant="secondary">
+                  </button>
+                  <button
+                    type="button"
+                    className="px-3 py-1.5 text-sm font-medium rounded-xl border"
+                    style={{
+                      background: tokens.secondary?.trim()
+                        ? tokens.secondary
+                        : 'transparent',
+                      color: tokens.secondary?.trim() ? '#fff' : tokens.fg,
+                      borderColor: tokens.secondary?.trim()
+                        ? tokens.secondary
+                        : 'rgba(128,128,128,0.45)',
+                    }}
+                  >
                     Secondary
-                  </Button>
+                  </button>
                 </div>
-              </Card>
-              <div className="flex gap-2">
-                {(['page', 'elevated', 'accent', 'fg'] as const).map((k) => (
-                  <div
-                    key={k}
-                    className="w-8 h-8 rounded-lg border border-black/10"
-                    style={{ background: tokens[k] }}
-                    title={k}
-                  />
+              </div>
+              <div className="flex flex-wrap gap-3 pt-1">
+                {(
+                  [
+                    ['page', 'Page', tokens.page],
+                    ['elevated', 'Card', tokens.elevated],
+                    ['accent', 'Accent', tokens.accent],
+                    ['fg', 'Text', tokens.fg],
+                    ...(tokens.secondary?.trim()
+                      ? ([['secondary', '2nd', tokens.secondary]] as const)
+                      : []),
+                  ] as const
+                ).map(([k, label, color]) => (
+                  <div key={k} className="flex items-center gap-1.5">
+                    <div
+                      className="w-8 h-8 rounded-lg border border-white/20 shadow-sm"
+                      style={{ background: color }}
+                      title={`${label}: ${color}`}
+                    />
+                    <span className="text-[10px] opacity-80" style={{ color: tokens.fg }}>
+                      {label}
+                    </span>
+                  </div>
                 ))}
               </div>
             </div>
