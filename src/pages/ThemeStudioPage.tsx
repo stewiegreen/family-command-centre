@@ -769,16 +769,35 @@ export function ThemeStudioPage() {
                         <p className="text-xs opacity-85 mb-2">
                           Card + buttons using your colours.
                         </p>
-                        <button
-                          type="button"
-                          className="px-3 py-1.5 text-sm font-medium rounded-xl"
-                          style={{
-                            background: tokens.accent,
-                            color: '#fff',
-                          }}
-                        >
-                          Primary action
-                        </button>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            className="px-3 py-1.5 text-sm font-medium rounded-xl"
+                            style={{
+                              background: tokens.accent,
+                              color: '#fff',
+                            }}
+                          >
+                            Primary action
+                          </button>
+                          <button
+                            type="button"
+                            className="px-3 py-1.5 text-sm font-medium rounded-xl border"
+                            style={{
+                              background: tokens.secondary?.trim()
+                                ? tokens.secondary
+                                : 'transparent',
+                              color: tokens.secondary?.trim()
+                                ? '#1a1a1a'
+                                : tokens.fg,
+                              borderColor: tokens.secondary?.trim()
+                                ? tokens.secondary
+                                : 'rgba(128,128,128,0.45)',
+                            }}
+                          >
+                            Secondary
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>

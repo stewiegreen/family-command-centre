@@ -22,6 +22,7 @@ export type RewardKind =
   | 'avatar_flair'
   | 'name_flair'
   | 'picture_frame'
+  | 'picture_frame_2'
   | 'theme_studio'
   | 'theme_slot'
   | 'theme_accents'
@@ -537,6 +538,8 @@ export interface FamilyData {
       nameFlairColor?: string;
       /** Shop unlock: personal dashboard picture-frame card */
       unlockPictureFrame?: boolean;
+      /** Shop unlock: second picture-frame card */
+      unlockPictureFrame2?: boolean;
       /** Shop unlock: Theme Studio (custom colour themes) */
       unlockThemeStudio?: boolean;
       /** Saved custom themes (v2: multiple slots) */
@@ -573,6 +576,8 @@ export interface FamilyData {
       activeWallpaperId?: string | null;
       /** Public URL of the framed image (R2 via messages upload) */
       pictureFrameUrl?: string;
+      /** Second frame image URL */
+      pictureFrameUrl2?: string;
       /** Ordered list of dashboard widget ids for this member only. */
       /** Ordered list of dashboard widget ids for this member only (legacy). */
       homescreenOrder?: string[];

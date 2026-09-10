@@ -112,6 +112,7 @@ const SECTION_LABELS: Record<SectionId, string> = {
   screentimer: 'Screen timer',
   look: 'Profile look',
   pictureframe: 'Picture frame',
+  pictureframe2: 'Picture frame 2',
 };
 
 const HOME_JOURNAL_MOODS = ['😊', '😌', '😐', '😔', '😤', '🤩', '😴', '🙏'] as const;
@@ -389,10 +390,17 @@ export function Dashboard() {
   const hiddenSet = useMemo(() => new Set(myHiddenWidgets), [myHiddenWidgets]);
   // What actually renders — hidden cards are dropped, but their spot in
   // `rows` (position + pairing) is preserved so unhiding restores it.
-  const visibleRows = useMemo(
-    () => visibleHomescreenRows(rows, myHiddenWidgets),
-    [rows, myHiddenWidgets],
-  );
+  const visibleRows = useMemo(() => {
+    const base = visibleHomescreenRows(rows, myHiddenWidgets);
+    const app = data.appearance?.[myId];
+    // Don't show frame 2 until purchased; frame 1 still shows locked teaser if on layout
+    if (!app?.unlockPictureFrame2) {
+      return base
+        .map((row) => row.filter((id) => id !== 'pictureframe2'))
+        .filter((row) => row.length > 0);
+    }
+    return base;
+  }, [rows, myHiddenWidgets, data.appearance, myId]);
   const [manageOpen, setManageOpen] = useState(false);
   const [viewNote, setViewNote] = useState<Note | null>(null);
 
@@ -1781,7 +1789,12 @@ export function Dashboard() {
     look: <ProfileLookCard />,
     pictureframe: (
       <Card className="!p-2 h-full flex flex-col min-h-[14rem]">
-        <PictureFrameCard />
+        <PictureFrameCard slot={1} />
+      </Card>
+    ),
+    pictureframe2: (
+      <Card className="!p-2 h-full flex flex-col min-h-[14rem]">
+        <PictureFrameCard slot={2} />
       </Card>
     ),
   };
@@ -2031,7 +2044,11 @@ export function Dashboard() {
             Choose which cards show on your homescreen. Hiding a card here doesn't delete anything —
             you can bring it back any time.
           </p>
-          {HOMESCREEN_WIDGETS.map((id) => {
+          {HOMESCREEN_WIDGETS.filter((id) => {
+            if (id === 'pictureframe2' && !data.appearance?.[myId]?.unlockPictureFrame2)
+              return false;
+            return true;
+          }).map((id) => {
             const hidden = hiddenSet.has(id);
             return (
               <button

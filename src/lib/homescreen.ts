@@ -26,6 +26,7 @@ export const HOMESCREEN_WIDGETS = [
   'screentimer',
   'look',
   'pictureframe',
+  'pictureframe2',
 ] as const;
 
 export type HomescreenWidgetId = (typeof HOMESCREEN_WIDGETS)[number];

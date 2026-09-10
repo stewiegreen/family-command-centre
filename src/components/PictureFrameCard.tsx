@@ -1,11 +1,19 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { ImagePlus, Loader2, Pencil, Trash2 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { getFirebaseAuth } from '../lib/firebase';
 import { cn } from '../lib/cn';
+import {
+  resolveHomescreenRows,
+  type HomescreenWidgetId,
+} from '../lib/homescreen';
 
-/** Resize to fit a dashboard card, keep aspect, output JPEG. */
-async function resizeForFrame(file: File, maxW = 720, maxH = 540): Promise<Blob> {
+/** Resize for dashboard: half-row card vs full-width banner. */
+async function resizeForFrame(
+  file: File,
+  maxW: number,
+  maxH: number,
+): Promise<Blob> {
   const bmp = await createImageBitmap(file);
   const scale = Math.min(1, maxW / bmp.width, maxH / bmp.height);
   const w = Math.max(1, Math.round(bmp.width * scale));
@@ -26,12 +34,29 @@ async function resizeForFrame(file: File, maxW = 720, maxH = 540): Promise<Blob>
   });
 }
 
-export function PictureFrameCard() {
+type Slot = 1 | 2;
+
+export function PictureFrameCard({ slot = 1 }: { slot?: Slot }) {
   const { data, update, currentUser, familyId } = useApp();
   const myId = currentUser?.id;
   const app = myId ? data.appearance?.[myId] : undefined;
-  const unlocked = !!app?.unlockPictureFrame;
-  const url = app?.pictureFrameUrl;
+  const unlocked =
+    slot === 1 ? !!app?.unlockPictureFrame : !!app?.unlockPictureFrame2;
+  const url = slot === 1 ? app?.pictureFrameUrl : app?.pictureFrameUrl2;
+  const widgetId: HomescreenWidgetId =
+    slot === 1 ? 'pictureframe' : 'pictureframe2';
+
+  const fullWidth = useMemo(() => {
+    if (!myId) return true;
+    const a = data.appearance?.[myId];
+    const rows = resolveHomescreenRows(
+      a?.homescreenRows,
+      a?.homescreenLayout,
+      a?.homescreenOrder,
+    );
+    return rows.some((row) => row.length === 1 && row[0] === widgetId);
+  }, [data.appearance, myId, widgetId]);
+
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -43,7 +68,9 @@ export function PictureFrameCard() {
       <div className="h-full min-h-[14rem] flex flex-col items-center justify-center gap-2 text-center px-4">
         <ImagePlus className="w-8 h-8 text-muted" />
         <p className="text-sm text-muted">
-          Unlock a picture frame in the ChoreQuest shop to pin a photo here.
+          {slot === 1
+            ? 'Unlock a picture frame in the ChoreQuest shop to pin a photo here.'
+            : 'Unlock a second picture frame in the shop for another photo.'}
         </p>
       </div>
     );
@@ -56,7 +83,12 @@ export function PictureFrameCard() {
         ...d,
         appearance: {
           ...(d.appearance || {}),
-          [myId]: { ...prev, pictureFrameUrl: nextUrl },
+          [myId]: {
+            ...prev,
+            ...(slot === 1
+              ? { pictureFrameUrl: nextUrl }
+              : { pictureFrameUrl2: nextUrl }),
+          },
         },
       };
     });
@@ -71,7 +103,12 @@ export function PictureFrameCard() {
         setErr('Please choose an image file.');
         return;
       }
-      const resized = await resizeForFrame(file);
+      // Banner (full row): keep more resolution; half row: card-sized
+      const resized = await resizeForFrame(
+        file,
+        fullWidth ? 1600 : 720,
+        fullWidth ? 900 : 540,
+      );
       const auth = getFirebaseAuth();
       const user = auth?.currentUser;
       if (!user) {
@@ -80,14 +117,20 @@ export function PictureFrameCard() {
       }
       const idToken = await user.getIdToken();
       const form = new FormData();
-      form.append('photo', new File([resized], 'frame.jpg', { type: 'image/jpeg' }));
+      form.append(
+        'photo',
+        new File([resized], `frame${slot}.jpg`, { type: 'image/jpeg' }),
+      );
       if (familyId) form.append('familyId', familyId);
       const res = await fetch('/api/messages-upload', {
         method: 'POST',
         headers: { Authorization: `Bearer ${idToken}` },
         body: form,
       });
-      const body = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
+      const body = (await res.json().catch(() => ({}))) as {
+        url?: string;
+        error?: string;
+      };
       if (!res.ok || !body.url) {
         setErr(body.error || `Upload failed (${res.status})`);
         return;
@@ -102,7 +145,12 @@ export function PictureFrameCard() {
   };
 
   return (
-    <div className="h-full min-h-[14rem] flex flex-col">
+    <div
+      className={cn(
+        'h-full flex flex-col',
+        fullWidth ? 'min-h-[16rem] sm:min-h-[20rem] lg:min-h-[24rem]' : 'min-h-[14rem]',
+      )}
+    >
       <input
         ref={fileRef}
         type="file"
@@ -113,12 +161,22 @@ export function PictureFrameCard() {
       />
 
       {url ? (
-        <div className="relative flex-1 min-h-[14rem] rounded-2xl overflow-hidden border border-border bg-inset">
-          {/* Fill the paired row height; whole image stays visible */}
+        <div
+          className={cn(
+            'relative flex-1 rounded-2xl overflow-hidden border border-border bg-inset',
+            fullWidth
+              ? 'min-h-[16rem] sm:min-h-[20rem] lg:min-h-[24rem]'
+              : 'min-h-[14rem]',
+          )}
+        >
+          {/* Half-row: fit whole image. Full-row banner: fill width, may crop height. */}
           <img
             src={url}
             alt=""
-            className="absolute inset-0 w-full h-full object-contain"
+            className={cn(
+              'absolute inset-0 w-full h-full',
+              fullWidth ? 'object-cover object-center' : 'object-contain',
+            )}
           />
 
           <div className="absolute top-2 right-2 flex items-center gap-1.5 z-10">
@@ -131,14 +189,19 @@ export function PictureFrameCard() {
                 'bg-black/55 text-white backdrop-blur-sm hover:bg-black/70 disabled:opacity-50',
               )}
             >
-              <Pencil className="w-3 h-3" />
+              {busy ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <Pencil className="w-3 h-3" />
+              )}
               Change
             </button>
             <button
               type="button"
               disabled={busy}
               onClick={() => {
-                if (confirm('Remove this picture from your frame?')) saveUrl(undefined);
+                if (confirm('Remove this picture from your frame?'))
+                  saveUrl(undefined);
               }}
               className={cn(
                 'p-1.5 rounded-lg bg-black/55 text-white backdrop-blur-sm',
@@ -149,12 +212,6 @@ export function PictureFrameCard() {
               <Trash2 className="w-3.5 h-3.5" />
             </button>
           </div>
-
-          {busy && (
-            <div className="absolute inset-0 bg-black/40 flex items-center justify-center z-20">
-              <Loader2 className="w-6 h-6 text-white animate-spin" />
-            </div>
-          )}
         </div>
       ) : (
         <button
@@ -162,21 +219,25 @@ export function PictureFrameCard() {
           disabled={busy}
           onClick={() => fileRef.current?.click()}
           className={cn(
-            'flex-1 min-h-[14rem] w-full rounded-2xl border-2 border-dashed border-border',
+            'flex-1 rounded-2xl border-2 border-dashed border-border',
             'flex flex-col items-center justify-center gap-2 text-muted hover:border-accent/50 hover:text-fg transition-colors',
-            busy && 'opacity-60 pointer-events-none',
+            fullWidth
+              ? 'min-h-[16rem] sm:min-h-[20rem]'
+              : 'min-h-[14rem]',
           )}
         >
           {busy ? (
-            <Loader2 className="w-7 h-7 animate-spin" />
+            <Loader2 className="w-8 h-8 animate-spin" />
           ) : (
-            <ImagePlus className="w-7 h-7" />
+            <ImagePlus className="w-8 h-8" />
           )}
-          <span className="text-xs">{busy ? 'Uploading…' : 'Tap to add a photo'}</span>
+          <span className="text-sm font-medium">
+            {fullWidth ? 'Add a wide banner photo' : 'Add a photo'}
+          </span>
         </button>
       )}
 
-      {err && <p className="text-xs text-warn mt-1">{err}</p>}
+      {err && <p className="text-xs text-red-500 mt-2">{err}</p>}
     </div>
   );
 }

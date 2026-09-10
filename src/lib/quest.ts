@@ -319,6 +319,15 @@ export const DEFAULT_REWARD_CATALOG: RewardItem[] = [
     sort: 42,
   },
   {
+    id: 'picture-frame-2',
+    label: 'Second picture frame',
+    icon: '🖼️',
+    kind: 'picture_frame_2',
+    coinCost: 35,
+    active: true,
+    sort: 42,
+  },
+  {
     id: 'theme-studio',
     label: 'Theme Studio unlock',
     icon: '🎨',
@@ -366,7 +375,7 @@ export function ensureRewardCatalog(existing?: RewardItem[] | null): RewardItem[
   for (const d of DEFAULT_REWARD_CATALOG) {
     if (
       !ids.has(d.id) &&
-      (d.kind === 'avatar_flair' || d.kind === 'name_flair' || d.kind === 'picture_frame' || d.kind === 'theme_studio' || d.kind === 'theme_slot' || d.kind === 'theme_accents' || d.kind === 'theme_wallpapers')
+      (d.kind === 'avatar_flair' || d.kind === 'name_flair' || d.kind === 'picture_frame' || d.kind === 'picture_frame_2' || d.kind === 'theme_studio' || d.kind === 'theme_slot' || d.kind === 'theme_accents' || d.kind === 'theme_wallpapers')
     ) {
       base.push({ ...d });
     }

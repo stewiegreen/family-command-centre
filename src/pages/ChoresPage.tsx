@@ -84,6 +84,7 @@ const KIND_LABEL: Record<RewardKind, string> = {
   avatar_flair: 'Avatar flair',
   name_flair: 'Name flair',
   picture_frame: 'Picture frame',
+  picture_frame_2: 'Second picture frame',
   theme_studio: 'Theme Studio',
   theme_slot: 'Theme slot +1',
   theme_accents: 'Accent packs',
@@ -645,6 +646,13 @@ export function ChoresPage() {
       alert('Unlock Theme Studio first — these are Studio add-ons.');
       return;
     }
+    if (
+      item.kind === 'picture_frame_2' &&
+      !data.appearance?.[myId]?.unlockPictureFrame
+    ) {
+      alert('Unlock your first picture frame before buying a second one.');
+      return;
+    }
 
     const confirmMsg = isGift
       ? `Spend ${item.coinCost} coins on “${item.label}” for ${forName}?`
@@ -678,11 +686,12 @@ export function ChoresPage() {
 
       const isFlair = item.kind === 'avatar_flair' || item.kind === 'name_flair';
       const isPictureFrame = item.kind === 'picture_frame';
+      const isPictureFrame2 = item.kind === 'picture_frame_2';
       const isThemeStudio = item.kind === 'theme_studio';
       const isThemeSlot = item.kind === 'theme_slot';
       const isThemeAccents = item.kind === 'theme_accents';
       const isThemeWallpapers = item.kind === 'theme_wallpapers';
-      const autoDone = isScreen || isFlair || isPictureFrame || isThemeStudio || isThemeSlot || isThemeAccents || isThemeWallpapers;
+      const autoDone = isScreen || isFlair || isPictureFrame || isPictureFrame2 || isThemeStudio || isThemeSlot || isThemeAccents || isThemeWallpapers;
 
       const record: RedemptionRecord = {
         id: redemptionId,
@@ -724,17 +733,18 @@ export function ChoresPage() {
       }
 
       let nextAppearance = d.appearance || {};
-      if (isFlair || isPictureFrame || isThemeStudio || isThemeSlot || isThemeAccents || isThemeWallpapers) {
+      if (isFlair || isPictureFrame || isPictureFrame2 || isThemeStudio || isThemeSlot || isThemeAccents || isThemeWallpapers) {
         const prev = nextAppearance[myId] || {};
         let homescreenRows = prev.homescreenRows;
-        if (isPictureFrame) {
+        if (isPictureFrame || isPictureFrame2) {
           // Pin the frame card onto this member's homescreen if missing
           const docs = Array.isArray(homescreenRows) ? [...homescreenRows] : [];
+          const wid = isPictureFrame2 ? 'pictureframe2' : 'pictureframe';
           const has = docs.some(
-            (row) => Array.isArray(row?.ids) && row.ids.includes('pictureframe'),
+            (row) => Array.isArray(row?.ids) && row.ids.includes(wid),
           );
           if (!has) {
-            docs.push({ ids: ['pictureframe'] });
+            docs.push({ ids: [wid] });
             homescreenRows = docs;
           }
         }
@@ -745,6 +755,7 @@ export function ChoresPage() {
             ...(item.kind === 'avatar_flair' ? { unlockAvatarFlair: true } : {}),
             ...(item.kind === 'name_flair' ? { unlockNameFlair: true } : {}),
             ...(isPictureFrame ? { unlockPictureFrame: true } : {}),
+            ...(isPictureFrame2 ? { unlockPictureFrame2: true } : {}),
             ...(isThemeStudio ? { unlockThemeStudio: true } : {}),
             ...(isThemeSlot
               ? {
@@ -1916,6 +1927,9 @@ export function ChoresPage() {
                         const unlockedFrame =
                           item.kind === 'picture_frame' &&
                           !!data.appearance?.[myId]?.unlockPictureFrame;
+                        const unlockedFrame2 =
+                          item.kind === 'picture_frame_2' &&
+                          !!data.appearance?.[myId]?.unlockPictureFrame2;
                         const unlockedStudio =
                           item.kind === 'theme_studio' &&
                           !!data.appearance?.[myId]?.unlockThemeStudio;
@@ -1939,7 +1953,7 @@ export function ChoresPage() {
                             </Button>
                           );
                         }
-                        if (unlockedFrame) {
+                        if (unlockedFrame || unlockedFrame2) {
                           return (
                             <Button
                               size="sm"
