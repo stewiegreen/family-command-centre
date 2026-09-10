@@ -97,10 +97,7 @@ export function ThemeStudioPage() {
 
   const saveAndApply = () => {
     if (!unlocked || !myId) return;
-    if (issues.length) {
-      setMsg(issues.join(' '));
-      return;
-    }
+    // Contrast is advisory only — preview is the source of truth
     const cleanName = name.trim() || 'My theme';
     const now = new Date().toISOString();
     const slot = appearance.customThemes?.[0];
@@ -367,11 +364,10 @@ export function ThemeStudioPage() {
           />
 
           {issues.length > 0 && (
-            <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-fg">
+            <div className="rounded-xl border border-border bg-inset px-3 py-2 text-sm text-muted">
               {issues.map((i) => (
                 <p key={i}>{i}</p>
               ))}
-              <p className="text-xs text-muted mt-1">Fix contrast before saving.</p>
             </div>
           )}
 
@@ -386,7 +382,6 @@ export function ThemeStudioPage() {
             <Button
               type="button"
               onClick={saveAndApply}
-              disabled={issues.length > 0}
             >
               Save &amp; apply
             </Button>

@@ -105,24 +105,31 @@ export function contrastRatio(a: string, b: string): number | null {
   return (lighter + 0.05) / (darker + 0.05);
 }
 
+/**
+ * Advisory contrast notes only — never used to block save.
+ * Theme Studio trusts the live preview; kids/parents decide readability.
+ */
 export function contrastIssues(tokens: ThemeTokenSet): string[] {
-  const issues: string[] = [];
+  const notes: string[] = [];
   const pageRatio = contrastRatio(tokens.fg, tokens.page);
-  if (pageRatio != null && pageRatio < 4.5) {
-    issues.push(
-      `Text vs background contrast is too low (${pageRatio.toFixed(1)}:1 — need at least 4.5:1).`,
-    );
-  }
   const cardRatio = contrastRatio(tokens.fg, tokens.elevated);
-  if (cardRatio != null && cardRatio < 4.5) {
-    issues.push(
-      `Text vs card contrast is too low (${cardRatio.toFixed(1)}:1 — need at least 4.5:1).`,
+
+  if (pageRatio == null || cardRatio == null) {
+    notes.push('Could not parse a colour — prefer #RRGGBB if something looks off.');
+    return notes;
+  }
+
+  if (cardRatio < 3) {
+    notes.push(
+      `Heads-up: text vs card is ${cardRatio.toFixed(1)}:1 (preview is the source of truth).`,
     );
   }
-  if (pageRatio == null || cardRatio == null) {
-    issues.push('Could not read one of the colours — use #RRGGBB or rgb().');
+  if (pageRatio < 3) {
+    notes.push(
+      `Heads-up: text vs page is ${pageRatio.toFixed(1)}:1 (often fine when text sits on cards).`,
+    );
   }
-  return issues;
+  return notes;
 }
 
 function clampByte(n: number): number {
