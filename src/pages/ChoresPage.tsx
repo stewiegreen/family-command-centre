@@ -127,9 +127,10 @@ export function ChoresPage() {
   const [ratesDraft, setRatesDraft] = useState<ChoreQuestConfig | null>(null);
   const [styleModal, setStyleModal] = useState<'avatar' | 'name' | null>(null);
   const [adjKidId, setAdjKidId] = useState('');
-  const [adjXp, setAdjXp] = useState(0);
-  const [adjCoins, setAdjCoins] = useState(0);
-  const [adjScreen, setAdjScreen] = useState(0);
+  // String state so users can type "-" without the controlled Number() eating it
+  const [adjXp, setAdjXp] = useState('');
+  const [adjCoins, setAdjCoins] = useState('');
+  const [adjScreen, setAdjScreen] = useState('');
   const [adjNote, setAdjNote] = useState('');
   const [adjMsg, setAdjMsg] = useState('');
   const [shopEditOpen, setShopEditOpen] = useState(false);
@@ -2282,33 +2283,46 @@ export function ChoresPage() {
                       <div>
                         <label className="text-xs text-muted mb-1 block">XP delta</label>
                         <input
-                          type="number"
-                          step={1}
+                          type="text"
+                          inputMode="numeric"
+                          pattern="-?[0-9]*"
                           className="w-full rounded-xl border border-border bg-inset px-3 py-2 text-fg text-sm outline-none focus:border-accent"
                           value={adjXp}
-                          onChange={(e) => setAdjXp(Number(e.target.value))}
+                          onChange={(e) => {
+                            const v = e.target.value.trim();
+                            // Allow empty, lone minus, or integer (pos/neg)
+                            if (v === '' || v === '-' || /^-?\d+$/.test(v)) setAdjXp(v);
+                          }}
                           placeholder="e.g. 50 or -20"
                         />
                       </div>
                       <div>
                         <label className="text-xs text-muted mb-1 block">Coins delta</label>
                         <input
-                          type="number"
-                          step={1}
+                          type="text"
+                          inputMode="numeric"
+                          pattern="-?[0-9]*"
                           className="w-full rounded-xl border border-border bg-inset px-3 py-2 text-fg text-sm outline-none focus:border-accent"
                           value={adjCoins}
-                          onChange={(e) => setAdjCoins(Number(e.target.value))}
+                          onChange={(e) => {
+                            const v = e.target.value.trim();
+                            if (v === '' || v === '-' || /^-?\d+$/.test(v)) setAdjCoins(v);
+                          }}
                           placeholder="e.g. 10 or -5"
                         />
                       </div>
                       <div>
                         <label className="text-xs text-muted mb-1 block">Screen minutes delta</label>
                         <input
-                          type="number"
-                          step={1}
+                          type="text"
+                          inputMode="numeric"
+                          pattern="-?[0-9]*"
                           className="w-full rounded-xl border border-border bg-inset px-3 py-2 text-fg text-sm outline-none focus:border-accent"
                           value={adjScreen}
-                          onChange={(e) => setAdjScreen(Number(e.target.value))}
+                          onChange={(e) => {
+                            const v = e.target.value.trim();
+                            if (v === '' || v === '-' || /^-?\d+$/.test(v)) setAdjScreen(v);
+                          }}
                           placeholder="e.g. 15 or -10"
                         />
                       </div>
@@ -2329,12 +2343,12 @@ export function ChoresPage() {
                     ) : null}
 
                     <Button
-                      disabled={!kidId || (adjXp === 0 && adjCoins === 0 && adjScreen === 0)}
+                      disabled={!kidId || (![adjXp, adjCoins, adjScreen].some((s) => s !== '' && s !== '-' && Number(s) !== 0))}
                       onClick={() => {
                         if (!kidId || !me) return;
-                        const xpD = Math.trunc(adjXp);
-                        const coinD = Math.trunc(adjCoins);
-                        const screenD = Math.trunc(adjScreen);
+                        const xpD = Math.trunc(Number(adjXp) || 0);
+                        const coinD = Math.trunc(Number(adjCoins) || 0);
+                        const screenD = Math.trunc(Number(adjScreen) || 0);
                         if (!xpD && !coinD && !screenD) return;
                         const at = new Date().toISOString();
                         const weekId = isoWeekId();
@@ -2404,9 +2418,9 @@ export function ChoresPage() {
                         if (coinD) parts.push(`${coinD > 0 ? '+' : ''}${coinD} coins`);
                         if (screenD) parts.push(`${screenD > 0 ? '+' : ''}${screenD}m screen`);
                         setAdjMsg(`Applied ${parts.join(', ')} to ${getMember(kidId)?.name || 'kid'}.`);
-                        setAdjXp(0);
-                        setAdjCoins(0);
-                        setAdjScreen(0);
+                        setAdjXp('');
+                        setAdjCoins('');
+                        setAdjScreen('');
                         setAdjNote('');
                       }}
                     >

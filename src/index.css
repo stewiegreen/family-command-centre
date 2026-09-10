@@ -181,21 +181,21 @@ html.neon .bg-accent {
 /* Spy×Family — sage field, Anya pink, gold trim, glass cards */
 .spyfamily {
   --app-page: #6b8f7a;
-  --app-surface: rgba(245, 240, 230, 0.55);
-  --app-surface-2: rgba(255, 252, 245, 0.45);
-  --app-surface-3: rgba(232, 220, 200, 0.55);
+  --app-surface: rgba(245, 240, 230, 0.90);
+  --app-surface-2: rgba(255, 252, 245, 0.88);
+  --app-surface-3: rgba(232, 220, 200, 0.90);
   --app-inset: rgba(40, 55, 48, 0.25);
-  --app-elevated: rgba(255, 252, 247, 0.58);
+  --app-elevated: rgba(255, 252, 247, 0.92);
   --app-border: rgba(40, 50, 45, 0.18);
   --app-border-strong: rgba(40, 50, 45, 0.32);
   --app-fg: #1a1c1b;
   --app-fg-secondary: #3d4a42;
   --app-muted: #4a5c52;
   --app-faint: #6a7d72;
-  --app-header: rgba(245, 240, 230, 0.82);
-  --app-sidebar: rgba(255, 252, 247, 0.72);
+  --app-header: rgba(245, 240, 230, 0.94);
+  --app-sidebar: rgba(255, 252, 247, 0.94);
   --app-nav-hover: rgba(255, 255, 255, 0.35);
-  --app-input: rgba(255, 255, 255, 0.75);
+  --app-input: rgba(255, 255, 255, 0.92);
   --app-scrollbar: rgba(40, 50, 45, 0.35);
   --app-hero-from: rgba(255, 182, 193, 0.35);
   --app-hero-via: rgba(212, 175, 55, 0.15);
@@ -248,15 +248,15 @@ html.spyfamily :focus-visible {
 /* Glass cards on this theme */
 html.spyfamily .bg-elevated,
 html.spyfamily [class*="bg-elevated"] {
-  background-color: rgba(255, 252, 247, 0.58) !important;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background-color: rgba(255, 252, 247, 0.92) !important;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 html.spyfamily .bg-surface {
-  background-color: rgba(245, 240, 230, 0.5) !important;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  background-color: rgba(245, 240, 230, 0.90) !important;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
 }
 
 html.spyfamily .bg-accent {
