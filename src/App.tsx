@@ -7,6 +7,7 @@ import { Dashboard } from './pages/Dashboard';
 import { CalendarPage } from './pages/CalendarPage';
 import { TodosPage } from './pages/TodosPage';
 import { ChoresPage } from './pages/ChoresPage';
+import { SchoolPage } from './pages/SchoolPage';
 import { ShoppingPage } from './pages/ShoppingPage';
 import { RecipesPage } from './pages/RecipesPage';
 import { NotesPage } from './pages/NotesPage';
@@ -84,6 +85,7 @@ function AppShell() {
             {view === 'calendar' && <CalendarPage />}
             {view === 'todos' && <TodosPage />}
             {view === 'chores' && <ChoresPage />}
+            {view === 'school' && <SchoolPage />}
             {view === 'shopping' && <ShoppingPage />}
             {view === 'recipes' && <RecipesPage />}
             {view === 'notes' && <NotesPage />}

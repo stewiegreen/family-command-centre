@@ -1,6 +1,6 @@
 export type Role = 'parent' | 'kid' | 'media';
 export type Priority = 'low' | 'medium' | 'high';
-export type ViewId = 'dashboard' | 'calendar' | 'todos' | 'chores' | 'shopping' | 'recipes' | 'notes' | 'journal' | 'messages' | 'media' | 'themestudio' | 'settings';
+export type ViewId = 'dashboard' | 'calendar' | 'todos' | 'chores' | 'school' | 'shopping' | 'recipes' | 'notes' | 'journal' | 'messages' | 'media' | 'themestudio' | 'settings';
 export type SyncStatus = 'local' | 'connecting' | 'live' | 'error' | 'auth';
 export type ChoreCadence = 'daily' | 'weekly' | 'once'; // legacy
 export type ChoreStatus = 'open' | 'pending' | 'done';
@@ -12,7 +12,9 @@ export type CoinReason =
   | 'interest'
   | 'house_inspection'
   | 'redeem'
-  | 'adjust';
+  | 'adjust'
+  | 'study'
+  | 'study_day_bonus';
 export type RewardKind =
   | 'screen_time'
   | 'treat'
@@ -298,6 +300,57 @@ export interface ScreenTimeAlert {
   at: string;
 }
 
+
+/** Homeschool subject (parent-defined). */
+export interface StudySubject {
+  id: string;
+  name: string;
+  /** Optional accent colour for chips. */
+  color?: string;
+  active?: boolean;
+  sort?: number;
+}
+
+export type StudyBlockStatus = 'open' | 'pending' | 'done';
+
+/** One scheduled school work block for a kid on a date. */
+export interface StudyBlock {
+  id: string;
+  kidId: string;
+  /** Local calendar date YYYY-MM-DD. */
+  date: string;
+  title: string;
+  subjectId?: string;
+  /** Optional wall-clock times HH:mm (local). */
+  startTime?: string;
+  endTime?: string;
+  /** Optional duration hint (minutes). */
+  minutes?: number;
+  xp: number;
+  coins: number;
+  status: StudyBlockStatus;
+  /** When true, Done → pending until parent approves. Default false (auto-credit). */
+  requiresApproval?: boolean;
+  submittedAt?: string;
+  submittedById?: string;
+  approvedAt?: string;
+  approvedById?: string;
+  /** Linked calendar event id (auto-managed). */
+  calendarEventId?: string;
+  notes?: string;
+  createdById: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** School rewards / day-bonus knobs. */
+export interface StudyConfig {
+  /** XP granted once when all of a kid's blocks for a day are done. */
+  dayBonusXp?: number;
+  /** Coins granted once when all of a kid's blocks for a day are done. */
+  dayBonusCoins?: number;
+}
+
 /** One ingredient line on a recipe (Phase A — manual). */
 export interface RecipeIngredient {
   id: string;
@@ -513,6 +566,12 @@ export interface FamilyData {
   /** Preferred store-tab order (store names). New stores append. */
   shoppingStoreOrder?: string[];
   notes: Note[];
+  /** Homeschool subjects. */
+  studySubjects?: StudySubject[];
+  /** Homeschool work blocks. */
+  studyBlocks?: StudyBlock[];
+  /** School day-bonus settings. */
+  studyConfig?: StudyConfig | null;
   messages: Message[];
   settings: Settings;
   /** memberId → presence (writable by all members; not on the members array). */
