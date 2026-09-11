@@ -4,6 +4,7 @@ import { Avatar } from './ui/Avatar';
 import { Button } from './ui/Button';
 import { Card } from './ui/Card';
 import { Modal } from './ui/Modal';
+import { Input } from './ui/Input';
 import { EmojiPickerPanel } from './EmojiPicker';
 import { MEMBER_COLORS } from '../lib/defaults';
 import { withAppearance } from '../lib/appearance';
@@ -15,6 +16,13 @@ import {
   rosterPackLabel,
   rosterPortraitPath,
 } from '../lib/rosterAvatars';
+import {
+  AVATAR_FLAIR_COLORS,
+  AVATAR_FLAIR_SHAPES,
+  NAME_FLAIR_MAX,
+  nameFlairLabel,
+  sanitizeNameFlair,
+} from '../lib/flair';
 
 type Mode = 'emoji' | 'portrait';
 
@@ -25,9 +33,17 @@ function LookEditorBody({
   portraitId,
   flairShape,
   flairColor,
+  nameFlairText,
+  nameFlairColor,
+  unlockAvatarFlair,
+  unlockNameFlair,
   onEmoji,
   onColor,
   onPortrait,
+  onFlairShape,
+  onFlairColor,
+  onNameFlairText,
+  onNameFlairColor,
   mode,
   setMode,
   pack,
@@ -39,9 +55,17 @@ function LookEditorBody({
   portraitId: string | null;
   flairShape?: string;
   flairColor?: string;
+  nameFlairText: string;
+  nameFlairColor: string;
+  unlockAvatarFlair: boolean;
+  unlockNameFlair: boolean;
   onEmoji: (e: string) => void;
   onColor: (c: string) => void;
   onPortrait: (id: string | null) => void;
+  onFlairShape: (s: string) => void;
+  onFlairColor: (c: string) => void;
+  onNameFlairText: (t: string) => void;
+  onNameFlairColor: (c: string) => void;
   mode: Mode;
   setMode: (m: Mode) => void;
   pack: number;
@@ -49,7 +73,7 @@ function LookEditorBody({
 }) {
   return (
     <div className="space-y-4">
-      <div className="flex justify-center">
+      <div className="flex flex-col items-center gap-1">
         <Avatar
           name={name}
           emoji={emoji}
@@ -60,6 +84,15 @@ function LookEditorBody({
           size="lg"
           className="!w-24 !h-24 !text-5xl"
         />
+        <p className="text-sm font-semibold text-fg">{name}</p>
+        {nameFlairLabel(nameFlairText) ? (
+          <p
+            className={cn('text-xs font-medium', !nameFlairColor && 'text-accent')}
+            style={nameFlairColor ? { color: nameFlairColor } : undefined}
+          >
+            {nameFlairLabel(nameFlairText)}
+          </p>
+        ) : null}
       </div>
 
       <div className="flex rounded-xl border border-border-strong overflow-hidden">
@@ -141,7 +174,7 @@ function LookEditorBody({
               </button>
             ))}
           </div>
-          <div className="grid grid-cols-5 sm:grid-cols-5 gap-2 max-h-64 overflow-y-auto p-0.5">
+          <div className="grid grid-cols-5 gap-2 max-h-64 overflow-y-auto p-0.5">
             {rosterIdsForPack(pack).map((id) => {
               const selected = portraitId === id;
               return (
@@ -177,6 +210,107 @@ function LookEditorBody({
           )}
         </div>
       )}
+
+      {/* Avatar flair — unlocked via ChoreQuest shop */}
+      {unlockAvatarFlair ? (
+        <div className="space-y-2 pt-2 border-t border-border">
+          <p className="text-sm font-semibold text-fg">Avatar flair</p>
+          <p className="text-xs text-muted">Shape and glow ring around your face.</p>
+          <div className="flex flex-wrap gap-2">
+            {AVATAR_FLAIR_SHAPES.map((s) => {
+              const active = (flairShape || 'circle') === s.id;
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => onFlairShape(s.id)}
+                  className={cn(
+                    'px-3 py-1.5 rounded-xl text-sm border',
+                    active
+                      ? 'border-accent bg-accent/15 text-accent'
+                      : 'border-border text-muted hover:border-accent/40',
+                  )}
+                >
+                  <span className="mr-1">{s.preview}</span>
+                  {s.label}
+                </button>
+              );
+            })}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {AVATAR_FLAIR_COLORS.map((c) => {
+              const active = (flairColor || '') === (c.hex || '');
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => onFlairColor(c.hex || '')}
+                  className={cn(
+                    'w-8 h-8 rounded-full border-2',
+                    active ? 'border-fg scale-110 ring-2 ring-fg/30' : 'border-transparent',
+                    !c.hex && 'bg-inset text-[10px] text-muted',
+                  )}
+                  style={c.hex ? { backgroundColor: c.hex } : undefined}
+                  title={c.label}
+                >
+                  {!c.hex ? 'Off' : null}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        <p className="text-xs text-muted border-t border-border pt-2">
+          Unlock <span className="font-medium text-fg">Avatar flair</span> in the ChoreQuest shop
+          for frame shapes and glow colours.
+        </p>
+      )}
+
+      {/* Name flair */}
+      {unlockNameFlair ? (
+        <div className="space-y-2 pt-2 border-t border-border">
+          <p className="text-sm font-semibold text-fg">Name flair</p>
+          <p className="text-xs text-muted">
+            A short title under your real name (max {NAME_FLAIR_MAX} characters). Does not change
+            your profile name.
+          </p>
+          <Input
+            value={nameFlairText}
+            maxLength={NAME_FLAIR_MAX}
+            placeholder="e.g. Pirate King"
+            onChange={(e) => onNameFlairText(sanitizeNameFlair(e.target.value))}
+          />
+          <p className="text-[11px] text-faint text-right">
+            {nameFlairText.length}/{NAME_FLAIR_MAX}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {AVATAR_FLAIR_COLORS.map((c) => {
+              const active = (nameFlairColor || '') === (c.hex || '');
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => onNameFlairColor(c.hex || '')}
+                  className={cn(
+                    'w-8 h-8 rounded-full border-2',
+                    active ? 'border-fg scale-110 ring-2 ring-fg/30' : 'border-transparent',
+                    !c.hex && 'bg-inset text-[10px] text-muted',
+                  )}
+                  style={c.hex ? { backgroundColor: c.hex } : undefined}
+                  title={c.label}
+                >
+                  {!c.hex ? 'Off' : null}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        <p className="text-xs text-muted border-t border-border pt-2">
+          Unlock <span className="font-medium text-fg">Name flair</span> in the ChoreQuest shop for a
+          custom title under your name.
+        </p>
+      )}
     </div>
   );
 }
@@ -184,16 +318,22 @@ function LookEditorBody({
 function useLookEditorState() {
   const { data, update, currentUser } = useApp();
   const look = currentUser ? withAppearance(currentUser, data) : null;
+  const app = currentUser ? data.appearance?.[currentUser.id] : undefined;
   const [open, setOpen] = useState(false);
   const [emoji, setEmoji] = useState('😀');
   const [color, setColor] = useState('#6366f1');
   const [portraitId, setPortraitId] = useState<string | null>(null);
+  const [flairShape, setFlairShape] = useState('circle');
+  const [flairColor, setFlairColor] = useState('');
+  const [nameFlairText, setNameFlairText] = useState('');
+  const [nameFlairColor, setNameFlairColor] = useState('');
   const [mode, setMode] = useState<Mode>('emoji');
   const [pack, setPack] = useState(1);
 
   const openEditor = () => {
     if (!currentUser) return;
     const l = withAppearance(currentUser, data);
+    const a = data.appearance?.[currentUser.id];
     setEmoji(l.emoji || '😀');
     setColor(l.color || '#6366f1');
     const pid = l.avatarPortraitId || null;
@@ -202,6 +342,10 @@ function useLookEditorState() {
     if (pid && /^\d{2}_/.test(pid)) {
       setPack(Math.max(1, parseInt(pid.slice(0, 2), 10) || 1));
     }
+    setFlairShape(a?.avatarFlairShape || l.avatarFlairShape || 'circle');
+    setFlairColor(a?.avatarFlairColor || l.avatarFlairColor || '');
+    setNameFlairText(a?.nameFlairText || l.nameFlairText || '');
+    setNameFlairColor(a?.nameFlairColor || l.nameFlairColor || '');
     setOpen(true);
   };
 
@@ -217,8 +361,11 @@ function useLookEditorState() {
             ...prev,
             emoji,
             color,
-            // empty string clears in UI; store null to mean none
             avatarPortraitId: portraitId || null,
+            avatarFlairShape: flairShape || 'circle',
+            avatarFlairColor: flairColor || undefined,
+            nameFlairText: nameFlairText.trim() || undefined,
+            nameFlairColor: nameFlairColor || undefined,
           },
         },
       };
@@ -229,6 +376,8 @@ function useLookEditorState() {
   return {
     currentUser,
     look,
+    unlockAvatarFlair: !!app?.unlockAvatarFlair,
+    unlockNameFlair: !!app?.unlockNameFlair,
     open,
     setOpen,
     emoji,
@@ -237,6 +386,14 @@ function useLookEditorState() {
     setColor,
     portraitId,
     setPortraitId,
+    flairShape,
+    setFlairShape,
+    flairColor,
+    setFlairColor,
+    nameFlairText,
+    setNameFlairText,
+    nameFlairColor,
+    setNameFlairColor,
     mode,
     setMode,
     pack,
@@ -244,6 +401,40 @@ function useLookEditorState() {
     openEditor,
     save,
   };
+}
+
+function EditorModal({ s }: { s: ReturnType<typeof useLookEditorState> }) {
+  if (!s.currentUser || !s.look) return null;
+  return (
+    <Modal open={s.open} onClose={() => s.setOpen(false)} title="Your look" wide>
+      <LookEditorBody
+        name={s.currentUser.name}
+        emoji={s.emoji}
+        color={s.color}
+        portraitId={s.portraitId}
+        flairShape={s.flairShape}
+        flairColor={s.flairColor}
+        nameFlairText={s.nameFlairText}
+        nameFlairColor={s.nameFlairColor}
+        unlockAvatarFlair={s.unlockAvatarFlair}
+        unlockNameFlair={s.unlockNameFlair}
+        onEmoji={s.setEmoji}
+        onColor={s.setColor}
+        onPortrait={s.setPortraitId}
+        onFlairShape={s.setFlairShape}
+        onFlairColor={s.setFlairColor}
+        onNameFlairText={s.setNameFlairText}
+        onNameFlairColor={s.setNameFlairColor}
+        mode={s.mode}
+        setMode={s.setMode}
+        pack={s.pack}
+        setPack={s.setPack}
+      />
+      <Button className="w-full mt-4" onClick={s.save}>
+        Save look
+      </Button>
+    </Modal>
+  );
 }
 
 export function ProfileLookEditor() {
@@ -267,27 +458,7 @@ export function ProfileLookEditor() {
           Edit look
         </span>
       </button>
-
-      <Modal open={s.open} onClose={() => s.setOpen(false)} title="Your look" wide>
-        <LookEditorBody
-          name={s.currentUser.name}
-          emoji={s.emoji}
-          color={s.color}
-          portraitId={s.portraitId}
-          flairShape={s.look.avatarFlairShape}
-          flairColor={s.look.avatarFlairColor}
-          onEmoji={s.setEmoji}
-          onColor={s.setColor}
-          onPortrait={s.setPortraitId}
-          mode={s.mode}
-          setMode={s.setMode}
-          pack={s.pack}
-          setPack={s.setPack}
-        />
-        <Button className="w-full mt-4" onClick={s.save}>
-          Save look
-        </Button>
-      </Modal>
+      <EditorModal s={s} />
     </>
   );
 }
@@ -303,7 +474,10 @@ export function ProfileLookCard() {
         <div className="flex items-center justify-between gap-3 mb-3">
           <div>
             <h2 className="font-semibold text-fg text-sm">Your look</h2>
-            <p className="text-xs text-muted">Emoji or portrait — flair still applies.</p>
+            <p className="text-xs text-muted">
+              Emoji, portrait
+              {s.unlockAvatarFlair || s.unlockNameFlair ? ', and flair' : ''}
+            </p>
           </div>
           <Avatar {...s.look} size="md" className="!text-2xl" />
         </div>
@@ -325,27 +499,7 @@ export function ProfileLookCard() {
           <span className="text-sm text-muted">Tap to change look</span>
         </button>
       </Card>
-
-      <Modal open={s.open} onClose={() => s.setOpen(false)} title="Your look" wide>
-        <LookEditorBody
-          name={s.currentUser.name}
-          emoji={s.emoji}
-          color={s.color}
-          portraitId={s.portraitId}
-          flairShape={s.look.avatarFlairShape}
-          flairColor={s.look.avatarFlairColor}
-          onEmoji={s.setEmoji}
-          onColor={s.setColor}
-          onPortrait={s.setPortraitId}
-          mode={s.mode}
-          setMode={s.setMode}
-          pack={s.pack}
-          setPack={s.setPack}
-        />
-        <Button className="w-full mt-4" onClick={s.save}>
-          Save look
-        </Button>
-      </Modal>
+      <EditorModal s={s} />
     </>
   );
 }
