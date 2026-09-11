@@ -89,6 +89,8 @@ export interface CalendarEvent {
   exceptionDates?: string[];
   location?: string;
   notes?: string;
+  /** Optional link to a Notes entry (packing list, prep checklist, etc.). */
+  linkedNoteId?: string;
 }
 
 /** Virtual instance produced by expanding a recurring master event. */

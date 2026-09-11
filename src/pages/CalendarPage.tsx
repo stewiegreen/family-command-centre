@@ -118,6 +118,39 @@ function primaryMemberColor(
   return memberColor(ids[0] || ev.memberId);
 }
 
+/** Chip background: single colour, or stripe when multiple people share the event. */
+function eventChipStyle(
+  ev: { memberId: string; memberIds?: string[] },
+  memberColor: (id: string) => string,
+  opts?: { alpha?: string },
+): import("react").CSSProperties {
+  const alpha = opts?.alpha ?? '55';
+  const ids = eventMemberIds(ev);
+  const colors = (ids.length ? ids : [ev.memberId]).map((id) => memberColor(id || ''));
+  const primary = colors[0] || '#6366f1';
+  if (colors.length <= 1) {
+    return {
+      backgroundColor: primary + alpha,
+      color: primary,
+      borderLeft: `4px solid ${primary}`,
+    };
+  }
+  // Up to 3 colour bands so multi-kid events read at a glance
+  const band = colors.slice(0, 3);
+  const stops = band
+    .map((c, i) => {
+      const a = (i / band.length) * 100;
+      const b = ((i + 1) / band.length) * 100;
+      return `${c}${alpha} ${a}%, ${c}${alpha} ${b}%`;
+    })
+    .join(', ');
+  return {
+    backgroundImage: `linear-gradient(90deg, ${stops})`,
+    color: primary,
+    borderLeft: `4px solid ${primary}`,
+  };
+}
+
 type FormState = {
   title: string;
   allDay: boolean;
@@ -130,6 +163,7 @@ type FormState = {
   recurrenceUntil: string;
   location: string;
   notes: string;
+  linkedNoteId: string;
 };
 
 function emptyForm(memberId: string, day?: Date): FormState {
@@ -146,11 +180,12 @@ function emptyForm(memberId: string, day?: Date): FormState {
     recurrenceUntil: '',
     location: '',
     notes: '',
+    linkedNoteId: '',
   };
 }
 
 export function CalendarPage() {
-  const { data, update, currentUser, getMember } = useApp();
+  const { data, update, currentUser, getMember, setView } = useApp();
   const [cursor, setCursor] = useState(new Date());
   const [view, setViewState] = useState<CalView>(loadView);
   const [showTasks, setShowTasksState] = useState(loadShowTasks);
@@ -470,6 +505,7 @@ export function CalendarPage() {
           : undefined,
       location: form.location.trim() || undefined,
       notes: form.notes.trim() || undefined,
+      linkedNoteId: form.linkedNoteId.trim() || undefined,
     };
 
     // Editing one instance of a recurring series → exception + new one-off
@@ -975,6 +1011,115 @@ export function CalendarPage() {
               rows={2}
             />
           </div>
+
+          <div>
+            <label className="text-xs text-muted mb-1 block">Linked note (packing / prep)</label>
+            <select
+              value={form.linkedNoteId}
+              onChange={(e) => setForm((f) => ({ ...f, linkedNoteId: e.target.value }))}
+              className="w-full bg-surface border border-border-strong rounded-xl px-3 py-2.5 text-sm"
+            >
+              <option value="">None</option>
+              {data.notes.map((n) => (
+                <option key={n.id} value={n.id}>
+                  {n.kind === 'checklist' ? '☑ ' : ''}
+                  {n.title || 'Untitled note'}
+                </option>
+              ))}
+            </select>
+            <div className="flex flex-wrap gap-2 mt-2">
+              <button
+                type="button"
+                className="text-xs text-accent hover:underline"
+                onClick={() => {
+                  if (!form.title.trim()) {
+                    alert('Add an event title first — it becomes the note title.');
+                    return;
+                  }
+                  const noteId = uid();
+                  const now = new Date().toISOString();
+                  update((d) => ({
+                    ...d,
+                    notes: [
+                      {
+                        id: noteId,
+                        title: `Pack: ${form.title.trim()}`,
+                        content: '',
+                        tags: ['packing', 'calendar'],
+                        pinned: false,
+                        kind: 'checklist',
+                        checklist: [
+                          { id: uid(), text: 'Bag / kit', done: false },
+                          { id: uid(), text: 'Water bottle', done: false },
+                          { id: uid(), text: 'Anything else…', done: false },
+                        ],
+                        authorId: data.settings.currentUserId,
+                        createdAt: now,
+                        updatedAt: now,
+                      },
+                      ...d.notes,
+                    ],
+                  }));
+                  setForm((f) => ({ ...f, linkedNoteId: noteId }));
+                }}
+              >
+                + Create packing checklist
+              </button>
+              {form.linkedNoteId && (
+                <button
+                  type="button"
+                  className="text-xs text-muted hover:text-fg underline"
+                  onClick={() => {
+                    // Jump to Notes; selection is by linked id stored on event after save
+                    setView?.('notes');
+                  }}
+                >
+                  Open in Notes
+                </button>
+              )}
+            </div>
+            {form.linkedNoteId && (() => {
+              const note = data.notes.find((n) => n.id === form.linkedNoteId);
+              if (!note || note.kind !== 'checklist' || !note.checklist?.length) return null;
+              return (
+                <ul className="mt-2 space-y-1 rounded-xl border border-border bg-inset/40 p-2">
+                  {note.checklist.map((item) => (
+                    <li key={item.id}>
+                      <label className="flex items-center gap-2 text-sm text-fg cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={!!item.done}
+                          onChange={() => {
+                            update((d) => ({
+                              ...d,
+                              notes: d.notes.map((n) =>
+                                n.id !== note.id
+                                  ? n
+                                  : {
+                                      ...n,
+                                      checklist: (n.checklist || []).map((c) =>
+                                        c.id === item.id ? { ...c, done: !c.done } : c,
+                                      ),
+                                      updatedAt: new Date().toISOString(),
+                                    },
+                              ),
+                            }));
+                          }}
+                        />
+                        <span className={item.done ? 'line-through text-muted' : ''}>
+                          {item.text}
+                        </span>
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              );
+            })()}
+            <p className="text-[11px] text-faint mt-1">
+              Link a note for packing lists or prep — checklist items can be ticked here.
+            </p>
+          </div>
+
           <div>
             <label className="text-xs text-muted mb-1 block">Repeat</label>
             <select
@@ -1258,11 +1403,7 @@ function MonthWeekRow({
                         onEventClick(ev);
                       }}
                       className="text-xs sm:text-[13px] truncate px-1.5 py-1 rounded-md flex items-center gap-1 leading-snug cursor-grab active:cursor-grabbing font-medium"
-                      style={{
-                        backgroundColor: col + '48',
-                        color: col,
-                        borderLeft: `4px solid ${col}`,
-                      }}
+                      style={eventChipStyle(ev, memberColor, { alpha: '48' })}
                       title={(names ? names + ': ' : '') + formatEventTimeLabel(ev) + ev.title}
                     >
                       {emojis && (
@@ -1271,6 +1412,7 @@ function MonthWeekRow({
                       <span className="truncate">
                         {formatEventTimeLabel(ev)}
                         {ev.title}
+                        {ev.linkedNoteId ? ' 📎' : ''}
                         {ev.recurrence && ev.recurrence !== 'none' ? ' ↻' : ''}
                       </span>
                     </div>
@@ -1328,9 +1470,7 @@ function MonthWeekRow({
               width: `calc(${((endCol - startCol) / 7) * 100}% - 4px)`,
               top: 28 + row * 22,
               height: 20,
-              backgroundColor: col + '60',
-              color: col,
-              borderLeft: `4px solid ${col}`,
+              ...eventChipStyle(ev, memberColor, { alpha: '60' }),
             }}
             onClick={(e) => {
               e.stopPropagation();
@@ -1680,9 +1820,7 @@ function TimeGridView({
                       onClick={() => onEventClick(ev)}
                       className="w-full text-left text-sm truncate px-2 py-1.5 rounded-md min-h-[32px] font-medium"
                       style={{
-                        backgroundColor: col + '48',
-                        color: col,
-                        borderLeft: `4px solid ${col}`,
+                        ...eventChipStyle(ev, memberColor, { alpha: '48' }),
                       }}
                       title={ev.title}
                     >
@@ -1807,9 +1945,7 @@ function TimeGridView({
                           height,
                           left: `calc(${leftPct}% + 2px)`,
                           width: `calc(${widthPct}% - 4px)`,
-                          backgroundColor: col + '60',
-                          color: col,
-                          borderLeft: `4px solid ${col}`,
+                          ...eventChipStyle(ev, memberColor, { alpha: '60' }),
                         }}
                         onPointerDown={(pe) => startMove(ev, di, pe)}
                       >
@@ -1828,6 +1964,7 @@ function TimeGridView({
                           <div className="font-semibold truncate leading-snug text-sm">
                             {emojis ? `${emojis} ` : ''}
                             {ev.title}
+                            {ev.linkedNoteId ? ' 📎' : ''}
                           </div>
                           {height > 30 && (
                             <div className="text-[11px] opacity-90 truncate font-medium">
