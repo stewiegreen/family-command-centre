@@ -17,6 +17,14 @@ import {
   rosterPortraitPath,
 } from '../lib/rosterAvatars';
 import {
+  COBRA_ROW_COUNT,
+  cobraIdsForPack,
+  cobraPackLabel,
+  cobraPortraitPath,
+  isCobraPortraitId,
+} from '../lib/cobraAvatars';
+import { isAnyPortraitId, portraitSrc } from '../lib/portraitPath';
+import {
   AVATAR_FLAIR_COLORS,
   AVATAR_FLAIR_SHAPES,
   NAME_FLAIR_MAX,
@@ -48,6 +56,8 @@ function LookEditorBody({
   setMode,
   pack,
   setPack,
+  portraitLib,
+  setPortraitLib,
 }: {
   name: string;
   emoji: string;
@@ -70,6 +80,8 @@ function LookEditorBody({
   setMode: (m: Mode) => void;
   pack: number;
   setPack: (p: number) => void;
+  portraitLib: 'roster' | 'cobra';
+  setPortraitLib: (l: 'roster' | 'cobra') => void;
 }) {
   return (
     <div className="space-y-4">
@@ -154,52 +166,102 @@ function LookEditorBody({
         </>
       ) : (
         <div className="space-y-3">
+          <div className="flex rounded-xl border border-border overflow-hidden">
+            <button
+              type="button"
+              className={cn(
+                'flex-1 py-1.5 text-xs font-medium',
+                portraitLib === 'roster' ? 'bg-accent text-accent-ink' : 'bg-surface-2 text-muted',
+              )}
+              onClick={() => {
+                setPortraitLib('roster');
+                setPack(1);
+              }}
+            >
+              Roster
+            </button>
+            <button
+              type="button"
+              className={cn(
+                'flex-1 py-1.5 text-xs font-medium',
+                portraitLib === 'cobra' ? 'bg-accent text-accent-ink' : 'bg-surface-2 text-muted',
+              )}
+              onClick={() => {
+                setPortraitLib('cobra');
+                setPack(1);
+              }}
+            >
+              Cobra
+            </button>
+          </div>
           <p className="text-xs text-muted">
-            200 roster faces in 10 sets — works with avatar flair borders.
+            {portraitLib === 'cobra'
+              ? '182 Cobra / G.I. Joe heads — works with avatar flair borders.'
+              : '200 roster faces in 10 sets — works with avatar flair borders.'}
           </p>
           <div className="flex flex-wrap gap-1.5">
-            {Array.from({ length: ROSTER_PACK_COUNT }, (_, i) => i + 1).map((p) => (
-              <button
-                key={p}
-                type="button"
-                onClick={() => setPack(p)}
-                className={cn(
-                  'px-2.5 py-1 rounded-lg text-xs font-medium border',
-                  pack === p
-                    ? 'border-accent bg-accent/15 text-accent'
-                    : 'border-border text-muted hover:border-accent/40',
-                )}
-              >
-                {rosterPackLabel(p)}
-              </button>
-            ))}
+            {portraitLib === 'roster'
+              ? Array.from({ length: ROSTER_PACK_COUNT }, (_, i) => i + 1).map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => setPack(p)}
+                    className={cn(
+                      'px-2.5 py-1 rounded-lg text-xs font-medium border',
+                      pack === p
+                        ? 'border-accent bg-accent/15 text-accent'
+                        : 'border-border text-muted hover:border-accent/40',
+                    )}
+                  >
+                    {rosterPackLabel(p)}
+                  </button>
+                ))
+              : Array.from({ length: COBRA_ROW_COUNT }, (_, i) => i + 1).map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => setPack(p)}
+                    className={cn(
+                      'px-2.5 py-1 rounded-lg text-xs font-medium border',
+                      pack === p
+                        ? 'border-accent bg-accent/15 text-accent'
+                        : 'border-border text-muted hover:border-accent/40',
+                    )}
+                  >
+                    {cobraPackLabel(p)}
+                  </button>
+                ))}
           </div>
           <div className="grid grid-cols-5 gap-2 max-h-64 overflow-y-auto p-0.5">
-            {rosterIdsForPack(pack).map((id) => {
-              const selected = portraitId === id;
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => onPortrait(id)}
-                  className={cn(
-                    'aspect-square rounded-xl overflow-hidden border-2 transition-transform',
-                    selected
-                      ? 'border-accent ring-2 ring-accent/40 scale-[1.03]'
-                      : 'border-border hover:border-accent/50',
-                  )}
-                >
-                  <img
-                    src={rosterPortraitPath(id)}
-                    alt=""
-                    className="w-full h-full object-cover"
-                    draggable={false}
-                  />
-                </button>
-              );
-            })}
+            {(portraitLib === 'roster' ? rosterIdsForPack(pack) : cobraIdsForPack(pack)).map(
+              (id) => {
+                const selected = portraitId === id;
+                const src =
+                  portraitLib === 'roster' ? rosterPortraitPath(id) : cobraPortraitPath(id);
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => onPortrait(id)}
+                    className={cn(
+                      'aspect-square rounded-xl overflow-hidden border-2 transition-transform bg-white',
+                      selected
+                        ? 'border-accent ring-2 ring-accent/40 scale-[1.03]'
+                        : 'border-border hover:border-accent/50',
+                    )}
+                  >
+                    <img
+                      src={src}
+                      alt=""
+                      className="w-full h-full object-cover"
+                      draggable={false}
+                    />
+                  </button>
+                );
+              },
+            )}
           </div>
-          {isRosterPortraitId(portraitId) && (
+          {isAnyPortraitId(portraitId) && (
             <button
               type="button"
               className="text-xs text-muted hover:text-fg underline"
@@ -329,6 +391,7 @@ function useLookEditorState() {
   const [nameFlairColor, setNameFlairColor] = useState('');
   const [mode, setMode] = useState<Mode>('emoji');
   const [pack, setPack] = useState(1);
+  const [portraitLib, setPortraitLib] = useState<'roster' | 'cobra'>('roster');
 
   const openEditor = () => {
     if (!currentUser) return;
@@ -339,7 +402,12 @@ function useLookEditorState() {
     const pid = l.avatarPortraitId || null;
     setPortraitId(pid);
     setMode(pid ? 'portrait' : 'emoji');
-    if (pid && /^\d{2}_/.test(pid)) {
+    if (isCobraPortraitId(pid)) {
+      setPortraitLib('cobra');
+      const m = /^cobra_(\d{2})_/.exec(pid!);
+      setPack(Math.max(1, m ? parseInt(m[1], 10) : 1));
+    } else if (pid && /^\d{2}_/.test(pid)) {
+      setPortraitLib('roster');
       setPack(Math.max(1, parseInt(pid.slice(0, 2), 10) || 1));
     }
     setFlairShape(a?.avatarFlairShape || l.avatarFlairShape || 'circle');
@@ -398,6 +466,8 @@ function useLookEditorState() {
     setMode,
     pack,
     setPack,
+    portraitLib,
+    setPortraitLib,
     openEditor,
     save,
   };
@@ -429,6 +499,8 @@ function EditorModal({ s }: { s: ReturnType<typeof useLookEditorState> }) {
         setMode={s.setMode}
         pack={s.pack}
         setPack={s.setPack}
+        portraitLib={s.portraitLib}
+        setPortraitLib={s.setPortraitLib}
       />
       <Button className="w-full mt-4" onClick={s.save}>
         Save look
@@ -487,9 +559,9 @@ export function ProfileLookCard() {
           onClick={s.openEditor}
           className="w-full flex items-center justify-center gap-3 py-3 rounded-xl border border-border bg-inset hover:bg-nav-hover transition-colors"
         >
-          {isRosterPortraitId(s.look.avatarPortraitId) ? (
+          {portraitSrc(s.look.avatarPortraitId) ? (
             <img
-              src={rosterPortraitPath(s.look.avatarPortraitId!)}
+              src={portraitSrc(s.look.avatarPortraitId)!}
               alt=""
               className="w-10 h-10 rounded-full object-cover"
             />
