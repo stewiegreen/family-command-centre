@@ -1,6 +1,6 @@
 /**
  * Built-in roster portrait avatars (200 squares).
- * Files: /avatars/roster/portrait_{pack}_{idx}.png
+ * Files: /avatars/portrait_{pack}_{idx}.png  (public/avatars/)
  * 10 packs × 20 faces for browsing without a 200-tile wall.
  */
 
@@ -8,7 +8,7 @@ export const ROSTER_PACK_SIZE = 20;
 export const ROSTER_PACK_COUNT = 10;
 
 export function rosterPortraitPath(id: string): string {
-  return `/avatars/roster/portrait_${id}.png`;
+  return `/avatars/portrait_${id}.png`;
 }
 
 export function rosterPackLabel(pack: number): string {
