@@ -53,6 +53,8 @@ export interface Member {
   name: string;
   color: string;
   emoji?: string;
+  /** Built-in roster portrait id (e.g. "03_12"). */
+  avatarPortraitId?: string | null;
   initials: string;
   role: Role;
   /** Optional 4–6 digit unlock PIN for this profile (client-gated). */
@@ -640,6 +642,8 @@ export interface FamilyData {
     string,
     {
       emoji?: string;
+      /** Roster portrait id; when set, Avatar shows the image (flair still applies). */
+      avatarPortraitId?: string | null;
       color?: string;
       theme?: ThemeId;
       /** Permanent shop unlocks */

@@ -1,6 +1,6 @@
 import type { FamilyData, Member } from '../types';
 
-/** Resolve display emoji/color (appearance override wins). */
+/** Resolve display emoji/color/portrait (appearance override wins). */
 export function withAppearance(member: Member, data: Pick<FamilyData, 'appearance'>): Member {
   const a = data.appearance?.[member.id];
   if (!a) return member;
@@ -8,6 +8,13 @@ export function withAppearance(member: Member, data: Pick<FamilyData, 'appearanc
     ...member,
     emoji: a.emoji ?? member.emoji,
     color: a.color ?? member.color,
+    avatarPortraitId:
+      a.avatarPortraitId !== undefined ? a.avatarPortraitId : member.avatarPortraitId,
+    avatarFlairId: a.avatarFlairId ?? member.avatarFlairId,
+    avatarFlairShape: a.avatarFlairShape ?? member.avatarFlairShape,
+    avatarFlairColor: a.avatarFlairColor ?? member.avatarFlairColor,
+    nameFlairText: a.nameFlairText ?? member.nameFlairText,
+    nameFlairColor: a.nameFlairColor ?? member.nameFlairColor,
   };
 }
 

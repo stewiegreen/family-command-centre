@@ -1,5 +1,6 @@
 import { cn } from '../../lib/cn';
 import { avatarFlairBoxShadow, avatarFlairShapeClass } from '../../lib/flair';
+import { isRosterPortraitId, rosterPortraitPath } from '../../lib/rosterAvatars';
 
 interface AvatarProps {
   name?: string;
@@ -8,6 +9,8 @@ interface AvatarProps {
   initials?: string;
   size?: 'sm' | 'md' | 'lg';
   className?: string;
+  /** Roster portrait id e.g. "03_12" — shows image instead of emoji when set. */
+  avatarPortraitId?: string | null;
   /** @deprecated legacy preset id — ignored when shape/color set */
   avatarFlairId?: string;
   avatarFlairShape?: string;
@@ -21,27 +24,39 @@ export function Avatar({
   initials,
   size = 'md',
   className,
+  avatarPortraitId,
   avatarFlairShape,
   avatarFlairColor,
 }: AvatarProps) {
   const s = { sm: 'w-10 h-10 text-xl', md: 'w-12 h-12 text-2xl', lg: 'w-16 h-16 text-3xl' }[size];
   const shape = avatarFlairShapeClass(avatarFlairShape || 'circle');
   const glow = avatarFlairBoxShadow(avatarFlairColor);
+  const usePortrait = isRosterPortraitId(avatarPortraitId);
+
   return (
     <div
       className={cn(
-        'flex items-center justify-center font-semibold text-white shrink-0 leading-none',
+        'flex items-center justify-center font-semibold text-white shrink-0 leading-none overflow-hidden',
         s,
         shape,
         className,
       )}
       style={{
-        backgroundColor: color,
+        backgroundColor: usePortrait ? undefined : color,
         boxShadow: glow,
       }}
       title={name}
     >
-      {emoji || initials}
+      {usePortrait ? (
+        <img
+          src={rosterPortraitPath(avatarPortraitId!)}
+          alt={name || 'Avatar'}
+          className="w-full h-full object-cover"
+          draggable={false}
+        />
+      ) : (
+        emoji || initials
+      )}
     </div>
   );
 }
