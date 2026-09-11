@@ -11,7 +11,6 @@ import { withAppearance } from '../lib/appearance';
 import { cn } from '../lib/cn';
 import {
   ROSTER_PACK_COUNT,
-  isRosterPortraitId,
   rosterIdsForPack,
   rosterPackLabel,
   rosterPortraitPath,
