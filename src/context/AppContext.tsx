@@ -348,9 +348,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // reason (e.g. a permissions rejection) while the connection is fine.
     } finally {
       setPendingWrites((n) => Math.max(0, n - 1));
+      // Keep ignoring inbound snapshots a bit longer so a lagging server
+      // echo of the *previous* doc cannot clobber a successful write
+      // (e.g. shop unlock flags). Was 400ms — too short under load.
       setTimeout(() => {
         writingRef.current = false;
-      }, 400);
+      }, 1500);
     }
   }, []);
 

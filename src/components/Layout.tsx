@@ -34,6 +34,7 @@ import {
   setNotificationsEnabled,
 } from '../lib/notifications';
 import { registerFcmToken, syncFcmToken, disableFcmForMember } from '../lib/fcm';
+import { hasLocalThemeStudioUnlock } from '../lib/themeStudioUnlock';
 
 const NAV: { id: ViewId; label: string; icon: typeof Home }[] = [
   { id: 'dashboard', label: 'Home', icon: Home },
@@ -141,7 +142,9 @@ export function Layout({ children }: { children: ReactNode }) {
 
   const unread = data.messages.filter((m) => m.toId === settings.currentUserId && !m.read).length;
   const themeStudioUnlocked = !!(
-    currentUser && data.appearance?.[currentUser.id]?.unlockThemeStudio
+    currentUser &&
+    (data.appearance?.[currentUser.id]?.unlockThemeStudio ||
+      hasLocalThemeStudioUnlock(currentUser.id))
   );
   const navItems = isMediaOnly
     ? NAV.filter((i) => i.id === 'media')

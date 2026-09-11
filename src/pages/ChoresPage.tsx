@@ -48,6 +48,7 @@ import {
 } from '../lib/quest';
 import { creditMemberForQuest } from '../lib/todoQuest';
 import { nameFlairLabel } from '../lib/flair';
+import { markThemeStudioUnlockedLocally } from '../lib/themeStudioUnlock';
 import {
   claimStreakChest,
   daysUntilWeekEnd,
@@ -622,6 +623,41 @@ export function ChoresPage() {
     const balance = coinBalances[myId] ?? 0;
     if (balance < item.coinCost) return;
 
+    // One-shot unlocks: never charge again if already owned
+    const app = data.appearance?.[myId];
+    if (item.kind === 'theme_studio' && app?.unlockThemeStudio) {
+      setView('themestudio');
+      return;
+    }
+    if (item.kind === 'avatar_flair' && app?.unlockAvatarFlair) {
+      setView('dashboard');
+      return;
+    }
+    if (item.kind === 'name_flair' && app?.unlockNameFlair) {
+      setView('dashboard');
+      return;
+    }
+    if (item.kind === 'picture_frame' && app?.unlockPictureFrame) {
+      setView('dashboard');
+      return;
+    }
+    if (item.kind === 'picture_frame_2' && app?.unlockPictureFrame2) {
+      setView('dashboard');
+      return;
+    }
+    if (item.kind === 'theme_accents' && app?.unlockAccentPacks) {
+      setView('themestudio');
+      return;
+    }
+    if (item.kind === 'theme_wallpapers' && app?.unlockWallpapers) {
+      setView('themestudio');
+      return;
+    }
+    if (item.kind === 'theme_fonts' && app?.unlockFontPacks) {
+      setView('themestudio');
+      return;
+    }
+
     const isScreen = item.kind === 'screen_time' && (item.screenMinutes || 0) > 0;
     const forId =
       isScreen
@@ -785,7 +821,17 @@ export function ChoresPage() {
     if (item.kind === 'avatar_flair' || item.kind === 'name_flair') {
       setView('dashboard');
     }
-    if (item.kind === 'theme_studio' || item.kind === 'theme_slot' || item.kind === 'theme_accents' || item.kind === 'theme_wallpapers' || item.kind === 'theme_fonts') setView('themestudio');
+    if (item.kind === 'theme_studio') {
+      markThemeStudioUnlockedLocally(myId);
+      setView('themestudio');
+    } else if (
+      item.kind === 'theme_slot' ||
+      item.kind === 'theme_accents' ||
+      item.kind === 'theme_wallpapers' ||
+      item.kind === 'theme_fonts'
+    ) {
+      setView('themestudio');
+    }
   };
 
   const fulfillRedemption = (r: RedemptionRecord) => {

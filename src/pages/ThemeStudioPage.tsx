@@ -19,6 +19,7 @@ import {
   FRAME_WALLPAPER_2,
 } from '../lib/themePacks';
 import { cn } from '../lib/cn';
+import { hasLocalThemeStudioUnlock } from '../lib/themeStudioUnlock';
 
 /** Slots included with Theme Studio unlock. */
 export const THEME_SLOTS_BASE = 3;
@@ -118,7 +119,10 @@ export function ThemeStudioPage() {
   const { data, update, currentUser, setView } = useApp();
   const myId = currentUser?.id || data.settings.currentUserId;
   const appearance = data.appearance?.[myId] || {};
-  const unlocked = !!appearance.unlockThemeStudio;
+  // Appearance is source of truth; session flag bridges the gap after a shop
+  // purchase when navigation happens before the write/snapshot settles.
+  const unlocked =
+    !!appearance.unlockThemeStudio || (!!myId && hasLocalThemeStudioUnlock(myId));
 
   const saved = (appearance.customThemes || []) as SavedTheme[];
   const activeId = appearance.activeCustomThemeId || null;
