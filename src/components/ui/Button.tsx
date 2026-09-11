@@ -10,9 +10,9 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 export function Button({ children, variant = 'primary', size = 'md', className, ...props }: ButtonProps) {
   const v = {
     primary: 'bg-accent hover:bg-accent-hover text-accent-ink',
-    // Theme secondary accent (from preset / Theme Studio), not just "grey button"
+    // Full secondary accent fill (Theme Studio secondary colour)
     secondary:
-      'bg-secondary/15 hover:bg-secondary/25 text-fg border border-secondary/45',
+      'bg-secondary hover:brightness-110 text-[color:var(--app-secondary-ink,#1a1a1a)] border border-secondary shadow-sm',
     ghost: 'bg-transparent hover:bg-nav-hover text-fg-secondary',
     danger: 'bg-red-500/15 hover:bg-red-500/25 text-red-500 border border-red-500/25',
   }[variant];

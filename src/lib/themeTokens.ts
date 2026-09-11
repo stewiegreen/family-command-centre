@@ -189,6 +189,21 @@ function rgbaOf(color: string, alpha: number): string {
 }
 
 /** Derive full chrome (sidebar/header/muted/borders) from the five Theme Studio tokens. */
+
+/** Dark text on light secondary, light text on dark secondary. */
+function secondaryInkFor(hexOrCss: string): string {
+  const parsed = parseColor(hexOrCss);
+  if (!parsed) return '#1a1a1a';
+  const [r, g, b] = parsed;
+  // relative luminance
+  const lin = (c: number) => {
+    const x = c / 255;
+    return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4;
+  };
+  const L = 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+  return L > 0.45 ? '#1a1a1a' : '#fafafa';
+}
+
 export function applyTokenSetToElement(el: HTMLElement, tokens: ThemeTokenSet): void {
   el.style.setProperty('--app-page', tokens.page);
   el.style.setProperty('--app-elevated', tokens.elevated);
@@ -227,13 +242,10 @@ export function applyTokenSetToElement(el: HTMLElement, tokens: ThemeTokenSet): 
     );
   }
   el.style.setProperty('--app-accent-ink', accentInk(tokens.accent));
-  // Secondary accent — always set so UI chips/buttons stay themed
-  if (tokens.secondary?.trim()) {
-    el.style.setProperty('--app-secondary', tokens.secondary.trim());
-  } else {
-    // Soft fallback: blend accent toward muted so the token still exists
-    el.style.setProperty('--app-secondary', tokens.accent);
-  }
+  // Secondary accent — full colour + contrasting ink for solid buttons
+  const sec = tokens.secondary?.trim() || tokens.accent;
+  el.style.setProperty('--app-secondary', sec);
+  el.style.setProperty('--app-secondary-ink', secondaryInkFor(sec));
 }
 
 export function applyCustomThemeToDocument(tokens: ThemeTokenSet): void {

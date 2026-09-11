@@ -48,6 +48,7 @@
   --app-danger-tint: #2c1a17;
   --app-success: #5ba88f;
   --app-secondary: #d4b896;
+  --app-secondary-ink: #1a1a1a;
   --app-shadow-card: 0 1px 2px rgb(0 0 0 / 0.2), 0 4px 16px rgb(0 0 0 / 0.18);
   --font-display: "Fraunces", "Iowan Old Style", Palatino, serif;
   --font-ui: "Source Sans 3", "Source Sans Pro", system-ui, -apple-system, sans-serif;
@@ -92,6 +93,7 @@
   --app-danger-tint: #fbebe7;
   --app-success: #3d8b6e;
   --app-secondary: #c4a574;
+  --app-secondary-ink: #1a1a1a;
   --app-shadow-card: 0 1px 2px rgb(28 25 22 / 0.04), 0 4px 12px rgb(28 25 22 / 0.05);
   --font-display: "Fraunces", "Iowan Old Style", Palatino, serif;
   --font-ui: "Source Sans 3", "Source Sans Pro", system-ui, -apple-system, sans-serif;
@@ -139,6 +141,7 @@
   --app-accent-ink: #021018;
   /* Magenta secondary / alerts that feel "game UI" */
   --app-secondary: #ff2db8;
+  --app-secondary-ink: #fafafa;
   --app-warn: #ffe14a;
   --app-warn-tint: #2a2410;
   --app-danger: #ff3d7a;
@@ -212,6 +215,7 @@ html.neon .bg-accent {
   --app-accent-tint-strong: rgba(232, 90, 122, 0.28);
   --app-accent-ink: #fff8f9;
   --app-secondary: #c9a227;
+  --app-secondary-ink: #1a1a1a;
   --app-warn: #d4a017;
   --app-warn-tint: rgba(212, 160, 23, 0.2);
   --app-danger: #b91c1c;
@@ -306,6 +310,7 @@ html.spyfamily .bg-accent {
   --color-danger-tint: var(--app-danger-tint);
   --color-success: var(--app-success);
   --color-secondary: var(--app-secondary);
+  --color-secondary-ink: var(--app-secondary-ink, #1a1a1a);
   --font-family-display: var(--font-display);
   --font-family-sans: var(--font-ui);
 }
