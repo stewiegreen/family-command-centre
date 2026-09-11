@@ -177,7 +177,7 @@ function LookEditorBody({
                 setPack(1);
               }}
             >
-              Roster
+              Transformers
             </button>
             <button
               type="button"
@@ -196,7 +196,7 @@ function LookEditorBody({
           <p className="text-xs text-muted">
             {portraitLib === 'cobra'
               ? '182 Cobra / G.I. Joe heads — works with avatar flair borders.'
-              : '200 roster faces in 10 sets — works with avatar flair borders.'}
+              : 'Transformers faces in 10 sets — works with avatar flair borders.'}
           </p>
           <div className="flex flex-wrap gap-1.5">
             {portraitLib === 'roster'
@@ -243,7 +243,8 @@ function LookEditorBody({
                     type="button"
                     onClick={() => onPortrait(id)}
                     className={cn(
-                      'aspect-square rounded-xl overflow-hidden border-2 transition-transform bg-white',
+                      'aspect-square rounded-xl overflow-hidden border-2 transition-transform',
+                      'bg-[#e8e8ec]',
                       selected
                         ? 'border-accent ring-2 ring-accent/40 scale-[1.03]'
                         : 'border-border hover:border-accent/50',
@@ -252,8 +253,9 @@ function LookEditorBody({
                     <img
                       src={src}
                       alt=""
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-contain"
                       draggable={false}
+                      loading="lazy"
                     />
                   </button>
                 );
