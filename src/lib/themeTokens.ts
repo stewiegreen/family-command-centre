@@ -2,7 +2,9 @@ import {
   wallpaperById,
   isFrameWallpaperId,
   fontPackById,
+  CARD_SHADOWS,
   type CardStyleId,
+  type CardShadowId,
 } from './themePacks';
 /** Color helpers for Theme Studio custom overrides. */
 
@@ -342,16 +344,22 @@ export function applyCardStyleToDocument(style: CardStyleId | null | undefined):
   if (id === 'sharp') {
     root.style.setProperty('--app-card-radius', '0.4rem');
     root.style.setProperty('--app-card-blur', '0px');
-    root.style.setProperty('--app-shadow-card', '0 1px 3px rgba(0,0,0,0.18)');
   } else if (id === 'glassy') {
     root.style.setProperty('--app-card-radius', '1.25rem');
     root.style.setProperty('--app-card-blur', '14px');
-    root.style.setProperty('--app-shadow-card', '0 8px 32px rgba(0,0,0,0.18)');
   } else {
     root.style.setProperty('--app-card-radius', '1rem');
     root.style.setProperty('--app-card-blur', '6px');
-    root.style.removeProperty('--app-shadow-card');
   }
+}
+
+/** Card shadow / glow preset (independent of corner style). */
+export function applyCardShadowToDocument(shadow: CardShadowId | null | undefined): void {
+  const root = document.documentElement;
+  const id = (shadow || 'soft') as CardShadowId;
+  const pack = CARD_SHADOWS.find((s) => s.id === id) || CARD_SHADOWS[1]!;
+  root.dataset.cardShadow = pack.id;
+  root.style.setProperty('--app-shadow-card', pack.shadow);
 }
 
 /** Soft glow on accent buttons / chips. */

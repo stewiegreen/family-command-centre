@@ -31,6 +31,8 @@ export type FontPack = {
 
 export type CardStyleId = 'soft' | 'sharp' | 'glassy';
 
+export type CardShadowId = 'none' | 'soft' | 'glow';
+
 export const CARD_STYLES: {
   id: CardStyleId;
   label: string;
@@ -39,6 +41,34 @@ export const CARD_STYLES: {
   { id: 'soft', label: 'Soft', hint: 'Rounded, gentle' },
   { id: 'sharp', label: 'Sharp', hint: 'Tighter corners' },
   { id: 'glassy', label: 'Glassy', hint: 'More blur & float' },
+];
+
+export const CARD_SHADOWS: {
+  id: CardShadowId;
+  label: string;
+  hint: string;
+  /** CSS box-shadow value */
+  shadow: string;
+}[] = [
+  {
+    id: 'none',
+    label: 'Flat',
+    hint: 'No shadow',
+    shadow: 'none',
+  },
+  {
+    id: 'soft',
+    label: 'Soft lift',
+    hint: 'Gentle depth',
+    shadow: '0 4px 18px rgba(0,0,0,0.14), 0 1px 3px rgba(0,0,0,0.08)',
+  },
+  {
+    id: 'glow',
+    label: 'Accent glow',
+    hint: 'Coloured edge light',
+    shadow:
+      '0 0 0 1px color-mix(in srgb, var(--app-accent) 35%, transparent), 0 0 22px color-mix(in srgb, var(--app-accent) 40%, transparent), 0 8px 24px rgba(0,0,0,0.18)',
+  },
 ];
 
 export const ACCENT_PACKS: AccentPack[] = [

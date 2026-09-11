@@ -27,6 +27,7 @@ import {
   applyCustomThemeToDocument,
   applyWallpaperToDocument,
   applyCardStyleToDocument,
+  applyCardShadowToDocument,
   applyAccentGlowToDocument,
   applyCardOpacityToDocument,
   applyWallpaperBlurToDocument,
@@ -428,6 +429,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     applyWallpaperToDocument(wallId, frameUrl);
 
     applyCardStyleToDocument(appearance?.cardStyle || 'soft');
+    applyCardShadowToDocument(appearance?.cardShadow || 'soft');
     applyAccentGlowToDocument(!!appearance?.accentGlow);
     applyCardOpacityToDocument(appearance?.cardOpacity);
     applyWallpaperBlurToDocument(appearance?.wallpaperBlur);

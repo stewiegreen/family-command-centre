@@ -14,6 +14,7 @@ import {
   WALLPAPERS,
   FONT_PACKS,
   CARD_STYLES,
+  CARD_SHADOWS,
   FRAME_WALLPAPER_1,
   FRAME_WALLPAPER_2,
 } from '../lib/themePacks';
@@ -628,6 +629,52 @@ export function ThemeStudioPage() {
                     className="mt-3 h-8 border border-border bg-page/50"
                     style={{ borderRadius: sampleStyle.borderRadius }}
                   />
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+
+        {/* Card shadow / glow */}
+        <div className="space-y-2">
+          <h3 className="text-xs font-semibold text-muted uppercase tracking-wide">
+            Card shadow
+          </h3>
+          <div className="grid sm:grid-cols-3 gap-3">
+            {CARD_SHADOWS.map((s) => {
+              const active = (appearance.cardShadow || 'soft') === s.id;
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => {
+                    if (!myId) return;
+                    update((d) => {
+                      const prev = d.appearance?.[myId] || {};
+                      return {
+                        ...d,
+                        appearance: {
+                          ...(d.appearance || {}),
+                          [myId]: { ...prev, cardShadow: s.id },
+                        },
+                      };
+                    });
+                    setMsg(`Card shadow: ${s.label}`);
+                  }}
+                  className={cn(
+                    'text-left border bg-elevated p-3 transition-all',
+                    active
+                      ? 'border-accent ring-2 ring-accent/40'
+                      : 'border-border hover:border-accent/40',
+                  )}
+                  style={{
+                    borderRadius: 'var(--app-card-radius, 1rem)',
+                    boxShadow: s.shadow,
+                  }}
+                >
+                  <p className="text-sm font-semibold text-fg">{s.label}</p>
+                  <p className="text-[11px] text-muted mt-0.5">{s.hint}</p>
                 </button>
               );
             })}

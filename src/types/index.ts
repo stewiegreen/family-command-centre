@@ -577,6 +577,8 @@ export interface FamilyData {
       activeWallpaperId?: string | null;
       /** Card look: soft (default) | sharp | glassy — Theme Studio */
       cardStyle?: 'soft' | 'sharp' | 'glassy' | null;
+      /** Card shadow: none | soft | glow */
+      cardShadow?: 'none' | 'soft' | 'glow' | null;
       /** Soft neon-style glow on accent controls */
       accentGlow?: boolean;
       /** Card surface opacity 0.5–1 (default 1) */
