@@ -183,19 +183,19 @@ export function SchoolPage() {
   const subjectOf = (id?: string) => subjects.find((s) => s.id === id);
 
   return (
-    <div className="max-w-3xl mx-auto space-y-4 pb-24">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <GraduationCap className="w-7 h-7 text-accent" />
-          <div>
-            <h1 className="text-xl font-bold text-fg">School</h1>
-            <p className="text-xs text-muted">
-              Plan the day · finish blocks · earn XP &amp; treasure
-            </p>
-          </div>
+    <div className="p-4 lg:p-8 max-w-5xl mx-auto space-y-6 pb-24">
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+            <GraduationCap className="w-6 h-6 text-accent" />
+            School
+          </h1>
+          <p className="text-sm text-muted mt-1">
+            Plan the day · finish blocks · earn XP &amp; treasure
+          </p>
         </div>
         {isParent && (
-          <Button size="sm" onClick={openCreate}>
+          <Button onClick={openCreate}>
             <Plus className="w-4 h-4" /> Add block
           </Button>
         )}
