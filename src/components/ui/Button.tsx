@@ -10,15 +10,17 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 export function Button({ children, variant = 'primary', size = 'md', className, ...props }: ButtonProps) {
   const v = {
     primary: 'bg-accent hover:bg-accent-hover text-accent-ink',
-    secondary: 'bg-surface-2 hover:bg-surface-3 text-fg border border-border-strong',
+    // Theme secondary accent (from preset / Theme Studio), not just "grey button"
+    secondary:
+      'bg-secondary/15 hover:bg-secondary/25 text-fg border border-secondary/45',
     ghost: 'bg-transparent hover:bg-nav-hover text-fg-secondary',
     danger: 'bg-red-500/15 hover:bg-red-500/25 text-red-500 border border-red-500/25',
   }[variant];
   const s = {
-    sm: 'px-3 py-1.5 text-sm rounded-xl',
-    md: 'px-4 py-2 text-sm rounded-xl',
-    lg: 'px-5 py-2.5 rounded-2xl',
-    icon: 'p-2 rounded-xl',
+    sm: 'px-3 py-1.5 text-sm rounded-[var(--app-radius-xl,0.75rem)]',
+    md: 'px-4 py-2 text-sm rounded-[var(--app-radius-xl,0.75rem)]',
+    lg: 'px-5 py-2.5 rounded-[var(--app-radius-2xl,1rem)]',
+    icon: 'p-2 rounded-[var(--app-radius-xl,0.75rem)]',
   }[size];
   return (
     <button

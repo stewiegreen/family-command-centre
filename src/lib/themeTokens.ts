@@ -227,10 +227,12 @@ export function applyTokenSetToElement(el: HTMLElement, tokens: ThemeTokenSet): 
     );
   }
   el.style.setProperty('--app-accent-ink', accentInk(tokens.accent));
-  if (tokens.secondary) {
-    el.style.setProperty('--app-secondary', tokens.secondary);
+  // Secondary accent — always set so UI chips/buttons stay themed
+  if (tokens.secondary?.trim()) {
+    el.style.setProperty('--app-secondary', tokens.secondary.trim());
   } else {
-    el.style.removeProperty('--app-secondary');
+    // Soft fallback: blend accent toward muted so the token still exists
+    el.style.setProperty('--app-secondary', tokens.accent);
   }
 }
 
@@ -336,7 +338,7 @@ export function applyWallpaperToDocument(
   root.style.setProperty('--app-wallpaper-photo-layer', pack.photo ? 'block' : 'none');
 }
 
-/** Card corner / glass style for Theme Studio. */
+/** Card corner / glass style for Theme Studio — also drives global radius scale. */
 export function applyCardStyleToDocument(style: CardStyleId | null | undefined): void {
   const root = document.documentElement;
   const id = style || 'soft';
@@ -344,12 +346,30 @@ export function applyCardStyleToDocument(style: CardStyleId | null | undefined):
   if (id === 'sharp') {
     root.style.setProperty('--app-card-radius', '0.4rem');
     root.style.setProperty('--app-card-blur', '0px');
+    root.style.setProperty('--app-radius-sm', '0.2rem');
+    root.style.setProperty('--app-radius-md', '0.3rem');
+    root.style.setProperty('--app-radius-lg', '0.4rem');
+    root.style.setProperty('--app-radius-xl', '0.45rem');
+    root.style.setProperty('--app-radius-2xl', '0.5rem');
+    root.style.setProperty('--app-radius-3xl', '0.55rem');
   } else if (id === 'glassy') {
     root.style.setProperty('--app-card-radius', '1.25rem');
     root.style.setProperty('--app-card-blur', '14px');
+    root.style.setProperty('--app-radius-sm', '0.5rem');
+    root.style.setProperty('--app-radius-md', '0.75rem');
+    root.style.setProperty('--app-radius-lg', '1rem');
+    root.style.setProperty('--app-radius-xl', '1.15rem');
+    root.style.setProperty('--app-radius-2xl', '1.35rem');
+    root.style.setProperty('--app-radius-3xl', '1.5rem');
   } else {
     root.style.setProperty('--app-card-radius', '1rem');
     root.style.setProperty('--app-card-blur', '6px');
+    root.style.setProperty('--app-radius-sm', '0.375rem');
+    root.style.setProperty('--app-radius-md', '0.5rem');
+    root.style.setProperty('--app-radius-lg', '0.75rem');
+    root.style.setProperty('--app-radius-xl', '0.75rem');
+    root.style.setProperty('--app-radius-2xl', '1rem');
+    root.style.setProperty('--app-radius-3xl', '1.25rem');
   }
 }
 

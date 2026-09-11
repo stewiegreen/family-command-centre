@@ -477,3 +477,35 @@ html[data-wallpaper-photo="1"] .hq-shell {
     transparent
   );
 }
+
+
+/* Theme Studio: global radius scale
+   Remaps the most common Tailwind rounded-* classes so Sharp/Soft/Glassy
+   affects quest tiles, inputs, chips, etc. — not only <Card>.
+   rounded-full (avatars) is intentionally left alone. */
+html[data-card-style] .rounded-md {
+  border-radius: var(--app-radius-md, 0.375rem) !important;
+}
+html[data-card-style] .rounded-lg {
+  border-radius: var(--app-radius-lg, 0.5rem) !important;
+}
+html[data-card-style] .rounded-xl {
+  border-radius: var(--app-radius-xl, 0.75rem) !important;
+}
+html[data-card-style] .rounded-2xl {
+  border-radius: var(--app-radius-2xl, 1rem) !important;
+}
+html[data-card-style] .rounded-3xl {
+  border-radius: var(--app-radius-3xl, 1.25rem) !important;
+}
+
+/* Secondary accent as a visible UI colour (chips, outlines, soft fills) */
+.bg-secondary-soft {
+  background-color: color-mix(in srgb, var(--app-secondary) 18%, transparent);
+}
+.border-secondary-soft {
+  border-color: color-mix(in srgb, var(--app-secondary) 45%, transparent);
+}
+.text-secondary-accent {
+  color: var(--app-secondary);
+}
