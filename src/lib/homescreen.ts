@@ -22,6 +22,7 @@ export const HOMESCREEN_WIDGETS = [
   'chores',
   'shopping',
   'journal',
+  'school',
   'weather',
   'screentimer',
   'look',

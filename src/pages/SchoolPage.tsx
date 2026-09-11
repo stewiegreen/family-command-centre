@@ -1,6 +1,15 @@
 import { useMemo, useState } from 'react';
 import { addDays, format, parseISO } from 'date-fns';
-import { Check, ChevronLeft, ChevronRight, GraduationCap, Plus, RotateCcw } from 'lucide-react';
+import {
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Copy,
+  GraduationCap,
+  Plus,
+  RotateCcw,
+  Save,
+} from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Avatar } from '../components/ui/Avatar';
 import { Button } from '../components/ui/Button';
@@ -10,14 +19,22 @@ import { Modal } from '../components/ui/Modal';
 import { cn } from '../lib/cn';
 import { uid } from '../lib/uid';
 import {
+  applyTemplateToDay,
   approveStudyBlock,
   blocksForKidDate,
   completeStudyBlock,
+  copyDayBlocks,
+  copyWeekBlocks,
+  dayCompletionState,
   ensureStudyConfig,
   ensureStudySubjects,
+  getDayPlan,
   localDateStr,
+  prevLocalDate,
   removeBlockCalendar,
   reopenStudyBlock,
+  saveTemplateFromDay,
+  setDayPickCount,
   upsertBlockCalendar,
 } from '../lib/school';
 import type { StudyBlock } from '../types';
@@ -33,6 +50,7 @@ type FormState = {
   xp: string;
   coins: string;
   requiresApproval: boolean;
+  choicePool: boolean;
   notes: string;
 };
 
@@ -48,6 +66,7 @@ function emptyForm(kidId: string, date: string): FormState {
     xp: '20',
     coins: '5',
     requiresApproval: false,
+    choicePool: false,
     notes: '',
   };
 }
@@ -60,6 +79,7 @@ export function SchoolPage() {
   );
   const subjects = ensureStudySubjects(data.studySubjects);
   const cfg = ensureStudyConfig(data.studyConfig);
+  const templates = data.studyTemplates || [];
 
   const defaultKid =
     currentUser?.role === 'kid' ? currentUser.id : kids[0]?.id || '';
@@ -69,12 +89,13 @@ export function SchoolPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(() => emptyForm(defaultKid, localDateStr()));
   const [msg, setMsg] = useState('');
+  const [templateName, setTemplateName] = useState('');
 
-  // Kid locked to self
   const effectiveKidId = currentUser?.role === 'kid' ? currentUser.id : kidId;
   const blocks = blocksForKidDate(data, effectiveKidId, date);
-  const doneCount = blocks.filter((b) => b.status === 'done').length;
-  const allDone = blocks.length > 0 && doneCount === blocks.length;
+  const dayState = dayCompletionState(data, effectiveKidId, date);
+  const plan = getDayPlan(data, effectiveKidId, date);
+  const streak = data.studyStreaks?.[effectiveKidId]?.current ?? 0;
   const pending = (data.studyBlocks || []).filter((b) => b.status === 'pending');
 
   const openCreate = () => {
@@ -97,6 +118,7 @@ export function SchoolPage() {
       xp: String(b.xp),
       coins: String(b.coins),
       requiresApproval: !!b.requiresApproval,
+      choicePool: !!b.choicePool,
       notes: b.notes || '',
     });
     setShowForm(true);
@@ -120,6 +142,7 @@ export function SchoolPage() {
       coins: Math.max(0, parseInt(form.coins, 10) || 0),
       status: 'open',
       requiresApproval: form.requiresApproval,
+      choicePool: form.choicePool,
       notes: form.notes.trim() || undefined,
       createdById: currentUser.id,
       createdAt: now,
@@ -127,8 +150,10 @@ export function SchoolPage() {
       calendarEventId: editingId
         ? data.studyBlocks?.find((b) => b.id === editingId)?.calendarEventId
         : undefined,
+      sort: editingId
+        ? data.studyBlocks?.find((b) => b.id === editingId)?.sort
+        : blocks.length,
     };
-    // Preserve status if editing existing
     if (editingId) {
       const prev = data.studyBlocks?.find((b) => b.id === editingId);
       if (prev) {
@@ -201,13 +226,8 @@ export function SchoolPage() {
         )}
       </div>
 
-      {msg && (
-        <p className="text-sm text-accent font-medium" onAnimationEnd={() => setMsg('')}>
-          {msg}
-        </p>
-      )}
+      {msg && <p className="text-sm text-accent font-medium">{msg}</p>}
 
-      {/* Kid + date */}
       <Card className="space-y-3">
         {isParent && kids.length > 0 && (
           <div className="flex flex-wrap gap-2">
@@ -246,11 +266,7 @@ export function SchoolPage() {
               {format(parseISO(date + 'T12:00:00'), 'EEEE, d MMM')}
             </p>
             {date !== localDateStr() && (
-              <button
-                type="button"
-                className="text-xs text-accent"
-                onClick={() => setDate(localDateStr())}
-              >
+              <button type="button" className="text-xs text-accent" onClick={() => setDate(localDateStr())}>
                 Jump to today
               </button>
             )}
@@ -259,24 +275,114 @@ export function SchoolPage() {
             <ChevronRight className="w-5 h-5" />
           </Button>
         </div>
-        {blocks.length > 0 && (
-          <div className="flex items-center justify-between text-xs text-muted">
-            <span>
-              {doneCount}/{blocks.length} done
-            </span>
-            {allDone && (
-              <span className="text-accent font-semibold">
-                Day complete
-                {(cfg.dayBonusXp || cfg.dayBonusCoins)
-                  ? ` · +${cfg.dayBonusXp || 0} XP · +${cfg.dayBonusCoins || 0} coins`
-                  : ''}
-              </span>
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
+          <span>
+            {dayState.doneCount}/{dayState.totalNeeded || blocks.length || 0} toward day complete
+            {dayState.pickCount > 0 ? ` · pick ${dayState.pickCount} choice` : ''}
+          </span>
+          <span className="flex items-center gap-2">
+            {streak > 0 && (
+              <span className="text-amber-600 font-semibold">{streak}-day streak</span>
             )}
-          </div>
-        )}
+            {dayState.complete && (
+              <span className="text-accent font-semibold">Day complete</span>
+            )}
+          </span>
+        </div>
       </Card>
 
-      {/* Parent pending */}
+      {/* Parent tools: copy / templates / choice */}
+      {isParent && currentUser && (
+        <Card className="space-y-3">
+          <h2 className="text-sm font-semibold text-fg">Plan tools</h2>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => {
+                const from = prevLocalDate(date);
+                update((d) => copyDayBlocks(d, effectiveKidId, from, date, currentUser.id));
+                setMsg(`Copied blocks from ${from}`);
+              }}
+            >
+              <Copy className="w-3.5 h-3.5" /> Copy yesterday
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => {
+                const lastWeek = localDateStr(addDays(parseISO(date + 'T12:00:00'), -7));
+                update((d) => copyWeekBlocks(d, effectiveKidId, lastWeek, date, currentUser.id));
+                setMsg('Copied last week (Mon–Fri) onto this week');
+              }}
+            >
+              <Copy className="w-3.5 h-3.5" /> Copy last week
+            </Button>
+          </div>
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="flex-1 min-w-[10rem]">
+              <label className="text-xs text-muted">Save today as template</label>
+              <Input
+                value={templateName}
+                onChange={(e) => setTemplateName(e.target.value)}
+                placeholder="e.g. Normal school day"
+              />
+            </div>
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={blocks.length === 0}
+              onClick={() => {
+                update((d) => saveTemplateFromDay(d, effectiveKidId, date, templateName));
+                setTemplateName('');
+                setMsg('Template saved');
+              }}
+            >
+              <Save className="w-3.5 h-3.5" /> Save template
+            </Button>
+          </div>
+          {templates.length > 0 && (
+            <div className="space-y-1">
+              <p className="text-xs text-muted">Apply template (replaces this day)</p>
+              <div className="flex flex-wrap gap-2">
+                {templates.map((tpl) => (
+                  <Button
+                    key={tpl.id}
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => {
+                      update((d) =>
+                        applyTemplateToDay(d, tpl.id, effectiveKidId, date, currentUser.id, true),
+                      );
+                      setMsg(`Applied “${tpl.name}”`);
+                    }}
+                  >
+                    {tpl.name}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
+          <div className="grid grid-cols-2 gap-3 max-w-sm">
+            <div>
+              <label className="text-xs text-muted">Choice pool — pick how many</label>
+              <Input
+                type="number"
+                min={0}
+                value={plan.pickCount ?? 0}
+                onChange={(e) => {
+                  const v = Math.max(0, parseInt(e.target.value, 10) || 0);
+                  update((d) => setDayPickCount(d, effectiveKidId, date, v));
+                }}
+              />
+              <p className="text-[11px] text-faint mt-1">
+                Mark blocks as “choice” below; kid must finish this many from the pool.
+              </p>
+            </div>
+          </div>
+        </Card>
+      )}
+
       {isParent && pending.length > 0 && (
         <Card className="space-y-2 border-accent/40">
           <h2 className="text-sm font-semibold text-fg">Waiting for approval</h2>
@@ -307,12 +413,11 @@ export function SchoolPage() {
         </Card>
       )}
 
-      {/* Blocks */}
       <div className="space-y-2">
         {blocks.length === 0 && (
           <Card className="text-center py-8 text-muted text-sm">
             {isParent
-              ? 'No school blocks this day — add one to get started.'
+              ? 'No school blocks this day — add one, copy yesterday, or apply a template.'
               : 'Nothing scheduled for this day. Enjoy the break!'}
           </Card>
         )}
@@ -333,6 +438,7 @@ export function SchoolPage() {
                 'space-y-2',
                 b.status === 'done' && 'opacity-80',
                 b.status === 'pending' && 'border-accent/50',
+                b.choicePool && 'border-dashed',
               )}
             >
               <div className="flex items-start gap-3">
@@ -343,9 +449,14 @@ export function SchoolPage() {
                 <div className="flex-1 min-w-0 space-y-1">
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <p className="font-semibold text-fg leading-snug">{b.title}</p>
+                      <p className="font-semibold text-fg leading-snug">
+                        {b.choicePool ? '◇ ' : ''}
+                        {b.title}
+                      </p>
                       <p className="text-xs text-muted">
-                        {[sub?.name, timeLabel].filter(Boolean).join(' · ')}
+                        {[sub?.name, timeLabel, b.choicePool ? 'choice' : null]
+                          .filter(Boolean)
+                          .join(' · ')}
                       </p>
                     </div>
                     <div className="text-right text-xs text-muted shrink-0">
@@ -398,44 +509,38 @@ export function SchoolPage() {
         })}
       </div>
 
-      {/* Parent day-bonus settings */}
       {isParent && (
         <Card className="space-y-2">
-          <h2 className="text-sm font-semibold text-fg">Day complete bonus</h2>
+          <h2 className="text-sm font-semibold text-fg">Day complete &amp; streak bonuses</h2>
           <p className="text-xs text-muted">
-            Granted once when every block that day is done (auto or after approval).
+            Day bonus when required blocks + choice picks are done. Streak bonus stacks when
+            consecutive school days complete.
           </p>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-muted">Bonus XP</label>
-              <Input
-                type="number"
-                min={0}
-                value={cfg.dayBonusXp ?? 0}
-                onChange={(e) => {
-                  const v = Math.max(0, parseInt(e.target.value, 10) || 0);
-                  update((d) => ({
-                    ...d,
-                    studyConfig: { ...ensureStudyConfig(d.studyConfig), dayBonusXp: v },
-                  }));
-                }}
-              />
-            </div>
-            <div>
-              <label className="text-xs text-muted">Bonus coins</label>
-              <Input
-                type="number"
-                min={0}
-                value={cfg.dayBonusCoins ?? 0}
-                onChange={(e) => {
-                  const v = Math.max(0, parseInt(e.target.value, 10) || 0);
-                  update((d) => ({
-                    ...d,
-                    studyConfig: { ...ensureStudyConfig(d.studyConfig), dayBonusCoins: v },
-                  }));
-                }}
-              />
-            </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {(
+              [
+                ['dayBonusXp', 'Day XP'],
+                ['dayBonusCoins', 'Day coins'],
+                ['streakBonusXp', 'Streak XP'],
+                ['streakBonusCoins', 'Streak coins'],
+              ] as const
+            ).map(([key, label]) => (
+              <div key={key}>
+                <label className="text-xs text-muted">{label}</label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={cfg[key] ?? 0}
+                  onChange={(e) => {
+                    const v = Math.max(0, parseInt(e.target.value, 10) || 0);
+                    update((d) => ({
+                      ...d,
+                      studyConfig: { ...ensureStudyConfig(d.studyConfig), [key]: v },
+                    }));
+                  }}
+                />
+              </div>
+            ))}
           </div>
         </Card>
       )}
@@ -476,11 +581,13 @@ export function SchoolPage() {
                 value={form.subjectId}
                 onChange={(e) => setForm((f) => ({ ...f, subjectId: e.target.value }))}
               >
-                {subjects.filter((s) => s.active !== false).map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
+                {subjects
+                  .filter((s) => s.active !== false)
+                  .map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
               </select>
             </div>
           </div>
@@ -546,6 +653,14 @@ export function SchoolPage() {
               onChange={(e) => setForm((f) => ({ ...f, requiresApproval: e.target.checked }))}
             />
             Require parent approval before rewards
+          </label>
+          <label className="flex items-center gap-2 text-sm text-fg">
+            <input
+              type="checkbox"
+              checked={form.choicePool}
+              onChange={(e) => setForm((f) => ({ ...f, choicePool: e.target.checked }))}
+            />
+            Choice pool (optional pick — not required unless count says so)
           </label>
           <div>
             <label className="text-xs text-muted">Notes (optional)</label>

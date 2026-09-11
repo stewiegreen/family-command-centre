@@ -30,6 +30,7 @@ import {
   Users,
   BookOpen,
   Lock,
+  GraduationCap,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { cloudCreateJournalEntry } from '../lib/firebase';
@@ -50,6 +51,12 @@ import { ProfileLookCard } from '../components/ProfileLookEditor';
 import { PictureFrameCard } from '../components/PictureFrameCard';
 import type { CalendarEvent, ExpandedEvent, FamilyData, JournalVisibility, Note, PresenceStatus, Quest, ViewId } from '../types';
 import { applyTodoStatus, creditMemberForQuest } from '../lib/todoQuest';
+import {
+  blocksForKidDate,
+  dayCompletionState,
+  localDateStr as schoolLocalDate,
+  completeStudyBlock,
+} from '../lib/school';
 import { FAMILY_LIST_ID, PRESENCE_OPTIONS } from '../types';
 import { upcomingExpanded } from '../lib/recurrence';
 import {
@@ -108,6 +115,7 @@ const SECTION_LABELS: Record<SectionId, string> = {
   chores: 'Chores',
   shopping: 'Shopping',
   journal: 'Journal',
+  school: 'School',
   weather: 'Weather',
   screentimer: 'Screen timer',
   look: 'Profile look',
@@ -1775,6 +1783,94 @@ export function Dashboard() {
         )}
       </Card>
     ),
+
+
+    school: (() => {
+      const today = schoolLocalDate();
+      const focusId =
+        currentUser?.role === 'kid'
+          ? currentUser.id
+          : data.members.find((m) => m.role === 'kid')?.id;
+      if (!focusId) {
+        return (
+          <Card className="!p-4">
+            <h2 className="font-semibold text-fg text-sm mb-1 flex items-center gap-1.5">
+              <GraduationCap className="w-4 h-4 text-accent" /> School
+            </h2>
+            <p className="text-sm text-muted">Add a kid profile to plan school days.</p>
+          </Card>
+        );
+      }
+      const blocks = blocksForKidDate(data, focusId, today);
+      const state = dayCompletionState(data, focusId, today);
+      const streak = data.studyStreaks?.[focusId]?.current ?? 0;
+      const pending = (data.studyBlocks || []).filter((b) => b.status === 'pending');
+      const openBlocks = blocks.filter((b) => b.status === 'open' || b.status === 'pending');
+      return (
+        <Card className="!p-4 space-y-2 h-full flex flex-col">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="font-semibold text-fg text-sm flex items-center gap-1.5">
+              <GraduationCap className="w-4 h-4 text-accent" />
+              School today
+            </h2>
+            <button
+              type="button"
+              className="text-xs text-accent hover:underline"
+              onClick={() => setView('school')}
+            >
+              Open
+            </button>
+          </div>
+          {streak > 0 && (
+            <p className="text-[11px] text-amber-600 font-medium">{streak}-day school streak</p>
+          )}
+          {isParent && pending.length > 0 && (
+            <p className="text-xs text-accent">{pending.length} waiting for approval</p>
+          )}
+          {blocks.length === 0 ? (
+            <p className="text-sm text-muted flex-1">Nothing scheduled today.</p>
+          ) : (
+            <ul className="space-y-1.5 flex-1 min-h-0">
+              {blocks.slice(0, 5).map((b) => (
+                <li
+                  key={b.id}
+                  className="flex items-center justify-between gap-2 text-sm rounded-lg border border-border px-2 py-1.5 bg-inset/40"
+                >
+                  <span className={cn('truncate', b.status === 'done' && 'line-through text-muted')}>
+                    {b.choicePool ? '◇ ' : ''}
+                    {b.title}
+                  </span>
+                  {b.status === 'open' && (currentUser?.role === 'kid' || isParent) && (
+                    <Button
+                      size="sm"
+                      className="!py-0.5 !px-2 text-xs shrink-0"
+                      onClick={() =>
+                        currentUser &&
+                        update((d) => completeStudyBlock(d, b.id, currentUser.id))
+                      }
+                    >
+                      Done
+                    </Button>
+                  )}
+                  {b.status === 'pending' && (
+                    <span className="text-[10px] text-accent shrink-0">Pending</span>
+                  )}
+                  {b.status === 'done' && (
+                    <span className="text-[10px] text-muted shrink-0">✓</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+          {blocks.length > 0 && (
+            <p className="text-[11px] text-muted">
+              {state.doneCount}/{state.totalNeeded || blocks.length} toward day complete
+              {openBlocks.length === 0 && state.complete ? ' · Day complete!' : ''}
+            </p>
+          )}
+        </Card>
+      );
+    })(),
 
     screentimer: rows.some((r) => r.includes('chorequest')) ? (
       <Card className="!p-4 text-sm text-muted">

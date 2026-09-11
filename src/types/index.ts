@@ -338,9 +338,51 @@ export interface StudyBlock {
   /** Linked calendar event id (auto-managed). */
   calendarEventId?: string;
   notes?: string;
+  /**
+   * When true, this block is part of the day's choice pool.
+   * Kid must finish `pickCount` choice blocks (see StudyDayPlan) in addition to all required ones.
+   */
+  choicePool?: boolean;
+  /** Display order within the day (lower first). */
+  sort?: number;
   createdById: string;
   createdAt: string;
   updatedAt: string;
+}
+
+/** Snapshot of a reusable school-day layout (no dates/status). */
+export interface StudyTemplateItem {
+  title: string;
+  subjectId?: string;
+  startTime?: string;
+  endTime?: string;
+  minutes?: number;
+  xp: number;
+  coins: number;
+  requiresApproval?: boolean;
+  choicePool?: boolean;
+  notes?: string;
+  sort?: number;
+}
+
+export interface StudyTemplate {
+  id: string;
+  name: string;
+  /** Optional: template aimed at one kid; still apply-able to others. */
+  kidId?: string;
+  items: StudyTemplateItem[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Per kid+date plan knobs (choice count). */
+export interface StudyDayPlan {
+  /** `${kidId}:${date}` */
+  id: string;
+  kidId: string;
+  date: string;
+  /** How many choice-pool blocks must be finished (0 = none required from pool). */
+  pickCount?: number;
 }
 
 /** School rewards / day-bonus knobs. */
@@ -349,6 +391,17 @@ export interface StudyConfig {
   dayBonusXp?: number;
   /** Coins granted once when all of a kid's blocks for a day are done. */
   dayBonusCoins?: number;
+  /** Extra XP when a school-day streak continues (granted with day bonus). */
+  streakBonusXp?: number;
+  /** Extra coins when a school-day streak continues. */
+  streakBonusCoins?: number;
+}
+
+/** Rolling school-day completion streak per kid. */
+export interface StudyStreak {
+  current: number;
+  /** Last local YYYY-MM-DD that counted toward the streak. */
+  lastDate: string;
 }
 
 /** One ingredient line on a recipe (Phase A — manual). */
@@ -572,6 +625,12 @@ export interface FamilyData {
   studyBlocks?: StudyBlock[];
   /** School day-bonus settings. */
   studyConfig?: StudyConfig | null;
+  /** Reusable school-day templates. */
+  studyTemplates?: StudyTemplate[];
+  /** Per-day choice rules keyed by plan id. */
+  studyDayPlans?: StudyDayPlan[];
+  /** memberId → school-day streak. */
+  studyStreaks?: Record<string, StudyStreak>;
   messages: Message[];
   settings: Settings;
   /** memberId → presence (writable by all members; not on the members array). */
