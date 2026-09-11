@@ -142,7 +142,7 @@ export function SchoolPage() {
       }
     }
     update((d) => {
-      let next = { ...d, studySubjects: ensureStudySubjects(d.studySubjects) };
+      let next: typeof d = { ...d, studySubjects: ensureStudySubjects(d.studySubjects) };
       const without = (next.studyBlocks || []).filter((b) => b.id !== block.id);
       next = { ...next, studyBlocks: [...without, block] };
       next = upsertBlockCalendar(next, block, ensureStudySubjects(next.studySubjects));

@@ -6,7 +6,6 @@ import type {
   StudySubject,
 } from '../types';
 import { ensureProgress, isoWeekId, progressTowardNextLevel } from './quest';
-import { uid } from './uid';
 
 export const DEFAULT_STUDY_SUBJECTS: StudySubject[] = [
   { id: 'math', name: 'Math', color: '#3b82f6', active: true, sort: 0 },
@@ -184,7 +183,7 @@ export function completeStudyBlock(
     };
   }
 
-  let next = {
+  let next: FamilyData = {
     ...data,
     studyBlocks: (data.studyBlocks || []).map((b) =>
       b.id === blockId
@@ -214,7 +213,7 @@ export function approveStudyBlock(
   const block = (data.studyBlocks || []).find((b) => b.id === blockId);
   if (!block || block.status !== 'pending') return data;
   const at = new Date().toISOString();
-  let next = {
+  let next: FamilyData = {
     ...data,
     studyBlocks: (data.studyBlocks || []).map((b) =>
       b.id === blockId

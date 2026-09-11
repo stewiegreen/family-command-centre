@@ -109,15 +109,6 @@ function eventMemberIds(ev: { memberId: string; memberIds?: string[] }): string[
   return ev.memberId ? [ev.memberId] : [];
 }
 
-/** Primary color from first assigned member. */
-function primaryMemberColor(
-  ev: { memberId: string; memberIds?: string[] },
-  memberColor: (id: string) => string,
-): string {
-  const ids = eventMemberIds(ev);
-  return memberColor(ids[0] || ev.memberId);
-}
-
 /** Chip background: single colour, or stripe when multiple people share the event. */
 function eventChipStyle(
   ev: { memberId: string; memberIds?: string[] },
@@ -185,7 +176,7 @@ function emptyForm(memberId: string, day?: Date): FormState {
 }
 
 export function CalendarPage() {
-  const { data, update, currentUser, getMember, setView } = useApp();
+  const { data, update, currentUser, getMember, setView: setAppView } = useApp();
   const [cursor, setCursor] = useState(new Date());
   const [view, setViewState] = useState<CalView>(loadView);
   const [showTasks, setShowTasksState] = useState(loadShowTasks);
@@ -468,6 +459,7 @@ export function CalendarPage() {
       recurrenceUntil: master.recurrenceUntil
         ? localDateStr(new Date(master.recurrenceUntil))
         : '',
+      linkedNoteId: master.linkedNoteId || '',
       location: master.location || '',
       notes: master.notes || '',
     });
@@ -1071,7 +1063,7 @@ export function CalendarPage() {
                   className="text-xs text-muted hover:text-fg underline"
                   onClick={() => {
                     // Jump to Notes; selection is by linked id stored on event after save
-                    setView?.('notes');
+                    setAppView('notes');
                   }}
                 >
                   Open in Notes
@@ -1379,7 +1371,6 @@ function MonthWeekRow({
               <div className="mt-0.5 space-y-1 flex-1 min-h-0">
                 {list.slice(0, 3).map((ev) => {
                   const ids = eventMemberIds(ev);
-                  const col = primaryMemberColor(ev, memberColor);
                   const names = ids
                     .map((id) => getMember(id))
                     .filter(Boolean)
@@ -1445,7 +1436,6 @@ function MonthWeekRow({
       {/* Spanning bars overlaid on the week row */}
       {layouts.map(({ ev, startCol, endCol, row }) => {
         const ids = eventMemberIds(ev);
-        const col = primaryMemberColor(ev, memberColor);
         const names = ids
           .map((id) => getMember(id))
           .filter(Boolean)
@@ -1808,7 +1798,6 @@ function TimeGridView({
               >
                 {allDayByDay[di].map((ev) => {
                   const ids = eventMemberIds(ev);
-                  const col = primaryMemberColor(ev, memberColor);
                   const emojis = ids
                     .map((id) => getMember(id)?.emoji)
                     .filter(Boolean)
@@ -1930,7 +1919,6 @@ function TimeGridView({
                     const widthPct = 100 / layout.columnCount;
                     const leftPct = layout.column * widthPct;
                     const ids = eventMemberIds(ev);
-                    const col = primaryMemberColor(ev, memberColor);
                     const emojis = ids
                       .map((id) => getMember(id)?.emoji)
                       .filter(Boolean)
