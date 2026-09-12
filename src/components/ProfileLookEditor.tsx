@@ -30,9 +30,16 @@ import {
   isFanPortraitId,
   type FanPackId,
 } from '../lib/fanAvatars';
+import {
+  JOE_ROW_COUNT,
+  joeIdsForPack,
+  joePackLabel,
+  joePortraitPath,
+  isJoePortraitId,
+} from '../lib/joeAvatars';
 import { isAnyPortraitId, portraitSrc } from '../lib/portraitPath';
 
-type PortraitLib = 'roster' | 'cobra' | FanPackId;
+type PortraitLib = 'roster' | 'cobra' | 'joe' | FanPackId;
 import {
   AVATAR_FLAIR_COLORS,
   AVATAR_FLAIR_SHAPES,
@@ -180,6 +187,7 @@ function LookEditorBody({
               [
                 { id: 'roster' as PortraitLib, label: 'Transformers' },
                 { id: 'cobra' as PortraitLib, label: 'Cobra' },
+                { id: 'joe' as PortraitLib, label: 'G.I. Joe' },
                 ...FAN_PACKS.map((p) => ({ id: p.id as PortraitLib, label: p.label })),
               ] as { id: PortraitLib; label: string }[]
             ).map((lib) => (
@@ -203,16 +211,18 @@ function LookEditorBody({
           </div>
           <p className="text-[11px] text-muted">
             {portraitLib === 'cobra'
-              ? '182 Cobra / G.I. Joe heads — works with avatar flair.'
-              : portraitLib === 'roster'
-                ? 'Transformers faces in 10 sets — works with avatar flair.'
-                : portraitLib === 'ntd'
-                  ? '26 Nintendo faces — works with avatar flair.'
-                  : portraitLib === 'spy'
-                    ? '15 Spy×Family faces — works with avatar flair.'
-                    : '17 One Piece faces — works with avatar flair.'}
+              ? '182 Cobra heads — works with avatar flair.'
+              : portraitLib === 'joe'
+                ? '220 G.I. Joe heads — works with avatar flair.'
+                : portraitLib === 'roster'
+                  ? 'Transformers faces in 10 sets — works with avatar flair.'
+                  : portraitLib === 'ntd'
+                    ? '26 Nintendo faces — works with avatar flair.'
+                    : portraitLib === 'spy'
+                      ? '15 Spy×Family faces — works with avatar flair.'
+                      : '17 One Piece faces — works with avatar flair.'}
           </p>
-          {(portraitLib === 'roster' || portraitLib === 'cobra') && (
+          {(portraitLib === 'roster' || portraitLib === 'cobra' || portraitLib === 'joe') && (
             <div className="flex flex-wrap gap-1.5">
               {portraitLib === 'roster'
                 ? Array.from({ length: ROSTER_PACK_COUNT }, (_, i) => i + 1).map((p) => (
@@ -230,21 +240,37 @@ function LookEditorBody({
                       {rosterPackLabel(p)}
                     </button>
                   ))
-                : Array.from({ length: COBRA_ROW_COUNT }, (_, i) => i + 1).map((p) => (
-                    <button
-                      key={p}
-                      type="button"
-                      onClick={() => setPack(p)}
-                      className={cn(
-                        'px-2.5 py-1 rounded-lg text-xs font-medium border',
-                        pack === p
-                          ? 'border-accent bg-accent/15 text-accent'
-                          : 'border-border text-muted hover:border-accent/40',
-                      )}
-                    >
-                      {cobraPackLabel(p)}
-                    </button>
-                  ))}
+                : portraitLib === 'cobra'
+                  ? Array.from({ length: COBRA_ROW_COUNT }, (_, i) => i + 1).map((p) => (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => setPack(p)}
+                        className={cn(
+                          'px-2.5 py-1 rounded-lg text-xs font-medium border',
+                          pack === p
+                            ? 'border-accent bg-accent/15 text-accent'
+                            : 'border-border text-muted hover:border-accent/40',
+                        )}
+                      >
+                        {cobraPackLabel(p)}
+                      </button>
+                    ))
+                  : Array.from({ length: JOE_ROW_COUNT }, (_, i) => i + 1).map((p) => (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => setPack(p)}
+                        className={cn(
+                          'px-2.5 py-1 rounded-lg text-xs font-medium border',
+                          pack === p
+                            ? 'border-accent bg-accent/15 text-accent'
+                            : 'border-border text-muted hover:border-accent/40',
+                        )}
+                      >
+                        {joePackLabel(p)}
+                      </button>
+                    ))}
             </div>
           )}
           <div className="grid grid-cols-5 gap-2 max-h-64 overflow-y-auto p-0.5">
@@ -252,7 +278,9 @@ function LookEditorBody({
               ? rosterIdsForPack(pack)
               : portraitLib === 'cobra'
                 ? cobraIdsForPack(pack)
-                : fanIdsForPack(portraitLib)
+                : portraitLib === 'joe'
+                  ? joeIdsForPack(pack)
+                  : fanIdsForPack(portraitLib)
             ).map((id) => {
               const selected = portraitId === id;
               const src =
@@ -260,7 +288,9 @@ function LookEditorBody({
                   ? rosterPortraitPath(id)
                   : portraitLib === 'cobra'
                     ? cobraPortraitPath(id)
-                    : fanPortraitPath(id);
+                    : portraitLib === 'joe'
+                      ? joePortraitPath(id)
+                      : fanPortraitPath(id);
               return (
                 <button
                   key={id}
@@ -429,6 +459,10 @@ function useLookEditorState() {
     if (isCobraPortraitId(pid)) {
       setPortraitLib('cobra');
       const m = /^cobra_(\d{2})_/.exec(pid!);
+      setPack(Math.max(1, m ? parseInt(m[1], 10) : 1));
+    } else if (isJoePortraitId(pid)) {
+      setPortraitLib('joe');
+      const m = /^joe_(\d{2})_/.exec(pid!);
       setPack(Math.max(1, m ? parseInt(m[1], 10) : 1));
     } else if (isFanPortraitId(pid)) {
       const fp = fanPackFromId(pid!) || 'ntd';
