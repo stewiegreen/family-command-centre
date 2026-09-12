@@ -187,14 +187,20 @@ function SectionChrome({
       className={cn(
         'relative group/section transition-opacity min-h-0 flex flex-col',
         paired && 'h-full',
-        // Collapse while dragging so between-row gaps line up under the cursor
-        // (opacity-only left a ghost that made the wrong gap easy to hit).
-        dragging && 'hidden',
+        // Keep the node in the layout (display:hidden cancels the browser drag).
+        // pointer-events-none lets gap strips under/near the ghost still receive dragOver.
+        dragging && 'opacity-30 pointer-events-none',
       )}
-      draggable
+      draggable={!dragging}
       onDragStart={(e) => {
         e.dataTransfer.effectAllowed = 'move';
         e.dataTransfer.setData('text/plain', id);
+        // Capture drag image before React re-renders this node
+        try {
+          e.dataTransfer.setDragImage(e.currentTarget as HTMLElement, 24, 24);
+        } catch {
+          /* ignore */
+        }
         onDragStart(id);
       }}
       onDragOver={(e) => onDragOver(e, id)}
