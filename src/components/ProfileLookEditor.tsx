@@ -99,28 +99,75 @@ function LookEditorBody({
   portraitLib: PortraitLib;
   setPortraitLib: (l: PortraitLib) => void;
 }) {
+  const [flairPanel, setFlairPanel] = useState<null | 'avatar' | 'name'>(null);
+
   return (
     <div className="space-y-4">
-      <div className="flex flex-col items-center gap-1">
-        <Avatar
-          name={name}
-          emoji={emoji}
-          color={color}
-          avatarPortraitId={portraitId}
-          avatarFlairShape={flairShape}
-          avatarFlairColor={flairColor}
-          size="lg"
-          className="!w-24 !h-24 !text-5xl"
-        />
-        <p className="text-sm font-semibold text-fg">{name}</p>
-        {nameFlairLabel(nameFlairText) ? (
-          <p
-            className={cn('text-xs font-medium', !nameFlairColor && 'text-accent')}
-            style={nameFlairColor ? { color: nameFlairColor } : undefined}
-          >
-            {nameFlairLabel(nameFlairText)}
-          </p>
-        ) : null}
+      {/* Avatar with flair shortcuts on either side */}
+      <div className="flex items-center justify-center gap-3 sm:gap-5">
+        <div className="w-[5.5rem] sm:w-28 flex justify-end shrink-0">
+          {unlockAvatarFlair ? (
+            <button
+              type="button"
+              onClick={() => setFlairPanel('avatar')}
+              className="text-left text-xs sm:text-sm font-medium text-accent hover:underline leading-tight max-w-[5.5rem] sm:max-w-[7rem]"
+            >
+              Avatar flair
+              {(flairColor || (flairShape && flairShape !== 'circle')) && (
+                <span className="block text-[10px] text-muted font-normal no-underline">Tap to edit</span>
+              )}
+            </button>
+          ) : (
+            <span className="text-[10px] sm:text-xs text-faint text-right leading-tight">
+              Avatar flair
+              <span className="block">locked</span>
+            </span>
+          )}
+        </div>
+
+        <div className="flex flex-col items-center gap-1 shrink-0">
+          <Avatar
+            name={name}
+            emoji={emoji}
+            color={color}
+            avatarPortraitId={portraitId}
+            avatarFlairShape={flairShape}
+            avatarFlairColor={flairColor}
+            size="lg"
+            className="!w-24 !h-24 !text-5xl"
+          />
+          <p className="text-sm font-semibold text-fg">{name}</p>
+          {nameFlairLabel(nameFlairText) ? (
+            <p
+              className={cn('text-xs font-medium', !nameFlairColor && 'text-accent')}
+              style={nameFlairColor ? { color: nameFlairColor } : undefined}
+            >
+              {nameFlairLabel(nameFlairText)}
+            </p>
+          ) : null}
+        </div>
+
+        <div className="w-[5.5rem] sm:w-28 flex justify-start shrink-0">
+          {unlockNameFlair ? (
+            <button
+              type="button"
+              onClick={() => setFlairPanel('name')}
+              className="text-left text-xs sm:text-sm font-medium text-accent hover:underline leading-tight max-w-[5.5rem] sm:max-w-[7rem]"
+            >
+              Name flair
+              {nameFlairLabel(nameFlairText) && (
+                <span className="block text-[10px] text-muted font-normal truncate">
+                  {nameFlairLabel(nameFlairText)}
+                </span>
+              )}
+            </button>
+          ) : (
+            <span className="text-[10px] sm:text-xs text-faint leading-tight">
+              Name flair
+              <span className="block">locked</span>
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="flex rounded-xl border border-border-strong overflow-hidden">
@@ -327,11 +374,36 @@ function LookEditorBody({
         </div>
       )}
 
-      {/* Avatar flair — unlocked via ChoreQuest shop */}
-      {unlockAvatarFlair ? (
-        <div className="space-y-2 pt-2 border-t border-border">
-          <p className="text-sm font-semibold text-fg">Avatar flair</p>
+      {(!unlockAvatarFlair || !unlockNameFlair) && (
+        <p className="text-xs text-muted border-t border-border pt-2">
+          {!unlockAvatarFlair && !unlockNameFlair
+            ? 'Unlock Avatar flair and Name flair in the ChoreQuest shop.'
+            : !unlockAvatarFlair
+              ? 'Unlock Avatar flair in the ChoreQuest shop for frame shapes and glow colours.'
+              : 'Unlock Name flair in the ChoreQuest shop for a custom title under your name.'}
+        </p>
+      )}
+
+      {/* Avatar flair editor */}
+      <Modal
+        open={flairPanel === 'avatar'}
+        onClose={() => setFlairPanel(null)}
+        title="Avatar flair"
+      >
+        <div className="space-y-3">
           <p className="text-xs text-muted">Shape and glow ring around your face.</p>
+          <div className="flex justify-center py-2">
+            <Avatar
+              name={name}
+              emoji={emoji}
+              color={color}
+              avatarPortraitId={portraitId}
+              avatarFlairShape={flairShape}
+              avatarFlairColor={flairColor}
+              size="lg"
+              className="!w-20 !h-20 !text-4xl"
+            />
+          </div>
           <div className="flex flex-wrap gap-2">
             {AVATAR_FLAIR_SHAPES.map((s) => {
               const active = (flairShape || 'circle') === s.id;
@@ -341,13 +413,13 @@ function LookEditorBody({
                   type="button"
                   onClick={() => onFlairShape(s.id)}
                   className={cn(
-                    'px-3 py-1.5 rounded-xl text-sm border',
+                    'px-3 py-1.5 rounded-xl text-sm border flex items-center gap-1.5',
                     active
                       ? 'border-accent bg-accent/15 text-accent'
                       : 'border-border text-muted hover:border-accent/40',
                   )}
                 >
-                  <span className="mr-1">{s.preview}</span>
+                  <span aria-hidden>{s.preview}</span>
                   {s.label}
                 </button>
               );
@@ -374,18 +446,19 @@ function LookEditorBody({
               );
             })}
           </div>
+          <Button className="w-full" onClick={() => setFlairPanel(null)}>
+            Done
+          </Button>
         </div>
-      ) : (
-        <p className="text-xs text-muted border-t border-border pt-2">
-          Unlock <span className="font-medium text-fg">Avatar flair</span> in the ChoreQuest shop
-          for frame shapes and glow colours.
-        </p>
-      )}
+      </Modal>
 
-      {/* Name flair */}
-      {unlockNameFlair ? (
-        <div className="space-y-2 pt-2 border-t border-border">
-          <p className="text-sm font-semibold text-fg">Name flair</p>
+      {/* Name flair editor */}
+      <Modal
+        open={flairPanel === 'name'}
+        onClose={() => setFlairPanel(null)}
+        title="Name flair"
+      >
+        <div className="space-y-3">
           <p className="text-xs text-muted">
             A short title under your real name (max {NAME_FLAIR_MAX} characters). Does not change
             your profile name.
@@ -420,13 +493,11 @@ function LookEditorBody({
               );
             })}
           </div>
+          <Button className="w-full" onClick={() => setFlairPanel(null)}>
+            Done
+          </Button>
         </div>
-      ) : (
-        <p className="text-xs text-muted border-t border-border pt-2">
-          Unlock <span className="font-medium text-fg">Name flair</span> in the ChoreQuest shop for a
-          custom title under your name.
-        </p>
-      )}
+      </Modal>
     </div>
   );
 }
