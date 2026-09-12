@@ -187,17 +187,22 @@ function SectionChrome({
       className={cn(
         'relative group/section transition-opacity min-h-0 flex flex-col',
         paired && 'h-full',
-        // Keep the node in the layout (display:hidden cancels the browser drag).
-        // pointer-events-none lets gap strips under/near the ghost still receive dragOver.
-        dragging && 'opacity-30 pointer-events-none',
+        dragging && 'opacity-40',
       )}
-      draggable={!dragging}
+      // Always leave draggable=true. Toggling it off when dragging=true cancels the
+      // active HTML5 drag in Chromium/Safari the moment React re-renders.
+      draggable
       onDragStart={(e) => {
+        const target = e.target as HTMLElement | null;
+        // Don't start a card drag from form controls or action buttons.
+        if (target?.closest('input, textarea, select, button, a, [contenteditable="true"]')) {
+          e.preventDefault();
+          return;
+        }
         e.dataTransfer.effectAllowed = 'move';
         e.dataTransfer.setData('text/plain', id);
-        // Capture drag image before React re-renders this node
         try {
-          e.dataTransfer.setDragImage(e.currentTarget as HTMLElement, 24, 24);
+          e.dataTransfer.setDragImage(e.currentTarget as HTMLElement, 40, 20);
         } catch {
           /* ignore */
         }
