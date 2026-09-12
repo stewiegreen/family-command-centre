@@ -182,41 +182,119 @@ function locate(rows: HomescreenRow[], id: HomescreenWidgetId): { row: number; p
 }
 
 /**
- * Drop `fromId` onto `toId`:
- * - If `toId`'s row has a free slot (currently solo), `fromId` joins it --
- *   the two cards now share a row.
- * - If `toId`'s row is already full (a pair), `fromId` is inserted as its
- *   own new full-width row right next to it (a normal reorder).
- * `fromId` is always removed from its old spot first; if that empties a
- * shared row, the remaining card becomes a solo full-width row.
+ * Where a dragged card is being dropped.
+ * - beside: left/right half of a target card (share or re-pair that row)
+ * - gap: insert a new full-width solo row at this index (0 = top)
+ */
+export type HomescreenDropPlacement =
+  | { kind: 'beside'; targetId: string; side: 'left' | 'right' }
+  | { kind: 'gap'; index: number };
+
+/** Remove a widget from rows; empty rows are dropped. */
+function removeWidget(rows: HomescreenRow[], id: HomescreenWidgetId): HomescreenRow[] {
+  return rows
+    .map((row) => row.filter((x) => x !== id) as HomescreenRow)
+    .filter((row) => row.length > 0);
+}
+
+/**
+ * Apply a position-aware homescreen drop.
+ *
+ * Beside rules:
+ * - Solo target → pair on the chosen side.
+ * - Already paired → insert on that side of the target; the card furthest from
+ *   the insertion is kicked to its own full-width row (before if it was left,
+ *   after if it was right).
+ *
+ * Gap rules:
+ * - Drag between rows / above top / below bottom → solo full-width row there.
+ */
+export function applyHomescreenDrop(
+  rows: HomescreenRow[],
+  fromId: string,
+  placement: HomescreenDropPlacement,
+): HomescreenRow[] {
+  if (!isWidgetId(fromId)) return rows;
+
+  if (placement.kind === 'gap') {
+    const from = locate(rows, fromId);
+    const next = removeWidget(rows, fromId);
+    // UI gap index is based on the layout *before* removal. If the dragged
+    // card sat in a row above the gap, removing it shifts later rows up by 1.
+    let idx = placement.index;
+    if (from && from.row < placement.index) {
+      idx = placement.index - 1;
+    }
+    idx = Math.max(0, Math.min(idx, next.length));
+    next.splice(idx, 0, [fromId]);
+    return next;
+  }
+
+  const { targetId, side } = placement;
+  if (fromId === targetId || !isWidgetId(targetId)) return rows;
+  if (!locate(rows, fromId) || !locate(rows, targetId)) return rows;
+
+  const next = removeWidget(rows, fromId);
+  const to = locate(next, targetId);
+  if (!to) return rows;
+
+  const rowIdx = to.row;
+  const row = next[rowIdx]!.slice() as HomescreenWidgetId[];
+
+  if (row.length === 1) {
+    const alone = row[0]!;
+    const paired: HomescreenRow =
+      side === 'left' ? [fromId, alone] : [alone, fromId];
+    next[rowIdx] = paired;
+    return next;
+  }
+
+  // Already two cards — insert relative to target, then kick the furthest.
+  const insertAt =
+    side === 'left' ? to.pos : to.pos + 1;
+  const three = row.slice() as HomescreenWidgetId[];
+  three.splice(insertAt, 0, fromId);
+  // three is length 3; fromId index is insertAt
+  const fromPos = insertAt;
+  let kickPos = 0;
+  let kickDist = -1;
+  for (let i = 0; i < three.length; i++) {
+    if (i === fromPos) continue;
+    const d = Math.abs(i - fromPos);
+    // Prefer kicking the non-target when distances tie
+    const isTarget = three[i] === targetId;
+    if (d > kickDist || (d === kickDist && isTarget === false && three[kickPos] === targetId)) {
+      kickDist = d;
+      kickPos = i;
+    }
+  }
+  const kicked = three[kickPos]!;
+  const kept = three.filter((_, i) => i !== kickPos) as HomescreenRow;
+
+  // Kicked card: own row before the pair if it was left of fromId, else after
+  const kickedWasLeft = kickPos < fromPos;
+  if (kickedWasLeft) {
+    next.splice(rowIdx, 1, [kicked], kept);
+  } else {
+    next.splice(rowIdx, 1, kept, [kicked]);
+  }
+  return next;
+}
+
+/**
+ * @deprecated Prefer applyHomescreenDrop. Kept for the "share row with…" menu:
+ * joins fromId into toId's row on the right (or reorders if already paired).
  */
 export function pairOrReorder(
   rows: HomescreenRow[],
   fromId: string,
   toId: string,
 ): HomescreenRow[] {
-  if (fromId === toId || !isWidgetId(fromId) || !isWidgetId(toId)) return rows;
-  const from = locate(rows, fromId);
-  const to = locate(rows, toId);
-  if (!from || !to) return rows;
-
-  // Remove fromId from its current row.
-  const next = rows.map((row) => row.slice()) as HomescreenRow[];
-  const oldRow = next[from.row]!;
-  oldRow.splice(from.pos, 1);
-  if (oldRow.length === 0) next.splice(from.row, 1);
-
-  // Re-locate the target row (index may have shifted if we removed a row before it).
-  const toRow2 = locate(next, toId)!;
-  const targetRow = next[toRow2.row]!;
-
-  if (targetRow.length < 2) {
-    targetRow.push(fromId);
-  } else {
-    next.splice(toRow2.row + 1, 0, [fromId]);
-  }
-
-  return next;
+  return applyHomescreenDrop(rows, fromId, {
+    kind: 'beside',
+    targetId: toId,
+    side: 'right',
+  });
 }
 
 /** Pop a card out to its own full-width row. Its old row partner (if any) also becomes solo. */

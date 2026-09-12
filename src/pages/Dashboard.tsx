@@ -62,10 +62,12 @@ import { upcomingExpanded } from '../lib/recurrence';
 import {
   pairOrReorder,
   popOutToFullRow,
+  applyHomescreenDrop,
   isPaired,
   visibleHomescreenRows,
   HOMESCREEN_WIDGETS,
   type HomescreenWidgetId,
+  type HomescreenDropPlacement,
 } from '../lib/homescreen';
 import {
   ensureProgress,
@@ -153,7 +155,7 @@ function SectionChrome({
   id,
   paired,
   dragging,
-  dragOver,
+  dropSide,
   onDragStart,
   onDragOver,
   onDrop,
@@ -167,10 +169,10 @@ function SectionChrome({
   id: SectionId;
   paired: boolean;
   dragging: boolean;
-  dragOver: boolean;
+  dropSide: 'left' | 'right' | null;
   onDragStart: (id: SectionId) => void;
   onDragOver: (e: DragEvent, id: SectionId) => void;
-  onDrop: (id: SectionId) => void;
+  onDrop: (e: DragEvent, id: SectionId) => void;
   onDragEnd: () => void;
   onPopOut: (id: SectionId) => void;
   onHide: (id: SectionId) => void;
@@ -186,7 +188,6 @@ function SectionChrome({
         'relative group/section transition-opacity min-h-0 flex flex-col',
         paired && 'h-full',
         dragging && 'opacity-40',
-        dragOver && 'ring-2 ring-accent/50 rounded-2xl',
       )}
       draggable
       onDragStart={(e) => {
@@ -197,10 +198,17 @@ function SectionChrome({
       onDragOver={(e) => onDragOver(e, id)}
       onDrop={(e) => {
         e.preventDefault();
-        onDrop(id);
+        e.stopPropagation();
+        onDrop(e, id);
       }}
       onDragEnd={onDragEnd}
     >
+      {dropSide === 'left' && (
+        <div className="pointer-events-none absolute inset-y-2 left-0 w-1.5 rounded-full bg-accent z-10 shadow-[0_0_8px_var(--app-accent,#38bdf8)]" />
+      )}
+      {dropSide === 'right' && (
+        <div className="pointer-events-none absolute inset-y-2 right-0 w-1.5 rounded-full bg-accent z-10 shadow-[0_0_8px_var(--app-accent,#38bdf8)]" />
+      )}
       <div className="flex items-center justify-end gap-1 mb-1 shrink-0">
         <div className="relative">
           <button
@@ -252,7 +260,7 @@ function SectionChrome({
         </div>
         <span
           className="p-1 rounded-md text-faint cursor-grab active:cursor-grabbing hover:text-fg hover:bg-nav-hover"
-          title="Drag onto another card to share its row"
+          title="Drag left/right of a card to share a row · between rows for full width"
         >
           <GripVertical className="w-3.5 h-3.5" />
         </span>
@@ -413,29 +421,68 @@ export function Dashboard() {
   const [viewNote, setViewNote] = useState<Note | null>(null);
 
   const [dragId, setDragId] = useState<SectionId | null>(null);
-  const [overId, setOverId] = useState<SectionId | null>(null);
+  const [dropHint, setDropHint] = useState<HomescreenDropPlacement | null>(null);
 
-  const onSectionDragStart = (id: SectionId) => setDragId(id);
+  const sideFromEvent = (e: DragEvent, el: HTMLElement): 'left' | 'right' => {
+    const rect = el.getBoundingClientRect();
+    const mid = rect.left + rect.width / 2;
+    return e.clientX < mid ? 'left' : 'right';
+  };
+
+  const onSectionDragStart = (id: SectionId) => {
+    setDragId(id);
+    setDropHint(null);
+  };
+
   const onSectionDragOver = (e: DragEvent, id: SectionId) => {
     e.preventDefault();
+    e.stopPropagation();
     e.dataTransfer.dropEffect = 'move';
-    setOverId(id);
+    if (dragId && dragId === id) {
+      setDropHint(null);
+      return;
+    }
+    const side = sideFromEvent(e, e.currentTarget as HTMLElement);
+    setDropHint({ kind: 'beside', targetId: id, side });
   };
-  /** Dropping (or picking from the menu) always pairs fromId into toId's row. */
+
+  const onGapDragOver = (e: DragEvent, index: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = 'move';
+    setDropHint({ kind: 'gap', index });
+  };
+
+  /** Menu: share row with… (join on the right). */
   const pairSections = (fromId: SectionId, toId: SectionId) => {
     if (fromId === toId) return;
     setMyHomescreenRows(pairOrReorder(rows, fromId, toId));
   };
-  const onSectionDrop = (toId: SectionId) => {
+
+  const commitDrop = (placement: HomescreenDropPlacement) => {
     const fromId = dragId;
     setDragId(null);
-    setOverId(null);
+    setDropHint(null);
     if (!fromId) return;
-    pairSections(fromId, toId);
+    setMyHomescreenRows(applyHomescreenDrop(rows, fromId, placement));
   };
+
+  const onSectionDrop = (e: DragEvent, toId: SectionId) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const side = sideFromEvent(e, e.currentTarget as HTMLElement);
+    commitDrop({ kind: 'beside', targetId: toId, side });
+  };
+
+  const onGapDrop = (e: DragEvent, index: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    commitDrop({ kind: 'gap', index });
+  };
+
   const onSectionDragEnd = () => {
     setDragId(null);
-    setOverId(null);
+    setDropHint(null);
   };
   const onPopOut = (id: SectionId) => {
     setMyHomescreenRows(popOutToFullRow(rows, id));
@@ -1900,7 +1947,7 @@ export function Dashboard() {
       {/* Toolbar — date lives in the app header only */}
       <div className="flex items-center justify-between gap-3">
         <p className="text-[11px] text-faint hidden sm:block">
-          Drag cards to reorder · use the width icon to full / half
+          Drag left/right of a card to share a row · drop between rows for full width
         </p>
         <div className="flex items-center gap-3 shrink-0 ml-auto">
           <button
@@ -2093,34 +2140,67 @@ export function Dashboard() {
         )}
       </Modal>
 
-      <div className="space-y-2">
+      <div className="space-y-1">
+        {/* Top gap — drop here to become the new first row */}
+        <div
+          className={cn(
+            'rounded-lg transition-all',
+            dragId
+              ? dropHint?.kind === 'gap' && dropHint.index === 0
+                ? 'h-8 bg-accent/25 ring-2 ring-accent/50'
+                : 'h-4 bg-transparent hover:bg-accent/10'
+              : 'h-0',
+          )}
+          onDragOver={(e) => onGapDragOver(e, 0)}
+          onDrop={(e) => onGapDrop(e, 0)}
+        />
         {visibleRows.map((row, ri) => (
-          <div
-            key={`row-${ri}-${row.join('-')}`}
-            className={cn(
-              'grid gap-2 items-stretch',
-              row.length > 1 ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1',
-            )}
-          >
-            {row.map((id) => (
-              <SectionChrome
-                key={id}
-                id={id}
-                paired={isPaired(rows, id)}
-                dragging={dragId === id}
-                dragOver={overId === id && dragId !== id}
-                onDragStart={onSectionDragStart}
-                onDragOver={onSectionDragOver}
-                onDrop={onSectionDrop}
-                onDragEnd={onSectionDragEnd}
-                onPopOut={onPopOut}
-                onHide={hideWidget}
-                partnerOptions={soloPartnersFor(id)}
-                onChoosePartner={pairSections}
-              >
-                {sections[id]}
-              </SectionChrome>
-            ))}
+          <div key={`row-${ri}-${row.join('-')}`}>
+            <div
+              className={cn(
+                'grid gap-2 items-stretch',
+                row.length > 1 ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1',
+              )}
+            >
+              {row.map((id) => (
+                <SectionChrome
+                  key={id}
+                  id={id}
+                  paired={isPaired(rows, id)}
+                  dragging={dragId === id}
+                  dropSide={
+                    dropHint?.kind === 'beside' &&
+                    dropHint.targetId === id &&
+                    dragId !== id
+                      ? dropHint.side
+                      : null
+                  }
+                  onDragStart={onSectionDragStart}
+                  onDragOver={onSectionDragOver}
+                  onDrop={onSectionDrop}
+                  onDragEnd={onSectionDragEnd}
+                  onPopOut={onPopOut}
+                  onHide={hideWidget}
+                  partnerOptions={soloPartnersFor(id)}
+                  onChoosePartner={pairSections}
+                >
+                  {sections[id]}
+                </SectionChrome>
+              ))}
+            </div>
+            {/* Gap under this row — index ri+1 inserts a solo row after it */}
+            <div
+              className={cn(
+                'rounded-lg transition-all mt-1',
+                dragId
+                  ? dropHint?.kind === 'gap' && dropHint.index === ri + 1
+                    ? 'h-8 bg-accent/25 ring-2 ring-accent/50'
+                    : 'h-4 bg-transparent'
+                  : 'h-0',
+              )}
+              onDragOver={(e) => onGapDragOver(e, ri + 1)}
+              onDrop={(e) => onGapDrop(e, ri + 1)}
+            />
           </div>
         ))}
         {visibleRows.length === 0 && (
