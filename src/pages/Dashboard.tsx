@@ -31,7 +31,6 @@ import {
   BookOpen,
   Lock,
   GraduationCap,
-  Lightbulb,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { cloudCreateJournalEntry } from '../lib/firebase';
