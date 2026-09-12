@@ -22,7 +22,17 @@ import {
   cobraPortraitPath,
   isCobraPortraitId,
 } from '../lib/cobraAvatars';
+import {
+  FAN_PACKS,
+  fanIdsForPack,
+  fanPackFromId,
+  fanPortraitPath,
+  isFanPortraitId,
+  type FanPackId,
+} from '../lib/fanAvatars';
 import { isAnyPortraitId, portraitSrc } from '../lib/portraitPath';
+
+type PortraitLib = 'roster' | 'cobra' | FanPackId;
 import {
   AVATAR_FLAIR_COLORS,
   AVATAR_FLAIR_SHAPES,
@@ -79,8 +89,8 @@ function LookEditorBody({
   setMode: (m: Mode) => void;
   pack: number;
   setPack: (p: number) => void;
-  portraitLib: 'roster' | 'cobra';
-  setPortraitLib: (l: 'roster' | 'cobra') => void;
+  portraitLib: PortraitLib;
+  setPortraitLib: (l: PortraitLib) => void;
 }) {
   return (
     <div className="space-y-4">
@@ -165,102 +175,115 @@ function LookEditorBody({
         </>
       ) : (
         <div className="space-y-3">
-          <div className="flex rounded-xl border border-border overflow-hidden">
-            <button
-              type="button"
-              className={cn(
-                'flex-1 py-1.5 text-xs font-medium',
-                portraitLib === 'roster' ? 'bg-accent text-accent-ink' : 'bg-surface-2 text-muted',
-              )}
-              onClick={() => {
-                setPortraitLib('roster');
-                setPack(1);
-              }}
-            >
-              Transformers
-            </button>
-            <button
-              type="button"
-              className={cn(
-                'flex-1 py-1.5 text-xs font-medium',
-                portraitLib === 'cobra' ? 'bg-accent text-accent-ink' : 'bg-surface-2 text-muted',
-              )}
-              onClick={() => {
-                setPortraitLib('cobra');
-                setPack(1);
-              }}
-            >
-              Cobra
-            </button>
-          </div>
-          <p className="text-xs text-muted">
-            {portraitLib === 'cobra'
-              ? '182 Cobra / G.I. Joe heads — works with avatar flair borders.'
-              : 'Transformers faces in 10 sets — works with avatar flair borders.'}
-          </p>
           <div className="flex flex-wrap gap-1.5">
-            {portraitLib === 'roster'
-              ? Array.from({ length: ROSTER_PACK_COUNT }, (_, i) => i + 1).map((p) => (
-                  <button
-                    key={p}
-                    type="button"
-                    onClick={() => setPack(p)}
-                    className={cn(
-                      'px-2.5 py-1 rounded-lg text-xs font-medium border',
-                      pack === p
-                        ? 'border-accent bg-accent/15 text-accent'
-                        : 'border-border text-muted hover:border-accent/40',
-                    )}
-                  >
-                    {rosterPackLabel(p)}
-                  </button>
-                ))
-              : Array.from({ length: COBRA_ROW_COUNT }, (_, i) => i + 1).map((p) => (
-                  <button
-                    key={p}
-                    type="button"
-                    onClick={() => setPack(p)}
-                    className={cn(
-                      'px-2.5 py-1 rounded-lg text-xs font-medium border',
-                      pack === p
-                        ? 'border-accent bg-accent/15 text-accent'
-                        : 'border-border text-muted hover:border-accent/40',
-                    )}
-                  >
-                    {cobraPackLabel(p)}
-                  </button>
-                ))}
+            {(
+              [
+                { id: 'roster' as PortraitLib, label: 'Transformers' },
+                { id: 'cobra' as PortraitLib, label: 'Cobra' },
+                ...FAN_PACKS.map((p) => ({ id: p.id as PortraitLib, label: p.label })),
+              ] as { id: PortraitLib; label: string }[]
+            ).map((lib) => (
+              <button
+                key={lib.id}
+                type="button"
+                className={cn(
+                  'px-2.5 py-1.5 rounded-lg text-xs font-medium border',
+                  portraitLib === lib.id
+                    ? 'border-accent bg-accent text-accent-ink'
+                    : 'border-border text-muted hover:border-accent/40',
+                )}
+                onClick={() => {
+                  setPortraitLib(lib.id);
+                  setPack(1);
+                }}
+              >
+                {lib.label}
+              </button>
+            ))}
           </div>
+          <p className="text-[11px] text-muted">
+            {portraitLib === 'cobra'
+              ? '182 Cobra / G.I. Joe heads — works with avatar flair.'
+              : portraitLib === 'roster'
+                ? 'Transformers faces in 10 sets — works with avatar flair.'
+                : portraitLib === 'ntd'
+                  ? '26 Nintendo faces — works with avatar flair.'
+                  : portraitLib === 'spy'
+                    ? '15 Spy×Family faces — works with avatar flair.'
+                    : '17 One Piece faces — works with avatar flair.'}
+          </p>
+          {(portraitLib === 'roster' || portraitLib === 'cobra') && (
+            <div className="flex flex-wrap gap-1.5">
+              {portraitLib === 'roster'
+                ? Array.from({ length: ROSTER_PACK_COUNT }, (_, i) => i + 1).map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => setPack(p)}
+                      className={cn(
+                        'px-2.5 py-1 rounded-lg text-xs font-medium border',
+                        pack === p
+                          ? 'border-accent bg-accent/15 text-accent'
+                          : 'border-border text-muted hover:border-accent/40',
+                      )}
+                    >
+                      {rosterPackLabel(p)}
+                    </button>
+                  ))
+                : Array.from({ length: COBRA_ROW_COUNT }, (_, i) => i + 1).map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => setPack(p)}
+                      className={cn(
+                        'px-2.5 py-1 rounded-lg text-xs font-medium border',
+                        pack === p
+                          ? 'border-accent bg-accent/15 text-accent'
+                          : 'border-border text-muted hover:border-accent/40',
+                      )}
+                    >
+                      {cobraPackLabel(p)}
+                    </button>
+                  ))}
+            </div>
+          )}
           <div className="grid grid-cols-5 gap-2 max-h-64 overflow-y-auto p-0.5">
-            {(portraitLib === 'roster' ? rosterIdsForPack(pack) : cobraIdsForPack(pack)).map(
-              (id) => {
-                const selected = portraitId === id;
-                const src =
-                  portraitLib === 'roster' ? rosterPortraitPath(id) : cobraPortraitPath(id);
-                return (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => onPortrait(id)}
-                    className={cn(
-                      'aspect-square rounded-xl overflow-hidden border-2 transition-transform',
-                      'bg-[#e8e8ec]',
-                      selected
-                        ? 'border-accent ring-2 ring-accent/40 scale-[1.03]'
-                        : 'border-border hover:border-accent/50',
-                    )}
-                  >
-                    <img
-                      src={src}
-                      alt=""
-                      className="w-full h-full object-contain"
-                      draggable={false}
-                      loading="lazy"
-                    />
-                  </button>
-                );
-              },
-            )}
+            {(portraitLib === 'roster'
+              ? rosterIdsForPack(pack)
+              : portraitLib === 'cobra'
+                ? cobraIdsForPack(pack)
+                : fanIdsForPack(portraitLib)
+            ).map((id) => {
+              const selected = portraitId === id;
+              const src =
+                portraitLib === 'roster'
+                  ? rosterPortraitPath(id)
+                  : portraitLib === 'cobra'
+                    ? cobraPortraitPath(id)
+                    : fanPortraitPath(id);
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => onPortrait(id)}
+                  className={cn(
+                    'aspect-square rounded-xl overflow-hidden border-2 transition-transform',
+                    'bg-[#e8e8ec]',
+                    selected
+                      ? 'border-accent ring-2 ring-accent/40 scale-[1.03]'
+                      : 'border-border hover:border-accent/50',
+                  )}
+                >
+                  <img
+                    src={src}
+                    alt=""
+                    className="w-full h-full object-contain"
+                    draggable={false}
+                    loading="lazy"
+                  />
+                </button>
+              );
+            })}
           </div>
           {isAnyPortraitId(portraitId) && (
             <button
@@ -392,7 +415,7 @@ function useLookEditorState() {
   const [nameFlairColor, setNameFlairColor] = useState('');
   const [mode, setMode] = useState<Mode>('emoji');
   const [pack, setPack] = useState(1);
-  const [portraitLib, setPortraitLib] = useState<'roster' | 'cobra'>('roster');
+  const [portraitLib, setPortraitLib] = useState<PortraitLib>('roster');
 
   const openEditor = () => {
     if (!currentUser) return;
@@ -407,6 +430,10 @@ function useLookEditorState() {
       setPortraitLib('cobra');
       const m = /^cobra_(\d{2})_/.exec(pid!);
       setPack(Math.max(1, m ? parseInt(m[1], 10) : 1));
+    } else if (isFanPortraitId(pid)) {
+      const fp = fanPackFromId(pid!) || 'ntd';
+      setPortraitLib(fp);
+      setPack(1);
     } else if (pid && /^\d{2}_/.test(pid)) {
       setPortraitLib('roster');
       setPack(Math.max(1, parseInt(pid.slice(0, 2), 10) || 1));
