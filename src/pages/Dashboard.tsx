@@ -422,35 +422,48 @@ export function Dashboard() {
 
   const [dragId, setDragId] = useState<SectionId | null>(null);
   const [dropHint, setDropHint] = useState<HomescreenDropPlacement | null>(null);
+  // Refs so drop handlers always see the latest hint (avoid stale closure on drop).
+  const dragIdRef = useRef<SectionId | null>(null);
+  const dropHintRef = useRef<HomescreenDropPlacement | null>(null);
+  dragIdRef.current = dragId;
+  dropHintRef.current = dropHint;
 
   const sideFromEvent = (e: DragEvent, el: HTMLElement): 'left' | 'right' => {
     const rect = el.getBoundingClientRect();
-    const mid = rect.left + rect.width / 2;
-    return e.clientX < mid ? 'left' : 'right';
+    // Prefer left when in the left 55% so left-drops are easier to hit.
+    const ratio = (e.clientX - rect.left) / Math.max(rect.width, 1);
+    return ratio < 0.55 ? 'left' : 'right';
   };
 
   const onSectionDragStart = (id: SectionId) => {
     setDragId(id);
+    dragIdRef.current = id;
     setDropHint(null);
+    dropHintRef.current = null;
   };
 
   const onSectionDragOver = (e: DragEvent, id: SectionId) => {
     e.preventDefault();
     e.stopPropagation();
     e.dataTransfer.dropEffect = 'move';
-    if (dragId && dragId === id) {
+    if (dragIdRef.current === id) {
       setDropHint(null);
+      dropHintRef.current = null;
       return;
     }
     const side = sideFromEvent(e, e.currentTarget as HTMLElement);
-    setDropHint({ kind: 'beside', targetId: id, side });
+    const hint: HomescreenDropPlacement = { kind: 'beside', targetId: id, side };
+    setDropHint(hint);
+    dropHintRef.current = hint;
   };
 
   const onGapDragOver = (e: DragEvent, index: number) => {
     e.preventDefault();
     e.stopPropagation();
     e.dataTransfer.dropEffect = 'move';
-    setDropHint({ kind: 'gap', index });
+    const hint: HomescreenDropPlacement = { kind: 'gap', index };
+    setDropHint(hint);
+    dropHintRef.current = hint;
   };
 
   /** Menu: share row with… (join on the right). */
@@ -460,9 +473,11 @@ export function Dashboard() {
   };
 
   const commitDrop = (placement: HomescreenDropPlacement) => {
-    const fromId = dragId;
+    const fromId = dragIdRef.current;
     setDragId(null);
+    dragIdRef.current = null;
     setDropHint(null);
+    dropHintRef.current = null;
     if (!fromId) return;
     setMyHomescreenRows(applyHomescreenDrop(rows, fromId, placement));
   };
@@ -470,6 +485,13 @@ export function Dashboard() {
   const onSectionDrop = (e: DragEvent, toId: SectionId) => {
     e.preventDefault();
     e.stopPropagation();
+    // Trust the last dragOver hint when it matches this card — drop event
+    // coordinates are often wrong and were forcing everything to the right.
+    const hint = dropHintRef.current;
+    if (hint?.kind === 'beside' && hint.targetId === toId) {
+      commitDrop(hint);
+      return;
+    }
     const side = sideFromEvent(e, e.currentTarget as HTMLElement);
     commitDrop({ kind: 'beside', targetId: toId, side });
   };
@@ -477,12 +499,19 @@ export function Dashboard() {
   const onGapDrop = (e: DragEvent, index: number) => {
     e.preventDefault();
     e.stopPropagation();
+    const hint = dropHintRef.current;
+    if (hint?.kind === 'gap') {
+      commitDrop(hint);
+      return;
+    }
     commitDrop({ kind: 'gap', index });
   };
 
   const onSectionDragEnd = () => {
     setDragId(null);
+    dragIdRef.current = null;
     setDropHint(null);
+    dropHintRef.current = null;
   };
   const onPopOut = (id: SectionId) => {
     setMyHomescreenRows(popOutToFullRow(rows, id));
@@ -2147,11 +2176,12 @@ export function Dashboard() {
             'rounded-lg transition-all',
             dragId
               ? dropHint?.kind === 'gap' && dropHint.index === 0
-                ? 'h-8 bg-accent/25 ring-2 ring-accent/50'
-                : 'h-4 bg-transparent hover:bg-accent/10'
+                ? 'h-10 my-1 bg-accent/30 ring-2 ring-accent/60'
+                : 'h-6 my-0.5 bg-accent/10 border border-dashed border-accent/30'
               : 'h-0',
           )}
           onDragOver={(e) => onGapDragOver(e, 0)}
+          onDragEnter={(e) => onGapDragOver(e, 0)}
           onDrop={(e) => onGapDrop(e, 0)}
         />
         {visibleRows.map((row, ri) => (
@@ -2191,14 +2221,15 @@ export function Dashboard() {
             {/* Gap under this row — index ri+1 inserts a solo row after it */}
             <div
               className={cn(
-                'rounded-lg transition-all mt-1',
+                'rounded-lg transition-all',
                 dragId
                   ? dropHint?.kind === 'gap' && dropHint.index === ri + 1
-                    ? 'h-8 bg-accent/25 ring-2 ring-accent/50'
-                    : 'h-4 bg-transparent'
+                    ? 'h-10 my-1 bg-accent/30 ring-2 ring-accent/60'
+                    : 'h-6 my-0.5 bg-accent/10 border border-dashed border-accent/30'
                   : 'h-0',
               )}
               onDragOver={(e) => onGapDragOver(e, ri + 1)}
+              onDragEnter={(e) => onGapDragOver(e, ri + 1)}
               onDrop={(e) => onGapDrop(e, ri + 1)}
             />
           </div>

@@ -241,42 +241,22 @@ export function applyHomescreenDrop(
   const rowIdx = to.row;
   const row = next[rowIdx]!.slice() as HomescreenWidgetId[];
 
-  if (row.length === 1) {
-    const alone = row[0]!;
-    const paired: HomescreenRow =
-      side === 'left' ? [fromId, alone] : [alone, fromId];
+  // fromId always stays with targetId on the chosen side.
+  // Solo row → just pair. Full row → the other card is kicked to its own row.
+  const partner = row.find((x) => x !== targetId) || null;
+  const paired: HomescreenRow =
+    side === 'left' ? [fromId, targetId] : [targetId, fromId];
+
+  if (!partner) {
     next[rowIdx] = paired;
     return next;
   }
 
-  // Already two cards — insert relative to target, then kick the furthest.
-  const insertAt =
-    side === 'left' ? to.pos : to.pos + 1;
-  const three = row.slice() as HomescreenWidgetId[];
-  three.splice(insertAt, 0, fromId);
-  // three is length 3; fromId index is insertAt
-  const fromPos = insertAt;
-  let kickPos = 0;
-  let kickDist = -1;
-  for (let i = 0; i < three.length; i++) {
-    if (i === fromPos) continue;
-    const d = Math.abs(i - fromPos);
-    // Prefer kicking the non-target when distances tie
-    const isTarget = three[i] === targetId;
-    if (d > kickDist || (d === kickDist && isTarget === false && three[kickPos] === targetId)) {
-      kickDist = d;
-      kickPos = i;
-    }
-  }
-  const kicked = three[kickPos]!;
-  const kept = three.filter((_, i) => i !== kickPos) as HomescreenRow;
-
-  // Kicked card: own row before the pair if it was left of fromId, else after
-  const kickedWasLeft = kickPos < fromPos;
-  if (kickedWasLeft) {
-    next.splice(rowIdx, 1, [kicked], kept);
+  const partnerWasLeft = row.indexOf(partner) < row.indexOf(targetId);
+  if (partnerWasLeft) {
+    next.splice(rowIdx, 1, [partner], paired);
   } else {
-    next.splice(rowIdx, 1, kept, [kicked]);
+    next.splice(rowIdx, 1, paired, [partner]);
   }
   return next;
 }
