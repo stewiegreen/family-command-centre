@@ -260,9 +260,7 @@ export function MessagesPage() {
               <div key={m.id} className={cn('flex items-end gap-2', mine ? 'justify-end' : 'justify-start')}>
                 {!mine && (
                   <Avatar
-                    name={sender?.name}
-                    emoji={sender?.emoji}
-                    color={sender?.color}
+                    {...(sender || {})}
                     size="sm"
                     className="mb-0.5"
                   />
@@ -281,9 +279,7 @@ export function MessagesPage() {
                 </div>
                 {mine && (
                   <Avatar
-                    name={sender?.name}
-                    emoji={sender?.emoji}
-                    color={sender?.color}
+                    {...(sender || {})}
                     size="sm"
                     className="mb-0.5"
                   />

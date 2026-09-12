@@ -244,13 +244,7 @@ export function SchoolPage() {
                     active ? 'border-accent bg-accent/15 text-accent' : 'border-border text-fg',
                   )}
                 >
-                  <Avatar
-                    name={look.name}
-                    color={look.color}
-                    emoji={look.emoji}
-                    initials={look.initials}
-                    size="sm"
-                  />
+                  <Avatar {...look} size="sm" />
                   {look.name}
                 </button>
               );

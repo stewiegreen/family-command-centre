@@ -18,6 +18,7 @@ import {
 } from 'date-fns';
 import { useApp } from '../context/AppContext';
 import { Avatar } from '../components/ui/Avatar';
+import { portraitSrc } from '../lib/portraitPath';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Input, Textarea } from '../components/ui/Input';
@@ -173,6 +174,44 @@ function emptyForm(memberId: string, day?: Date): FormState {
     notes: '',
     linkedNoteId: '',
   };
+}
+
+
+function MemberFaces({
+  ids,
+  getMember,
+}: {
+  ids: string[];
+  getMember: (id: string) => { emoji?: string; avatarPortraitId?: string | null } | undefined;
+}) {
+  if (!ids.length) return null;
+  return (
+    <span className="shrink-0 inline-flex items-center gap-0.5">
+      {ids.map((id) => {
+        const m = getMember(id);
+        const src = portraitSrc(m?.avatarPortraitId);
+        if (src) {
+          return (
+            <img
+              key={id}
+              src={src}
+              alt=""
+              className="w-3.5 h-3.5 rounded-full object-cover shrink-0"
+              draggable={false}
+            />
+          );
+        }
+        if (m?.emoji) {
+          return (
+            <span key={id} className="text-xs leading-none">
+              {m.emoji}
+            </span>
+          );
+        }
+        return null;
+      })}
+    </span>
+  );
 }
 
 export function CalendarPage() {
@@ -646,10 +685,7 @@ export function CalendarPage() {
                 <Avatar
                   size="sm"
                   className="!w-7 !h-7 !text-sm"
-                  name={getMember(filterMemberId)?.name}
-                  color={getMember(filterMemberId)?.color}
-                  emoji={getMember(filterMemberId)?.emoji}
-                  initials={getMember(filterMemberId)?.initials}
+                  {...(getMember(filterMemberId) || {})}
                 />
               )}
               <span className="truncate font-medium">
@@ -704,10 +740,7 @@ export function CalendarPage() {
                         <Avatar
                           size="sm"
                           className="!w-7 !h-7 !text-sm"
-                          name={look.name}
-                          color={look.color}
-                          emoji={look.emoji}
-                          initials={look.initials}
+                          {...look}
                         />
                         <span className="truncate">{look.name}</span>
                       </button>
@@ -974,10 +1007,7 @@ export function CalendarPage() {
                       <Avatar
                         size="sm"
                         className="!w-6 !h-6 !text-xs"
-                        name={look.name}
-                        color={look.color}
-                        emoji={look.emoji}
-                        initials={look.initials}
+                        {...look}
                       />
                       {look.name}
                     </button>
@@ -1207,7 +1237,7 @@ function MonthView({
   expanded: ExpandedEvent[];
   tasksOnDay: (day: Date) => Todo[];
   taskExtra: (t: Todo) => string;
-  getMember: (id: string) => { emoji?: string; name: string; color: string } | undefined;
+  getMember: (id: string) => { emoji?: string; name: string; color: string; avatarPortraitId?: string | null; avatarFlairShape?: string; avatarFlairColor?: string; initials?: string } | undefined;
   memberColor: (id: string) => string;
   onDayClick: (d: Date) => void;
   onEventClick: (ev: ExpandedEvent) => void;
@@ -1268,7 +1298,7 @@ function MonthWeekRow({
   expanded: ExpandedEvent[];
   tasksOnDay: (day: Date) => Todo[];
   taskExtra: (t: Todo) => string;
-  getMember: (id: string) => { emoji?: string; name: string; color: string } | undefined;
+  getMember: (id: string) => { emoji?: string; name: string; color: string; avatarPortraitId?: string | null; avatarFlairShape?: string; avatarFlairColor?: string; initials?: string } | undefined;
   memberColor: (id: string) => string;
   onDayClick: (d: Date) => void;
   onEventClick: (ev: ExpandedEvent) => void;
@@ -1376,10 +1406,6 @@ function MonthWeekRow({
                     .filter(Boolean)
                     .map((m) => (m ? `${m.emoji || ''} ${m.name}`.trim() : ''))
                     .join(', ');
-                  const emojis = ids
-                    .map((id) => getMember(id)?.emoji)
-                    .filter(Boolean)
-                    .join('');
                   return (
                     <div
                       key={ev.id}
@@ -1397,9 +1423,7 @@ function MonthWeekRow({
                       style={eventChipStyle(ev, memberColor, { alpha: '48' })}
                       title={(names ? names + ': ' : '') + formatEventTimeLabel(ev) + ev.title}
                     >
-                      {emojis && (
-                        <span className="shrink-0 text-xs leading-none">{emojis}</span>
-                      )}
+                      <MemberFaces ids={ids} getMember={getMember} />
                       <span className="truncate">
                         {formatEventTimeLabel(ev)}
                         {ev.title}
@@ -1441,11 +1465,7 @@ function MonthWeekRow({
           .filter(Boolean)
           .map((m) => (m ? `${m.emoji || ''} ${m.name}`.trim() : ''))
           .join(', ');
-        const emojis = ids
-          .map((id) => getMember(id)?.emoji)
-          .filter(Boolean)
-          .join('');
-        return (
+                return (
           <div
             key={ev.id + '-span'}
             draggable
@@ -1468,9 +1488,13 @@ function MonthWeekRow({
             }}
             title={(names ? names + ': ' : '') + ev.title}
           >
-            {emojis ? `${emojis} ` : ''}
-            {ev.title}
-            {ev.recurrence && ev.recurrence !== 'none' ? ' ↻' : ''}
+            <span className="inline-flex items-center gap-1">
+              <MemberFaces ids={ids} getMember={getMember} />
+              <span className="truncate">
+                {ev.title}
+                {ev.recurrence && ev.recurrence !== 'none' ? ' ↻' : ''}
+              </span>
+            </span>
           </div>
         );
       })}
@@ -1508,7 +1532,7 @@ function TimeGridView({
   expanded: ExpandedEvent[];
   tasksOnDay: (day: Date) => Todo[];
   taskExtra: (t: Todo) => string;
-  getMember: (id: string) => { emoji?: string; name: string; color: string } | undefined;
+  getMember: (id: string) => { emoji?: string; name: string; color: string; avatarPortraitId?: string | null; avatarFlairShape?: string; avatarFlairColor?: string; initials?: string } | undefined;
   memberColor: (id: string) => string;
   onSlotClick: (d: Date, hour: number) => void;
   onCreateRange: (day: Date, startMins: number, endMins: number) => void;
@@ -1798,11 +1822,7 @@ function TimeGridView({
               >
                 {allDayByDay[di].map((ev) => {
                   const ids = eventMemberIds(ev);
-                  const emojis = ids
-                    .map((id) => getMember(id)?.emoji)
-                    .filter(Boolean)
-                    .join('');
-                  return (
+                                    return (
                     <button
                       key={ev.id}
                       type="button"
@@ -1813,8 +1833,10 @@ function TimeGridView({
                       }}
                       title={ev.title}
                     >
-                      {emojis ? `${emojis} ` : ''}
-                      {ev.title}
+                      <span className="inline-flex items-center gap-1 max-w-full">
+                        <MemberFaces ids={ids} getMember={getMember} />
+                        <span className="truncate">{ev.title}</span>
+                      </span>
                     </button>
                   );
                 })}
@@ -1919,11 +1941,7 @@ function TimeGridView({
                     const widthPct = 100 / layout.columnCount;
                     const leftPct = layout.column * widthPct;
                     const ids = eventMemberIds(ev);
-                    const emojis = ids
-                      .map((id) => getMember(id)?.emoji)
-                      .filter(Boolean)
-                      .join('');
-                    return (
+                                        return (
                       <div
                         key={ev.id}
                         data-event-block
@@ -1949,10 +1967,12 @@ function TimeGridView({
                           className="w-full h-full text-left px-1.5 py-1 overflow-hidden pointer-events-none"
                           title={`${format(s, 'H:mm')}–${format(e, 'H:mm')} ${ev.title}`}
                         >
-                          <div className="font-semibold truncate leading-snug text-sm">
-                            {emojis ? `${emojis} ` : ''}
-                            {ev.title}
-                            {ev.linkedNoteId ? ' 📎' : ''}
+                          <div className="font-semibold truncate leading-snug text-sm flex items-center gap-1">
+                            <MemberFaces ids={ids} getMember={getMember} />
+                            <span className="truncate">
+                              {ev.title}
+                              {ev.linkedNoteId ? ' 📎' : ''}
+                            </span>
                           </div>
                           {height > 30 && (
                             <div className="text-[11px] opacity-90 truncate font-medium">
