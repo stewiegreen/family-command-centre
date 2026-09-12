@@ -13,7 +13,7 @@ type Props = {
 };
 
 /**
- * Social-style avatar cropper: drag (or arrows) to pan, slider to zoom.
+ * Social-style avatar cropper: drag to pan, slider to zoom.
  * Exports a square JPEG for Avatar + flair rings.
  */
 export function AvatarPhotoCropper({ src, onCancel, onConfirm, busy }: Props) {
@@ -45,7 +45,6 @@ export function AvatarPhotoCropper({ src, onCancel, onConfirm, busy }: Props) {
       if (!natural.w || !natural.h) return { x: 0, y: 0 };
       const dw = natural.w * cover * z;
       const dh = natural.h * cover * z;
-      // How far the image center can move before an edge shows inside the frame
       const maxX = Math.max(0, (dw - FRAME) / 2);
       const maxY = Math.max(0, (dh - FRAME) / 2);
       return {
@@ -75,18 +74,15 @@ export function AvatarPhotoCropper({ src, onCancel, onConfirm, busy }: Props) {
     setOffset({ x: 0, y: 0 });
   };
 
-  // Re-clamp when zoom changes
   useEffect(() => {
     applyOffset(offsetRef.current.x, offsetRef.current.y, zoom);
   }, [zoom, applyOffset]);
 
-  // Native pointer listeners — more reliable than React synthetic events for drag
   useEffect(() => {
     const el = frameRef.current;
     if (!el) return;
 
     const onDown = (e: PointerEvent) => {
-      // Only primary button / touch
       if (e.pointerType === 'mouse' && e.button !== 0) return;
       e.preventDefault();
       el.setPointerCapture(e.pointerId);
@@ -104,9 +100,7 @@ export function AvatarPhotoCropper({ src, onCancel, onConfirm, busy }: Props) {
       const d = dragRef.current;
       if (!d || d.pointerId !== e.pointerId) return;
       e.preventDefault();
-      const dx = e.clientX - d.startX;
-      const dy = e.clientY - d.startY;
-      applyOffset(d.originX + dx, d.originY + dy);
+      applyOffset(d.originX + (e.clientX - d.startX), d.originY + (e.clientY - d.startY));
     };
 
     const onUp = (e: PointerEvent) => {
@@ -133,10 +127,6 @@ export function AvatarPhotoCropper({ src, onCancel, onConfirm, busy }: Props) {
     };
   }, [applyOffset]);
 
-  const nudge = (dx: number, dy: number) => {
-    applyOffset(offsetRef.current.x + dx, offsetRef.current.y + dy);
-  };
-
   const displayW = natural.w * cover * zoom;
   const displayH = natural.h * cover * zoom;
 
@@ -154,7 +144,6 @@ export function AvatarPhotoCropper({ src, onCancel, onConfirm, busy }: Props) {
     const scale = cover * z;
     const dw = natural.w * scale;
     const dh = natural.h * scale;
-    // Image top-left in frame coordinates (frame is 0..FRAME)
     const imgLeft = (FRAME - dw) / 2 + o.x;
     const imgTop = (FRAME - dh) / 2 + o.y;
     const sx = (0 - imgLeft) / scale;
@@ -176,7 +165,7 @@ export function AvatarPhotoCropper({ src, onCancel, onConfirm, busy }: Props) {
   return (
     <div className="space-y-3">
       <p className="text-xs text-muted">
-        Drag the photo to frame the face · use the slider to zoom · arrows for fine nudge
+        Drag the photo to frame the face · use the slider to zoom
       </p>
       <div
         ref={frameRef}
@@ -207,56 +196,6 @@ export function AvatarPhotoCropper({ src, onCancel, onConfirm, busy }: Props) {
             willChange: 'transform',
           }}
         />
-      </div>
-
-      {/* Nudge pad — works even if drag is awkward on some devices */}
-      <div className="flex justify-center">
-        <div className="grid grid-cols-3 gap-1 w-[7.5rem]">
-          <span />
-          <button
-            type="button"
-            className="h-8 rounded-lg bg-surface-2 text-fg text-sm border border-border hover:border-accent"
-            onClick={() => nudge(0, -16)}
-            aria-label="Nudge up"
-          >
-            ↑
-          </button>
-          <span />
-          <button
-            type="button"
-            className="h-8 rounded-lg bg-surface-2 text-fg text-sm border border-border hover:border-accent"
-            onClick={() => nudge(-16, 0)}
-            aria-label="Nudge left"
-          >
-            ←
-          </button>
-          <button
-            type="button"
-            className="h-8 rounded-lg bg-surface-2 text-muted text-[10px] border border-border"
-            onClick={() => applyOffset(0, 0)}
-            aria-label="Recenter"
-          >
-            ·
-          </button>
-          <button
-            type="button"
-            className="h-8 rounded-lg bg-surface-2 text-fg text-sm border border-border hover:border-accent"
-            onClick={() => nudge(16, 0)}
-            aria-label="Nudge right"
-          >
-            →
-          </button>
-          <span />
-          <button
-            type="button"
-            className="h-8 rounded-lg bg-surface-2 text-fg text-sm border border-border hover:border-accent"
-            onClick={() => nudge(0, 16)}
-            aria-label="Nudge down"
-          >
-            ↓
-          </button>
-          <span />
-        </div>
       </div>
 
       <div className="space-y-1">

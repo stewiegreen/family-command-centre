@@ -18,6 +18,7 @@ import {
   saveLocalData,
 } from '../lib/storage';
 import { migratePayload } from '../lib/defaults';
+import { withAppearance } from '../lib/appearance';
 import {
   resolveHomescreenRows,
   toHomescreenRowDocs,
@@ -442,38 +443,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [data.settings.theme, data.settings.currentUserId, data.appearance]);
 
   const currentUserRaw = data.members.find((m) => m.id === data.settings.currentUserId);
-  const currentUser = currentUserRaw
-    ? {
-        ...currentUserRaw,
-        emoji: data.appearance?.[currentUserRaw.id]?.emoji ?? currentUserRaw.emoji,
-        color: data.appearance?.[currentUserRaw.id]?.color ?? currentUserRaw.color,
-        avatarPortraitId: data.appearance?.[currentUserRaw.id]?.avatarPortraitId ?? currentUserRaw.avatarPortraitId,
-        avatarFlairId: data.appearance?.[currentUserRaw.id]?.avatarFlairId,
-        nameFlairId: data.appearance?.[currentUserRaw.id]?.nameFlairId,
-        avatarFlairShape: data.appearance?.[currentUserRaw.id]?.avatarFlairShape,
-        avatarFlairColor: data.appearance?.[currentUserRaw.id]?.avatarFlairColor,
-        nameFlairText: data.appearance?.[currentUserRaw.id]?.nameFlairText,
-        nameFlairColor: data.appearance?.[currentUserRaw.id]?.nameFlairColor,
-      }
-    : undefined;
+  const currentUser = currentUserRaw ? withAppearance(currentUserRaw, data) : undefined;
   const getMember = useCallback(
     (id: string) => {
       const m = data.members.find((x) => x.id === id);
-      if (!m) return undefined;
-      const a = data.appearance?.[id];
-      if (!a) return m;
-      return {
-        ...m,
-        emoji: a.emoji ?? m.emoji,
-        color: a.color ?? m.color,
-        avatarPortraitId: a.avatarPortraitId !== undefined ? a.avatarPortraitId : m.avatarPortraitId,
-        avatarFlairId: a.avatarFlairId,
-        nameFlairId: a.nameFlairId,
-        avatarFlairShape: a.avatarFlairShape,
-        avatarFlairColor: a.avatarFlairColor,
-        nameFlairText: a.nameFlairText,
-        nameFlairColor: a.nameFlairColor,
-      };
+      return m ? withAppearance(m, data) : undefined;
     },
     [data.members, data.appearance],
   );
