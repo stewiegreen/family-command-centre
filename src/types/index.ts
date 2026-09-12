@@ -55,6 +55,8 @@ export interface Member {
   emoji?: string;
   /** Built-in roster portrait id (e.g. "03_12"). */
   avatarPortraitId?: string | null;
+  /** Custom uploaded avatar URL. */
+  avatarCustomUrl?: string | null;
   initials: string;
   role: Role;
   /** Optional 4–6 digit unlock PIN for this profile (client-gated). */
@@ -644,6 +646,8 @@ export interface FamilyData {
       emoji?: string;
       /** Roster portrait id; when set, Avatar shows the image (flair still applies). */
       avatarPortraitId?: string | null;
+      /** Uploaded custom photo avatar URL (R2). Prefer over portrait packs when set. */
+      avatarCustomUrl?: string | null;
       color?: string;
       theme?: ThemeId;
       /** Permanent shop unlocks */

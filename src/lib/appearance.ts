@@ -10,6 +10,8 @@ export function withAppearance(member: Member, data: Pick<FamilyData, 'appearanc
     color: a.color ?? member.color,
     avatarPortraitId:
       a.avatarPortraitId !== undefined ? a.avatarPortraitId : member.avatarPortraitId,
+    avatarCustomUrl:
+      a.avatarCustomUrl !== undefined ? a.avatarCustomUrl : member.avatarCustomUrl,
     avatarFlairId: a.avatarFlairId ?? member.avatarFlairId,
     avatarFlairShape: a.avatarFlairShape ?? member.avatarFlairShape,
     avatarFlairColor: a.avatarFlairColor ?? member.avatarFlairColor,

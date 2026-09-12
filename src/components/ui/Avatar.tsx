@@ -11,6 +11,8 @@ interface AvatarProps {
   className?: string;
   /** Portrait id — roster "03_12" or cobra "cobra_01_09" */
   avatarPortraitId?: string | null;
+  /** Custom uploaded photo URL (R2). Wins over portrait packs when set. */
+  avatarCustomUrl?: string | null;
   avatarFlairId?: string;
   avatarFlairShape?: string;
   avatarFlairColor?: string;
@@ -24,14 +26,17 @@ export function Avatar({
   size = 'md',
   className,
   avatarPortraitId,
+  avatarCustomUrl,
   avatarFlairShape,
   avatarFlairColor,
 }: AvatarProps) {
   const s = { sm: 'w-10 h-10 text-xl', md: 'w-12 h-12 text-2xl', lg: 'w-16 h-16 text-3xl' }[size];
   const shape = avatarFlairShapeClass(avatarFlairShape || 'circle');
   const glow = avatarFlairBoxShadow(avatarFlairColor);
-  const src = portraitSrc(avatarPortraitId);
-  const usePortrait = isAnyPortraitId(avatarPortraitId) && !!src;
+  const custom = (avatarCustomUrl || '').trim() || null;
+  const packSrc = portraitSrc(avatarPortraitId);
+  const src = custom || (isAnyPortraitId(avatarPortraitId) ? packSrc : null);
+  const useImage = !!src;
 
   return (
     <div
@@ -42,12 +47,12 @@ export function Avatar({
         className,
       )}
       style={{
-        backgroundColor: usePortrait ? '#f8fafc' : color,
+        backgroundColor: useImage ? '#f8fafc' : color,
         boxShadow: glow,
       }}
       title={name}
     >
-      {usePortrait ? (
+      {useImage ? (
         <img
           src={src!}
           alt={name || 'Avatar'}

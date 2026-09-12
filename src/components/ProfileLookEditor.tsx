@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { Avatar } from './ui/Avatar';
 import { Button } from './ui/Button';
@@ -6,6 +6,8 @@ import { Card } from './ui/Card';
 import { Modal } from './ui/Modal';
 import { Input } from './ui/Input';
 import { EmojiPickerPanel } from './EmojiPicker';
+import { AvatarPhotoCropper } from './AvatarPhotoCropper';
+import { getFirebaseAuth } from '../lib/firebase';
 import { MEMBER_COLORS } from '../lib/defaults';
 import { withAppearance } from '../lib/appearance';
 import { cn } from '../lib/cn';
@@ -48,13 +50,16 @@ import {
   sanitizeNameFlair,
 } from '../lib/flair';
 
-type Mode = 'emoji' | 'portrait';
+type Mode = 'emoji' | 'portrait' | 'photo';
 
 function LookEditorBody({
   name,
   emoji,
   color,
   portraitId,
+  customUrl,
+  onCustomUrl,
+  familyId,
   flairShape,
   flairColor,
   nameFlairText,
@@ -79,6 +84,9 @@ function LookEditorBody({
   emoji: string;
   color: string;
   portraitId: string | null;
+  customUrl: string | null;
+  onCustomUrl: (url: string | null) => void;
+  familyId?: string;
   flairShape?: string;
   flairColor?: string;
   nameFlairText: string;
@@ -100,6 +108,56 @@ function LookEditorBody({
   setPortraitLib: (l: PortraitLib) => void;
 }) {
   const [flairPanel, setFlairPanel] = useState<null | 'avatar' | 'name'>(null);
+  const [cropSrc, setCropSrc] = useState<string | null>(null);
+  const [uploadBusy, setUploadBusy] = useState(false);
+  const [uploadErr, setUploadErr] = useState('');
+  const photoInputRef = useRef<HTMLInputElement | null>(null);
+
+  const onPickPhoto = (file: File | null) => {
+    if (!file) return;
+    setUploadErr('');
+    if (!file.type.startsWith('image/')) {
+      setUploadErr('Please choose an image file.');
+      return;
+    }
+    if (cropSrc) URL.revokeObjectURL(cropSrc);
+    setCropSrc(URL.createObjectURL(file));
+  };
+
+  const onCropConfirm = async (blob: Blob) => {
+    setUploadBusy(true);
+    setUploadErr('');
+    try {
+      const auth = getFirebaseAuth();
+      const user = auth?.currentUser;
+      if (!user) {
+        setUploadErr('Sign in required to upload.');
+        return;
+      }
+      const idToken = await user.getIdToken();
+      const form = new FormData();
+      form.append('photo', new File([blob], 'avatar.jpg', { type: 'image/jpeg' }));
+      if (familyId) form.append('familyId', familyId);
+      const res = await fetch('/api/messages-upload', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${idToken}` },
+        body: form,
+      });
+      const body = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
+      if (!res.ok || !body.url) {
+        setUploadErr(body.error || `Upload failed (${res.status})`);
+        return;
+      }
+      onCustomUrl(body.url);
+      onPortrait(null);
+      if (cropSrc) URL.revokeObjectURL(cropSrc);
+      setCropSrc(null);
+    } catch (e) {
+      setUploadErr(e instanceof Error ? e.message : 'Upload failed');
+    } finally {
+      setUploadBusy(false);
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -131,6 +189,7 @@ function LookEditorBody({
             emoji={emoji}
             color={color}
             avatarPortraitId={portraitId}
+            avatarCustomUrl={customUrl}
             avatarFlairShape={flairShape}
             avatarFlairColor={flairColor}
             size="lg"
@@ -191,6 +250,16 @@ function LookEditorBody({
         >
           Portrait
         </button>
+        <button
+          type="button"
+          className={cn(
+            'flex-1 py-2 text-sm font-medium',
+            mode === 'photo' ? 'bg-accent text-accent-ink' : 'bg-surface-2 text-muted',
+          )}
+          onClick={() => setMode('photo')}
+        >
+          Photo
+        </button>
       </div>
 
       {mode === 'emoji' ? (
@@ -202,6 +271,7 @@ function LookEditorBody({
               onPick={(e) => {
                 onEmoji(e);
                 onPortrait(null);
+                onCustomUrl(null);
               }}
               tall
             />
@@ -227,7 +297,7 @@ function LookEditorBody({
             </div>
           </div>
         </>
-      ) : (
+      ) : mode === 'portrait' ? (
         <div className="space-y-3">
           <div className="flex flex-wrap gap-1.5">
             {(
@@ -342,7 +412,10 @@ function LookEditorBody({
                 <button
                   key={id}
                   type="button"
-                  onClick={() => onPortrait(id)}
+                  onClick={() => {
+                    onPortrait(id);
+                    onCustomUrl(null);
+                  }}
                   className={cn(
                     'aspect-square rounded-xl overflow-hidden border-2 transition-transform',
                     'bg-[#e8e8ec]',
@@ -372,7 +445,65 @@ function LookEditorBody({
             </button>
           )}
         </div>
+      ) : (
+        <div className="space-y-3">
+          <p className="text-xs text-muted">
+            Upload any photo, then zoom and drag until the face fills the circle — same idea as a
+            profile picture on social apps.
+          </p>
+          <input
+            ref={photoInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={(e) => onPickPhoto(e.target.files?.[0] || null)}
+          />
+          {!cropSrc ? (
+            <div className="space-y-2">
+              {customUrl ? (
+                <div className="flex flex-col items-center gap-2">
+                  <Avatar
+                    name={name}
+                    emoji={emoji}
+                    color={color}
+                    avatarCustomUrl={customUrl}
+                    avatarFlairShape={flairShape}
+                    avatarFlairColor={flairColor}
+                    size="lg"
+                    className="!w-20 !h-20"
+                  />
+                  <p className="text-xs text-muted">Current photo icon</p>
+                </div>
+              ) : null}
+              <Button className="w-full" onClick={() => photoInputRef.current?.click()}>
+                Choose photo
+              </Button>
+              {customUrl ? (
+                <button
+                  type="button"
+                  className="w-full text-xs text-muted hover:text-fg underline"
+                  onClick={() => onCustomUrl(null)}
+                >
+                  Remove photo icon
+                </button>
+              ) : null}
+            </div>
+          ) : (
+            <AvatarPhotoCropper
+              src={cropSrc}
+              busy={uploadBusy}
+              onCancel={() => {
+                if (cropSrc) URL.revokeObjectURL(cropSrc);
+                setCropSrc(null);
+              }}
+              onConfirm={(blob) => void onCropConfirm(blob)}
+            />
+          )}
+          {uploadErr ? <p className="text-xs text-red-500">{uploadErr}</p> : null}
+        </div>
       )}
+
 
       {(!unlockAvatarFlair || !unlockNameFlair) && (
         <p className="text-xs text-muted border-t border-border pt-2">
@@ -398,6 +529,7 @@ function LookEditorBody({
               emoji={emoji}
               color={color}
               avatarPortraitId={portraitId}
+              avatarCustomUrl={customUrl}
               avatarFlairShape={flairShape}
               avatarFlairColor={flairColor}
               size="lg"
@@ -503,13 +635,14 @@ function LookEditorBody({
 }
 
 function useLookEditorState() {
-  const { data, update, currentUser } = useApp();
+  const { data, update, currentUser, familyId } = useApp();
   const look = currentUser ? withAppearance(currentUser, data) : null;
   const app = currentUser ? data.appearance?.[currentUser.id] : undefined;
   const [open, setOpen] = useState(false);
   const [emoji, setEmoji] = useState('😀');
   const [color, setColor] = useState('#6366f1');
   const [portraitId, setPortraitId] = useState<string | null>(null);
+  const [customUrl, setCustomUrl] = useState<string | null>(null);
   const [flairShape, setFlairShape] = useState('circle');
   const [flairColor, setFlairColor] = useState('');
   const [nameFlairText, setNameFlairText] = useState('');
@@ -525,8 +658,10 @@ function useLookEditorState() {
     setEmoji(l.emoji || '😀');
     setColor(l.color || '#6366f1');
     const pid = l.avatarPortraitId || null;
+    const curl = (l.avatarCustomUrl || null) as string | null;
     setPortraitId(pid);
-    setMode(pid ? 'portrait' : 'emoji');
+    setCustomUrl(curl);
+    setMode(curl ? 'photo' : pid ? 'portrait' : 'emoji');
     if (isCobraPortraitId(pid)) {
       setPortraitLib('cobra');
       const m = /^cobra_(\d{2})_/.exec(pid!);
@@ -562,7 +697,8 @@ function useLookEditorState() {
             ...prev,
             emoji,
             color,
-            avatarPortraitId: portraitId || null,
+            avatarPortraitId: mode === 'portrait' ? portraitId || null : null,
+            avatarCustomUrl: mode === 'photo' ? customUrl || null : null,
             avatarFlairShape: flairShape || 'circle',
             avatarFlairColor: flairColor || undefined,
             nameFlairText: nameFlairText.trim() || undefined,
@@ -576,6 +712,7 @@ function useLookEditorState() {
 
   return {
     currentUser,
+    familyId,
     look,
     unlockAvatarFlair: !!app?.unlockAvatarFlair,
     unlockNameFlair: !!app?.unlockNameFlair,
@@ -587,6 +724,8 @@ function useLookEditorState() {
     setColor,
     portraitId,
     setPortraitId,
+    customUrl,
+    setCustomUrl,
     flairShape,
     setFlairShape,
     flairColor,
@@ -615,6 +754,9 @@ function EditorModal({ s }: { s: ReturnType<typeof useLookEditorState> }) {
         emoji={s.emoji}
         color={s.color}
         portraitId={s.portraitId}
+        customUrl={s.customUrl}
+        onCustomUrl={s.setCustomUrl}
+        familyId={s.familyId}
         flairShape={s.flairShape}
         flairColor={s.flairColor}
         nameFlairText={s.nameFlairText}
