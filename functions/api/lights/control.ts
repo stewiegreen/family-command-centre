@@ -1,13 +1,12 @@
 /**
  * POST /api/lights/control
- * Body: { "action": "on" | "off" }
+ * Body:
+ *   { "action": "on" | "off" }
+ *   { "action": "dim", "percent": 1-100 }
  * Auth: Firebase ID token (Bearer). Card is parents-only in the UI.
- *
- * Env (same as Emby webhook lighting):
- *   TUYA_CLIENT_ID, TUYA_CLIENT_SECRET, TUYA_DEVICE_IDS
- *   optional TUYA_ENDPOINT, TUYA_RESTORE_PERCENT, FIREBASE_API_KEY
  */
 import {
+  setLivingRoomBrightness,
   setLivingRoomLights,
   tuyaConfigured,
   type TuyaEnv,
@@ -82,21 +81,32 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     return json({ error: 'Invalid id token' }, 401);
   }
 
-  let body: { action?: string };
+  let body: { action?: string; percent?: number };
   try {
-    body = (await context.request.json()) as { action?: string };
+    body = (await context.request.json()) as { action?: string; percent?: number };
   } catch {
-    return json({ error: 'Expected JSON body { action: "on"|"off" }' }, 400);
+    return json(
+      { error: 'Expected JSON body { action: "on"|"off"|"dim", percent?: number }' },
+      400,
+    );
   }
 
   const action = (body.action || '').toLowerCase();
-  if (action !== 'on' && action !== 'off') {
-    return json({ error: 'action must be "on" or "off"' }, 400);
-  }
 
   try {
-    const result = await setLivingRoomLights(env, action as 'on' | 'off');
-    return json({ ok: true, ...result });
+    if (action === 'on' || action === 'off') {
+      const result = await setLivingRoomLights(env, action);
+      return json({ ok: true, ...result });
+    }
+    if (action === 'dim') {
+      const pct = Number(body.percent);
+      if (!Number.isFinite(pct) || pct < 1 || pct > 100) {
+        return json({ error: 'percent must be 1–100' }, 400);
+      }
+      const result = await setLivingRoomBrightness(env, pct);
+      return json({ ok: true, action: 'dim', ...result });
+    }
+    return json({ error: 'action must be "on", "off", or "dim"' }, 400);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error('Lights control failed:', message);

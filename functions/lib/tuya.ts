@@ -463,3 +463,27 @@ export async function setLivingRoomLights(
   }
   return { power, devices: deviceIds.length };
 }
+
+/**
+ * Manual dim: set every device to the same brightness % (turns them on).
+ * Stores the value as last-known so later "On" / Emby restore uses it.
+ */
+export async function setLivingRoomBrightness(
+  env: TuyaEnv,
+  percent: number,
+): Promise<{ percent: number; devices: number }> {
+  const deviceIds = getDeviceIds(env);
+  if (!deviceIds.length) {
+    throw new Error('TUYA_DEVICE_IDS is empty');
+  }
+  const pct = clampPercent(percent, 50);
+  const token = await getToken(env);
+  await Promise.all(
+    deviceIds.map(async (deviceId) => {
+      lastBrightnessPct[deviceId] = pct;
+      await setBrightnessOne(env, token, deviceId, pct);
+    }),
+  );
+  markLightsRestored();
+  return { percent: pct, devices: deviceIds.length };
+}
