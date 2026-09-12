@@ -441,3 +441,25 @@ export function tuyaConfigured(env: TuyaEnv): boolean {
     getDeviceIds(env).length
   );
 }
+
+/**
+ * Manual parent control: turn every configured device fully on or off.
+ * Updates the cinema latch so Emby webhooks stay consistent.
+ */
+export async function setLivingRoomLights(
+  env: TuyaEnv,
+  power: 'on' | 'off',
+): Promise<{ power: 'on' | 'off'; devices: number }> {
+  const deviceIds = getDeviceIds(env);
+  if (!deviceIds.length) {
+    throw new Error('TUYA_DEVICE_IDS is empty');
+  }
+  if (power === 'off') {
+    await dimPlaybackLightingToOff(env);
+    markLightsOff('manual');
+  } else {
+    await restorePlaybackLighting(env);
+    markLightsRestored();
+  }
+  return { power, devices: deviceIds.length };
+}

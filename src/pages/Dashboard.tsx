@@ -31,6 +31,7 @@ import {
   BookOpen,
   Lock,
   GraduationCap,
+  Lightbulb,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { cloudCreateJournalEntry } from '../lib/firebase';
@@ -48,6 +49,7 @@ import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Modal } from '../components/ui/Modal';
 import { ProfileLookCard } from '../components/ProfileLookEditor';
+import { LightsCard } from '../components/LightsCard';
 import { PictureFrameCard } from '../components/PictureFrameCard';
 import type { CalendarEvent, ExpandedEvent, FamilyData, JournalVisibility, Note, PresenceStatus, Quest, ViewId } from '../types';
 import { applyTodoStatus, creditMemberForQuest } from '../lib/todoQuest';
@@ -123,6 +125,7 @@ const SECTION_LABELS: Record<SectionId, string> = {
   look: 'Profile look',
   pictureframe: 'Picture frame',
   pictureframe2: 'Picture frame 2',
+  lights: 'Lights',
 };
 
 const HOME_JOURNAL_MOODS = ['😊', '😌', '😐', '😔', '😤', '🤩', '😴', '🙏'] as const;
@@ -422,14 +425,21 @@ export function Dashboard() {
   const visibleRows = useMemo(() => {
     const base = visibleHomescreenRows(rows, myHiddenWidgets);
     const app = data.appearance?.[myId];
+    let next = base;
     // Don't show frame 2 until purchased; frame 1 still shows locked teaser if on layout
     if (!app?.unlockPictureFrame2) {
-      return base
+      next = next
         .map((row) => row.filter((id) => id !== 'pictureframe2'))
         .filter((row) => row.length > 0);
     }
-    return base;
-  }, [rows, myHiddenWidgets, data.appearance, myId]);
+    // Living-room lights control is parents-only
+    if (!isParent) {
+      next = next
+        .map((row) => row.filter((id) => id !== 'lights'))
+        .filter((row) => row.length > 0);
+    }
+    return next;
+  }, [rows, myHiddenWidgets, data.appearance, myId, isParent]);
   const [manageOpen, setManageOpen] = useState(false);
   const [viewNote, setViewNote] = useState<Note | null>(null);
 
@@ -1981,6 +1991,7 @@ export function Dashboard() {
         <PictureFrameCard slot={2} />
       </Card>
     ),
+    lights: isParent ? <LightsCard /> : <Card className="!p-4 text-sm text-muted">Parents only.</Card>,
   };
 
   return (
@@ -2272,6 +2283,7 @@ export function Dashboard() {
           {HOMESCREEN_WIDGETS.filter((id) => {
             if (id === 'pictureframe2' && !data.appearance?.[myId]?.unlockPictureFrame2)
               return false;
+            if (id === 'lights' && !isParent) return false;
             return true;
           }).map((id) => {
             const hidden = hiddenSet.has(id);
