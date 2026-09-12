@@ -188,7 +188,10 @@ function locate(rows: HomescreenRow[], id: HomescreenWidgetId): { row: number; p
  */
 export type HomescreenDropPlacement =
   | { kind: 'beside'; targetId: string; side: 'left' | 'right' }
-  | { kind: 'gap'; index: number };
+  /** New solo row at the very top */
+  | { kind: 'gapStart' }
+  /** New solo row after the row that currently contains afterId */
+  | { kind: 'gapAfter'; afterId: string };
 
 /** Remove a widget from rows; empty rows are dropped. */
 function removeWidget(rows: HomescreenRow[], id: HomescreenWidgetId): HomescreenRow[] {
@@ -216,17 +219,32 @@ export function applyHomescreenDrop(
 ): HomescreenRow[] {
   if (!isWidgetId(fromId)) return rows;
 
-  if (placement.kind === 'gap') {
+  if (placement.kind === 'gapStart') {
+    const next = removeWidget(rows, fromId);
+    next.unshift([fromId]);
+    return next;
+  }
+
+  if (placement.kind === 'gapAfter') {
     const from = locate(rows, fromId);
     const next = removeWidget(rows, fromId);
-    // UI gap index is based on the layout *before* removal. If the dragged
-    // card sat in a row above the gap, removing it shifts later rows up by 1.
-    let idx = placement.index;
-    if (from && from.row < placement.index) {
-      idx = placement.index - 1;
+    if (!isWidgetId(placement.afterId)) {
+      next.push([fromId]);
+      return next;
     }
-    idx = Math.max(0, Math.min(idx, next.length));
-    next.splice(idx, 0, [fromId]);
+    const loc = locate(next, placement.afterId);
+    if (loc) {
+      next.splice(loc.row + 1, 0, [fromId]);
+      return next;
+    }
+    // Anchor was the dragged card itself (gap under its old row). Insert at the
+    // index that row occupied so we land *after* the previous row, not at end.
+    if (from) {
+      const idx = Math.max(0, Math.min(from.row, next.length));
+      next.splice(idx, 0, [fromId]);
+      return next;
+    }
+    next.push([fromId]);
     return next;
   }
 

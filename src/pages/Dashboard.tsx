@@ -187,7 +187,9 @@ function SectionChrome({
       className={cn(
         'relative group/section transition-opacity min-h-0 flex flex-col',
         paired && 'h-full',
-        dragging && 'opacity-40',
+        // Collapse while dragging so between-row gaps line up under the cursor
+        // (opacity-only left a ghost that made the wrong gap easy to hit).
+        dragging && 'hidden',
       )}
       draggable
       onDragStart={(e) => {
@@ -457,11 +459,10 @@ export function Dashboard() {
     dropHintRef.current = hint;
   };
 
-  const onGapDragOver = (e: DragEvent, index: number) => {
+  const onGapDragOver = (e: DragEvent, hint: HomescreenDropPlacement) => {
     e.preventDefault();
     e.stopPropagation();
     e.dataTransfer.dropEffect = 'move';
-    const hint: HomescreenDropPlacement = { kind: 'gap', index };
     setDropHint(hint);
     dropHintRef.current = hint;
   };
@@ -496,15 +497,15 @@ export function Dashboard() {
     commitDrop({ kind: 'beside', targetId: toId, side });
   };
 
-  const onGapDrop = (e: DragEvent, index: number) => {
+  const onGapDrop = (e: DragEvent, fallback: HomescreenDropPlacement) => {
     e.preventDefault();
     e.stopPropagation();
     const hint = dropHintRef.current;
-    if (hint?.kind === 'gap') {
+    if (hint && (hint.kind === 'gapStart' || hint.kind === 'gapAfter')) {
       commitDrop(hint);
       return;
     }
-    commitDrop({ kind: 'gap', index });
+    commitDrop(fallback);
   };
 
   const onSectionDragEnd = () => {
@@ -2175,14 +2176,14 @@ export function Dashboard() {
           className={cn(
             'rounded-lg transition-all',
             dragId
-              ? dropHint?.kind === 'gap' && dropHint.index === 0
+              ? dropHint?.kind === 'gapStart'
                 ? 'h-10 my-1 bg-accent/30 ring-2 ring-accent/60'
                 : 'h-6 my-0.5 bg-accent/10 border border-dashed border-accent/30'
               : 'h-0',
           )}
-          onDragOver={(e) => onGapDragOver(e, 0)}
-          onDragEnter={(e) => onGapDragOver(e, 0)}
-          onDrop={(e) => onGapDrop(e, 0)}
+          onDragOver={(e) => onGapDragOver(e, { kind: 'gapStart' })}
+          onDragEnter={(e) => onGapDragOver(e, { kind: 'gapStart' })}
+          onDrop={(e) => onGapDrop(e, { kind: 'gapStart' })}
         />
         {visibleRows.map((row, ri) => (
           <div key={`row-${ri}-${row.join('-')}`}>
@@ -2218,19 +2219,25 @@ export function Dashboard() {
                 </SectionChrome>
               ))}
             </div>
-            {/* Gap under this row — index ri+1 inserts a solo row after it */}
+            {/* Gap under this row — insert a solo full-width row after it */}
             <div
               className={cn(
                 'rounded-lg transition-all',
                 dragId
-                  ? dropHint?.kind === 'gap' && dropHint.index === ri + 1
+                  ? dropHint?.kind === 'gapAfter' && dropHint.afterId === row[0]
                     ? 'h-10 my-1 bg-accent/30 ring-2 ring-accent/60'
                     : 'h-6 my-0.5 bg-accent/10 border border-dashed border-accent/30'
                   : 'h-0',
               )}
-              onDragOver={(e) => onGapDragOver(e, ri + 1)}
-              onDragEnter={(e) => onGapDragOver(e, ri + 1)}
-              onDrop={(e) => onGapDrop(e, ri + 1)}
+              onDragOver={(e) =>
+                onGapDragOver(e, { kind: 'gapAfter', afterId: row[0]! })
+              }
+              onDragEnter={(e) =>
+                onGapDragOver(e, { kind: 'gapAfter', afterId: row[0]! })
+              }
+              onDrop={(e) =>
+                onGapDrop(e, { kind: 'gapAfter', afterId: row[0]! })
+              }
             />
           </div>
         ))}
