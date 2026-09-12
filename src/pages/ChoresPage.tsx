@@ -1474,10 +1474,7 @@ export function ChoresPage() {
                   )}
                 >
                   <Avatar
-                    name={look.name}
-                    emoji={look.emoji}
-                    color={look.color}
-                    initials={look.initials}
+                    {...look}
                     size="md"
                     className="!w-11 !h-11 !text-2xl !rounded-xl"
                   />
