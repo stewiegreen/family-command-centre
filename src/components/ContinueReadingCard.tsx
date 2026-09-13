@@ -37,8 +37,8 @@ function BookStrip({
   onMedia: () => void;
 }) {
   return (
-    <div className="flex flex-col flex-1 min-h-[10rem]">
-      {error && <p className="text-xs text-warn mb-2 line-clamp-3">{error}</p>}
+    <div className="flex flex-col flex-1 min-h-0">
+      {error && <p className="text-xs text-warn mb-2 line-clamp-3 shrink-0">{error}</p>}
 
       {loading && books.length === 0 && !error && (
         <p className="text-sm text-muted py-8 text-center flex-1">Loading…</p>
@@ -59,52 +59,67 @@ function BookStrip({
       )}
 
       {books.length > 0 && (
-        <div className="flex gap-2.5 overflow-x-auto pb-1 -mx-0.5 px-0.5 snap-x flex-1 items-start">
-          {books.map((b) => {
-            const pct = bookProgressPercent(b);
-            return (
-              <button
-                key={b.id}
-                type="button"
-                onClick={() => onOpen(b)}
-                className="snap-start shrink-0 w-[4.75rem] sm:w-24 text-left group"
-              >
-                <div className="relative aspect-[2/3] rounded-lg overflow-hidden bg-surface-2 border border-border shadow-sm">
-                  <img
-                    src={komgaBookThumbUrl(b.id, memberId)}
-                    alt=""
-                    className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform"
-                    loading="lazy"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = 'none';
+        <>
+          {/*
+            Covers size from available card height (not a fixed rem width).
+            aspect-ratio 2/3 → width follows height so a tall/full-width card
+            fills with large covers instead of a small strip and empty space.
+          */}
+          <div className="flex-1 min-h-[9rem] flex gap-3 overflow-x-auto overflow-y-hidden items-stretch px-0.5 -mx-0.5">
+            {books.map((b) => {
+              const pct = bookProgressPercent(b);
+              return (
+                <button
+                  key={b.id}
+                  type="button"
+                  onClick={() => onOpen(b)}
+                  className="h-full max-h-full shrink-0 flex flex-col text-left group"
+                >
+                  <div
+                    className="relative rounded-lg overflow-hidden bg-surface-2 border border-border shadow-sm min-h-0"
+                    style={{
+                      height: 'calc(100% - 2.35rem)',
+                      aspectRatio: '2 / 3',
+                      width: 'auto',
                     }}
-                  />
-                  {pct > 0 && pct < 100 && (
-                    <div className="absolute left-0 right-0 bottom-0 h-1.5 bg-black/40">
-                      <div className="h-full bg-amber-400" style={{ width: `${pct}%` }} />
-                    </div>
+                  >
+                    <img
+                      src={komgaBookThumbUrl(b.id, memberId)}
+                      alt=""
+                      className="absolute inset-0 w-full h-full object-cover group-hover:scale-[1.03] transition-transform"
+                      loading="lazy"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = 'none';
+                      }}
+                    />
+                    {pct > 0 && pct < 100 && (
+                      <div className="absolute left-0 right-0 bottom-0 h-1.5 bg-black/40 z-10">
+                        <div className="h-full bg-amber-400" style={{ width: `${pct}%` }} />
+                      </div>
+                    )}
+                  </div>
+                  <p className="mt-1 text-[10px] sm:text-[11px] font-medium text-fg line-clamp-2 leading-snug max-w-[7rem] sm:max-w-[9rem]">
+                    {bookTitle(b)}
+                  </p>
+                  {pct > 0 && pct < 100 ? (
+                    <p className="text-[10px] text-muted tabular-nums leading-none">
+                      {Math.round(pct)}%
+                    </p>
+                  ) : (
+                    <p className="text-[10px] text-transparent leading-none">·</p>
                   )}
-                </div>
-                <p className="mt-1 text-[10px] sm:text-[11px] font-medium text-fg line-clamp-2 leading-snug">
-                  {bookTitle(b)}
-                </p>
-                {pct > 0 && pct < 100 && (
-                  <p className="text-[10px] text-muted tabular-nums">{Math.round(pct)}%</p>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      {books.length > 0 && (
-        <button
-          type="button"
-          onClick={onMedia}
-          className="mt-2 text-[11px] text-muted hover:text-fg self-start"
-        >
-          See all in Media →
-        </button>
+                </button>
+              );
+            })}
+          </div>
+          <button
+            type="button"
+            onClick={onMedia}
+            className="mt-2 text-[11px] text-muted hover:text-fg self-start shrink-0"
+          >
+            See all in Media →
+          </button>
+        </>
       )}
     </div>
   );
@@ -125,7 +140,7 @@ function FaceHeader({
 }) {
   const Icon = icon === 'deck' ? Library : BookOpen;
   return (
-    <div className="flex items-center gap-2 mb-3">
+    <div className="flex items-center gap-2 mb-3 shrink-0">
       <div
         className={cn(
           'w-8 h-8 rounded-xl flex items-center justify-center shrink-0',
@@ -155,6 +170,7 @@ function FaceHeader({
  * Home flip card:
  * - Front: On Deck (next up from Komga)
  * - Back: Continue reading (IN_PROGRESS)
+ * Covers scale with card height so tall/full-width layouts fill the face.
  */
 export function ContinueReadingCard() {
   const { currentUser, data, setView } = useApp();
@@ -192,8 +208,8 @@ export function ContinueReadingCard() {
   const goMedia = () => setView('media');
   const openBook = (b: KomgaBook) => setReading(b);
 
-  // Shared min height via matching structure + FlipCard measure; pb for flip chip
-  const faceClass = '!p-4 pb-12 h-full flex flex-col min-h-[14rem]';
+  // h-full + flex-1 chain so covers can consume leftover height; pb for flip chip
+  const faceClass = '!p-4 pb-12 h-full flex flex-col min-h-[16rem]';
 
   return (
     <>
