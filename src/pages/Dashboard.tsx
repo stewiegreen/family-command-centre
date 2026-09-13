@@ -49,6 +49,7 @@ import { Card } from '../components/ui/Card';
 import { Modal } from '../components/ui/Modal';
 import { ProfileLookCard } from '../components/ProfileLookEditor';
 import { LightsCard } from '../components/LightsCard';
+import { ContinueReadingCard } from '../components/ContinueReadingCard';
 import { PictureFrameCard } from '../components/PictureFrameCard';
 import type { CalendarEvent, ExpandedEvent, FamilyData, JournalVisibility, Note, PresenceStatus, Quest, ViewId } from '../types';
 import { applyTodoStatus, creditMemberForQuest } from '../lib/todoQuest';
@@ -125,6 +126,7 @@ const SECTION_LABELS: Record<SectionId, string> = {
   pictureframe: 'Picture frame',
   pictureframe2: 'Picture frame 2',
   lights: 'Lights',
+  books: 'Continue reading',
 };
 
 const HOME_JOURNAL_MOODS = ['😊', '😌', '😐', '😔', '😤', '🤩', '😴', '🙏'] as const;
@@ -1991,6 +1993,7 @@ export function Dashboard() {
       </Card>
     ),
     lights: isParent ? <LightsCard /> : <Card className="!p-4 text-sm text-muted">Parents only.</Card>,
+    books: <ContinueReadingCard />,
   };
 
   return (

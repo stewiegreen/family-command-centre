@@ -106,9 +106,9 @@ export function MediaPage() {
     setKomgaError(null);
     try {
       const [prog, deck, libs] = await Promise.all([
-        komgaInProgress(12),
-        komgaOnDeck(12),
-        komgaLibraries(),
+        komgaInProgress(12, komgaMemberId),
+        komgaOnDeck(12, komgaMemberId),
+        komgaLibraries(komgaMemberId),
       ]);
       setInProgress(prog);
       setOnDeck(deck);
@@ -131,7 +131,7 @@ export function MediaPage() {
   useEffect(() => {
     void loadKomga();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [komgaMemberId]);
 
   const openItem = (item: EmbyItem) => {
     if (!webUrl || !serverId) {
