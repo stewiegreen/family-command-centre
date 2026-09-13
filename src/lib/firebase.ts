@@ -667,6 +667,22 @@ export async function fbSignOut() {
   return au.signOut(auth);
 }
 
+/**
+ * TEMP family migration helper — change the signed-in user's login email.
+ * Sends a confirmation link to the *new* address. Same uid / family link kept.
+ * Requires a recent password (reauthenticate).
+ */
+export async function changeSignInEmail(newEmail: string, currentPassword: string) {
+  const { authMod: au } = await loadModules();
+  if (!auth?.currentUser) throw new Error('Not signed in');
+  const user = auth.currentUser;
+  const email = user.email;
+  if (!email) throw new Error('Current account has no email');
+  const cred = au.EmailAuthProvider.credential(email, currentPassword);
+  await au.reauthenticateWithCredential(user, cred);
+  await au.verifyBeforeUpdateEmail(user, newEmail.trim());
+}
+
 export async function updateProfile(user: User, profile: { displayName?: string }) {
   const { authMod: au } = await loadModules();
   return au.updateProfile(user, profile);

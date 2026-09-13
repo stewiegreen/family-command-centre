@@ -15,6 +15,7 @@ import { JournalPage } from './pages/JournalPage';
 import { MessagesPage } from './pages/MessagesPage';
 import { MediaPage } from './pages/MediaPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { ChangeEmailPage } from './pages/ChangeEmailPage';
 import { ThemeStudioPage } from './pages/ThemeStudioPage';
 import { KidPinGate } from './components/PinGate';
 import { NotificationWatcher } from './components/NotificationWatcher';
@@ -67,6 +68,11 @@ function AppShell() {
       );
     }
     return <AuthScreen />;
+  }
+
+  // TEMP: /#change-email — remove ChangeEmailPage + this block after @greenhq.io migration
+  if (authUser && typeof window !== 'undefined' && window.location.hash.replace(/^#/, '') === 'change-email') {
+    return <ChangeEmailPage />;
   }
 
   if (authUser && (needsFamilySetup || !familyId) && syncStatus !== 'live' && syncStatus !== 'connecting') {
