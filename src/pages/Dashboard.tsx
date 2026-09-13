@@ -126,7 +126,7 @@ const SECTION_LABELS: Record<SectionId, string> = {
   pictureframe: 'Picture frame',
   pictureframe2: 'Picture frame 2',
   lights: 'Lights',
-  books: 'Continue reading',
+  books: 'On Deck',
 };
 
 const HOME_JOURNAL_MOODS = ['😊', '😌', '😐', '😔', '😤', '🤩', '😴', '🙏'] as const;
