@@ -557,11 +557,66 @@ export function SettingsPage() {
           className="mb-1"
         />
         <p className="text-[11px] text-muted mb-3">
-          Public browser URL for deep links. API key is only in Cloudflare:{' '}
-          <code className="text-[10px]">KOMGA_BASE_URL</code> +{' '}
-          <code className="text-[10px]">KOMGA_API_KEY</code>. Progress follows the Komga user that
-          owns that API key.
+          Public browser URL for deep links. API keys live only in Cloudflare (never in this form).
+          Shared fallback: <code className="text-[10px]">KOMGA_BASE_URL</code> +{' '}
+          <code className="text-[10px]">KOMGA_API_KEY</code>. Prefer a{' '}
+          <strong>per-kid</strong> key so On Deck / progress stay separate.
         </p>
+
+        {isParent && (
+          <div className="mt-2 pt-3 border-t border-border space-y-2">
+            <p className="text-xs font-semibold text-fg">Komga — one account per person</p>
+            <ol className="text-[11px] text-muted list-decimal pl-4 space-y-1">
+              <li>
+                In Komga → Users, create a user for each kid (and optional parent).
+              </li>
+              <li>
+                For each user: edit → <strong>Authentication</strong> → generate an{' '}
+                <strong>API key</strong>.
+              </li>
+              <li>
+                Cloudflare Pages → Settings → Environment variables → add{' '}
+                <code className="text-[10px]">KOMGA_API_KEY_&lt;memberId&gt;</code> = that key
+                (Production + Preview if you use both). Redeploy after saving.
+              </li>
+            </ol>
+            <p className="text-[11px] text-muted">
+              GreenHQ sends the signed-in profile&apos;s member id on every Komga request. Match
+              the suffix to the id below (exact spelling).
+            </p>
+            <div className="space-y-1.5">
+              {members
+                .filter((m) => m.role !== 'media')
+                .map((m) => (
+                  <div
+                    key={`komga-${m.id}`}
+                    className="flex flex-wrap items-center gap-2 rounded-xl bg-inset border border-border px-2.5 py-2"
+                  >
+                    <span className="text-sm w-28 shrink-0 truncate">
+                      {m.emoji ? `${m.emoji} ` : ''}
+                      {m.name}
+                    </span>
+                    <code className="text-[11px] text-fg break-all flex-1 min-w-0">
+                      KOMGA_API_KEY_{m.id}
+                    </code>
+                    <button
+                      type="button"
+                      className="text-[11px] text-accent shrink-0 px-2 py-1 rounded-lg hover:bg-accent/10"
+                      onClick={() => {
+                        void navigator.clipboard.writeText(`KOMGA_API_KEY_${m.id}`);
+                      }}
+                    >
+                      Copy name
+                    </button>
+                  </div>
+                ))}
+            </div>
+            <p className="text-[11px] text-muted pt-1">
+              Keep <code className="text-[10px]">KOMGA_API_KEY</code> as a parent/shared fallback
+              for anyone without a personal key yet.
+            </p>
+          </div>
+        )}
 
         {isParent && (
           <div className="mt-2 pt-3 border-t border-border space-y-2">
