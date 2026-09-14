@@ -162,7 +162,6 @@ export function Layout({ children }: { children: ReactNode }) {
     .map((id) => navById[id])
     .filter(Boolean) as typeof NAV;
 
-  const editableNavIds = myNavOrder.filter((id) => id !== 'themestudio' || themeStudioUnlocked);
 
   const navBtn = (active: boolean) =>
     cn(
@@ -532,6 +531,21 @@ export function Layout({ children }: { children: ReactNode }) {
                   <item.icon className="w-5 h-5" /> {item.label}
                 </button>
               ))}
+              {!isMediaOnly && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNavEditOpen(true);
+                    setSidebarOpen(false);
+                  }}
+                  className={cn(
+                    'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all',
+                    'text-muted hover:bg-nav-hover hover:text-fg',
+                  )}
+                >
+                  <ListOrdered className="w-5 h-5" /> Reorder menu
+                </button>
+              )}
               {isParent && (
                 <button
                   type="button"
@@ -611,7 +625,6 @@ export function Layout({ children }: { children: ReactNode }) {
         </div>
       )}
       <ProfileSwitcher open={switcherOpen} onClose={() => setSwitcherOpen(false)} />
-    </div>
 
       {navEditOpen && !isMediaOnly && (
         <div
@@ -690,7 +703,7 @@ export function Layout({ children }: { children: ReactNode }) {
           </div>
         </div>
       )}
-
+    </div>
   );
 }
 
