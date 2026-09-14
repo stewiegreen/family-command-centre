@@ -12,6 +12,7 @@ export function AuthScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
+  const [inviteCode, setInviteCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
 
@@ -33,7 +34,8 @@ export function AuthScreen() {
       if (mode === 'signup') {
         if (!displayName.trim()) throw new Error('Enter your name');
         if (password.length < 6) throw new Error('Password must be at least 6 characters');
-        await signUp(email, password, displayName.trim());
+        if (!inviteCode.trim()) throw new Error('An invite code is required to create an account');
+        await signUp(email, password, displayName.trim(), inviteCode.trim());
       } else {
         await signIn(email, password);
       }
@@ -46,7 +48,6 @@ export function AuthScreen() {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-page relative overflow-hidden">
-      {/* Subtle cyber grid / glow behind the wordmark */}
       <div
         className="pointer-events-none absolute inset-0"
         style={{
@@ -82,7 +83,10 @@ export function AuthScreen() {
           <div className="flex gap-2 p-1 bg-surface rounded-xl">
             <button
               type="button"
-              onClick={() => setMode('signin')}
+              onClick={() => {
+                setMode('signin');
+                setErr('');
+              }}
               className={cn(
                 'flex-1 py-2 text-sm rounded-lg font-medium transition-colors',
                 mode === 'signin' ? 'bg-accent text-accent-ink' : 'text-muted hover:text-fg',
@@ -92,7 +96,10 @@ export function AuthScreen() {
             </button>
             <button
               type="button"
-              onClick={() => setMode('signup')}
+              onClick={() => {
+                setMode('signup');
+                setErr('');
+              }}
               className={cn(
                 'flex-1 py-2 text-sm rounded-lg font-medium transition-colors',
                 mode === 'signup' ? 'bg-accent text-accent-ink' : 'text-muted hover:text-fg',
@@ -103,16 +110,33 @@ export function AuthScreen() {
           </div>
           <form onSubmit={submit} className="space-y-3">
             {mode === 'signup' && (
-              <div>
-                <label className="text-xs text-muted mb-1 block">Your name</label>
-                <Input
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                  placeholder="Alex"
-                  autoComplete="name"
-                  required
-                />
-              </div>
+              <>
+                <div>
+                  <label className="text-xs text-muted mb-1 block">Invite code</label>
+                  <Input
+                    value={inviteCode}
+                    onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
+                    placeholder="From a parent in Settings"
+                    className="uppercase tracking-widest"
+                    autoComplete="off"
+                    required
+                  />
+                  <p className="text-[11px] text-muted mt-1">
+                    Required. Ask a parent for a one-time code — accounts without an invite are not
+                    created.
+                  </p>
+                </div>
+                <div>
+                  <label className="text-xs text-muted mb-1 block">Your name</label>
+                  <Input
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    placeholder="Alex"
+                    autoComplete="name"
+                    required
+                  />
+                </div>
+              </>
             )}
             <div>
               <label className="text-xs text-muted mb-1 block">Email</label>
@@ -140,15 +164,18 @@ export function AuthScreen() {
             <Button
               type="submit"
               className="w-full !bg-accent hover:!bg-accent-hover !text-accent-ink focus-visible:!ring-accent"
-              disabled={busy}
+              disabled={busy || (mode === 'signup' && !inviteCode.trim())}
             >
-              {busy ? 'Please wait…' : mode === 'signup' ? 'Create account' : 'Sign in'}
+              {busy
+                ? 'Please wait…'
+                : mode === 'signup'
+                  ? 'Create account & join'
+                  : 'Sign in'}
             </Button>
           </form>
           {mode === 'signin' && (
             <p className="text-xs text-muted text-center">
-              First time on this device? Use the same email you created on another phone, or Create
-              account then join with an invite.
+              First time? You need an invite code from a parent under Create account.
             </p>
           )}
         </Card>

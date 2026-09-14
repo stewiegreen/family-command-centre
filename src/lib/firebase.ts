@@ -202,6 +202,21 @@ export async function cloudRevokeInvite(code: string): Promise<void> {
  * Join without requiring a prior family read (members-only read rules).
  * Uses arrayUnion so the client does not need the current document.
  */
+
+/** Validate invite before Auth signup (anonymous get; rules allow unused only). */
+export async function cloudPeekInvite(inviteCode: string): Promise<{ role: Role; label?: string }> {
+  if (!db || !fsMod) throw new Error('Cloud not connected');
+  const clean = (inviteCode || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (clean.length < 6) throw new Error('Enter a valid invite code');
+  const invSnap = await fsMod.getDoc(inviteRef(clean));
+  if (!invSnap.exists()) throw new Error('Invite not found. Ask a parent for a new invite.');
+  const inv = invSnap.data() as { used?: boolean; role?: Role; label?: string; familyId?: string };
+  if (inv.used) throw new Error('This invite has already been used.');
+  if (!inv.familyId) throw new Error('Invalid invite');
+  const role: Role = inv.role === 'parent' || inv.role === 'media' ? inv.role : 'kid';
+  return { role, label: inv.label };
+}
+
 export async function cloudJoinWithInvite(
   inviteCode: string,
   authUser: User,
@@ -647,6 +662,13 @@ export async function fetchUserFamily(uid: string): Promise<{ familyId?: string;
 export async function clearUserFamily(uid: string): Promise<void> {
   if (!db || !fsMod) return;
   await fsMod.setDoc(userRef(uid), { familyId: null, memberId: null }, { merge: true });
+}
+
+export async function deleteCurrentUser(): Promise<void> {
+  if (!auth || !authMod) throw new Error('Auth not ready');
+  const u = auth.currentUser;
+  if (!u) throw new Error('Not signed in');
+  await authMod.deleteUser(u);
 }
 
 export async function createUserWithEmailAndPassword(email: string, password: string) {

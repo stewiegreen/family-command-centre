@@ -45,7 +45,11 @@ service cloud.firestore {
     }
 
     match /invites/{inviteId} {
-      allow get: if signedIn();
+      // Exact-code lookup only (no list). Unused invites readable without auth so
+      // Create account can require a valid invite before/with Auth signup.
+      // Codes are random; used invites are not readable anonymously.
+      allow get: if resource.data.used == false
+        || signedIn();
       allow list: if signedIn()
         && request.query.limit <= 50
         && isMember(resource.data.familyId);

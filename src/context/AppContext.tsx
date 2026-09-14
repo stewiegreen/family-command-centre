@@ -40,6 +40,8 @@ import {
   cloudCreateInvite,
   cloudDeleteMessage,
   cloudJoinWithInvite,
+  cloudPeekInvite,
+  deleteCurrentUser,
   cloudListInvites,
   cloudMarkMessageRead,
   cloudRevokeInvite,
@@ -115,7 +117,7 @@ interface AppContextValue {
   revokeInvite: (code: string) => Promise<void>;
   sendMessage: (toMemberId: string, text: string) => Promise<void>;
   markThreadRead: (fromMemberId: string) => Promise<void>;
-  signUp: (email: string, password: string, displayName: string) => Promise<User>;
+  signUp: (email: string, password: string, displayName: string, inviteCode: string) => Promise<User>;
   signIn: (email: string, password: string) => Promise<User>;
   signOut: () => Promise<void>;
   loadCloudConfig: typeof loadCloudConfig;
@@ -607,10 +609,42 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [familyId],
   );
 
-  const signUp = useCallback(async (email: string, password: string, displayName: string) => {
+  const signUp = useCallback(async (
+    email: string,
+    password: string,
+    displayName: string,
+    inviteCode: string,
+  ) => {
     if (!getFirebaseAuth()) throw new Error('Cloud not connected');
+    const name = displayName.trim();
+    if (!name) throw new Error('Enter your name');
+    // Reject bad invites before creating an Auth user (stops casual / bot signups).
+    await cloudPeekInvite(inviteCode);
     const cred = await createUserWithEmailAndPassword(email.trim(), password);
-    if (displayName) await updateProfile(cred.user, { displayName: displayName.trim() });
+    try {
+      if (name) await updateProfile(cred.user, { displayName: name });
+      const { familyId: fid, memberId, data: remote } = await cloudJoinWithInvite(
+        inviteCode,
+        cred.user,
+        name,
+      );
+      localStorage.setItem(FAMILY_ID_KEY, fid);
+      if (memberId) localStorage.setItem(CURRENT_USER_KEY, memberId);
+      setFamilyId(fid);
+      setData(remote);
+      setNeedsFamilySetup(false);
+      setSyncStatus('live');
+      // Live listener attaches via auth/family effects in connectCloud path —
+      // re-run family subscription if helper exists on next tick via setFamilyId.
+    } catch (err) {
+      // Roll back orphan Auth user so they cannot sit on FamilySetup / empty shell.
+      try {
+        await deleteCurrentUser();
+      } catch {
+        /* best-effort */
+      }
+      throw err instanceof Error ? err : new Error('Could not join with that invite');
+    }
     return cred.user;
   }, []);
 
