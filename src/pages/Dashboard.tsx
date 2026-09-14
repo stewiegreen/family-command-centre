@@ -27,6 +27,8 @@ import {
   Megaphone,
   Home,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Users,
   BookOpen,
   Lock,
@@ -115,7 +117,7 @@ const SECTION_LABELS: Record<SectionId, string> = {
   presence: 'Where is everyone',
   digest: 'This week',
   events: 'Upcoming Events',
-  todos: 'My to-dos',
+  todos: "Today's Tasks",
   chores: 'Chores',
   shopping: 'Shopping',
   journal: 'Journal',
@@ -613,6 +615,7 @@ export function Dashboard() {
 
   const [shopDraft, setShopDraft] = useState('');
   const [todoDraft, setTodoDraft] = useState('');
+  const [tasksDayOffset, setTasksDayOffset] = useState(0);
   const [eventDraft, setEventDraft] = useState('');
   const [editEvent, setEditEvent] = useState<CalendarEvent | null>(null);
   const [evTitle, setEvTitle] = useState('');
@@ -693,13 +696,56 @@ export function Dashboard() {
   );
 
   /** To-dos for the active profile (+ shared family list). */
-  const myOpenTodos = useMemo(() => {
-    return todos.filter(
-      (td) =>
-        !td.completed &&
-        (td.memberId === myId || td.memberId === FAMILY_LIST_ID),
-    );
-  }, [todos, myId]);
+  const tasksFocusDate = useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() + tasksDayOffset);
+    return d;
+  }, [tasksDayOffset]);
+
+  const tasksFocusLabel = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (tasksFocusDate.getTime() === today.getTime()) return "Today's Tasks";
+    const tmr = new Date(today);
+    tmr.setDate(tmr.getDate() + 1);
+    if (tasksFocusDate.getTime() === tmr.getTime()) return "Tomorrow's Tasks";
+    const yest = new Date(today);
+    yest.setDate(yest.getDate() - 1);
+    if (tasksFocusDate.getTime() === yest.getTime()) return "Yesterday's Tasks";
+    return tasksFocusDate.toLocaleDateString(undefined, {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+    });
+  }, [tasksFocusDate]);
+
+  /** Tasks due on the focus day (or undated open tasks when viewing today). */
+  const dayTasks = useMemo(() => {
+    const start = tasksFocusDate.getTime();
+    const end = start + 86400000;
+    const isToday = tasksDayOffset === 0;
+    const list = todos.filter((t) => {
+      if (t.dueAt) {
+        const ts = new Date(t.dueAt).getTime();
+        if (Number.isNaN(ts)) return false;
+        return ts >= start && ts < end;
+      }
+      // No due date: only on "today" view, open items for me / family
+      if (!isToday) return false;
+      if (t.completed || t.status === 'done') return false;
+      return t.memberId === myId || t.memberId === FAMILY_LIST_ID || isParent;
+    });
+    // Open first, then done; high priority first within each
+    const rank = (p: string) => (p === 'high' ? 0 : p === 'medium' ? 1 : 2);
+    return [...list].sort((a, b) => {
+      const ac = a.completed || a.status === 'done' ? 1 : 0;
+      const bc = b.completed || b.status === 'done' ? 1 : 0;
+      if (ac !== bc) return ac - bc;
+      return rank(a.priority) - rank(b.priority);
+    });
+  }, [todos, myId, isParent, tasksFocusDate, tasksDayOffset]);
+
 
   const addShopItem = () => {
     const text = shopDraft.trim();
@@ -1255,19 +1301,53 @@ export function Dashboard() {
 
     todos: (
       <Card>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="font-semibold text-fg flex items-center gap-2">
-            <CheckSquare className="w-4 h-4 text-accent" />
-            My to-dos
-          </h2>
-          <button type="button" onClick={() => setView('todos')} className="text-xs text-accent">
-            All lists →
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <h2 className="font-semibold text-fg flex items-center gap-2 shrink-0">
+              <CheckSquare className="w-4 h-4 text-accent" />
+              {tasksFocusLabel}
+            </h2>
+            <div className="flex items-center gap-0.5 shrink-0">
+              <button
+                type="button"
+                className="p-1 rounded-lg border border-border text-muted hover:text-fg hover:bg-nav-hover"
+                aria-label="Previous day"
+                onClick={() => setTasksDayOffset((n) => n - 1)}
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                className="p-1 rounded-lg border border-border text-muted hover:text-fg hover:bg-nav-hover"
+                aria-label="Jump to today"
+                onClick={() => setTasksDayOffset(0)}
+                title="Today"
+              >
+                <Calendar className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                className="p-1 rounded-lg border border-border text-muted hover:text-fg hover:bg-nav-hover"
+                aria-label="Next day"
+                onClick={() => setTasksDayOffset((n) => n + 1)}
+              >
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setView('todos')}
+            className="text-xs font-medium text-accent hover:underline shrink-0 flex items-center gap-0.5"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Add Task
           </button>
         </div>
         <div className="flex gap-2 mb-3">
           <input
             className="flex-1 rounded-xl border border-border bg-inset px-3 py-2 text-sm text-fg outline-none focus:border-accent"
-            placeholder="Add a to-do for me…"
+            placeholder="Quick add a task for me…"
             value={todoDraft}
             onChange={(e) => setTodoDraft(e.target.value)}
             onKeyDown={(e) => {
@@ -1278,29 +1358,71 @@ export function Dashboard() {
             <Plus className="w-4 h-4" />
           </Button>
         </div>
-        <p className="text-xs text-muted mb-2">
-          Your tasks and the family list — tap to complete.
-        </p>
-        {myOpenTodos.length === 0 ? (
-          <p className="text-sm text-muted py-3 text-center">Nothing on your list. Nice work.</p>
+        {dayTasks.length === 0 ? (
+          <p className="text-sm text-muted py-3 text-center">No tasks for this day.</p>
         ) : (
-          <div className="max-h-64 overflow-y-auto space-y-1.5">
-            {myOpenTodos.slice(0, 12).map((td) => (
-              <button
-                key={td.id}
-                type="button"
-                onClick={() => toggleTodo(td.id)}
-                className="w-full flex items-center gap-3 p-2.5 rounded-xl border border-border hover:bg-nav-hover/50 text-left transition-colors"
-              >
-                <span className="w-5 h-5 rounded-md border border-border-strong flex items-center justify-center shrink-0">
-                  {/* open circle */}
-                </span>
-                <span className="text-sm text-fg flex-1 min-w-0 truncate">{td.text}</span>
-                {td.memberId === FAMILY_LIST_ID && (
-                  <span className="text-[10px] uppercase tracking-wide text-muted shrink-0">Family</span>
-                )}
-              </button>
-            ))}
+          <div className="max-h-72 overflow-y-auto space-y-2">
+            {dayTasks.slice(0, 14).map((td) => {
+              const done = !!(td.completed || td.status === 'done');
+              const assignee =
+                td.memberId === FAMILY_LIST_ID
+                  ? 'Everyone'
+                  : getMember(td.memberId)?.name || 'Someone';
+              const dueLabel = td.dueAt
+                ? new Date(td.dueAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+                : null;
+              const pri = td.priority || 'medium';
+              const priClass =
+                pri === 'high'
+                  ? 'text-red-500 border-red-500/30 bg-red-500/10'
+                  : pri === 'low'
+                    ? 'text-slate-500 border-border bg-surface-2'
+                    : 'text-amber-600 border-amber-500/30 bg-amber-500/10';
+              return (
+                <button
+                  key={td.id}
+                  type="button"
+                  onClick={() => toggleTodo(td.id)}
+                  className={cn(
+                    'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border text-left transition-colors',
+                    done
+                      ? 'bg-emerald-500/10 border-emerald-500/20'
+                      : 'border-border hover:bg-nav-hover/50 bg-elevated/40',
+                  )}
+                >
+                  <span
+                    className={cn(
+                      'w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0',
+                      done ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-border-strong',
+                    )}
+                  >
+                    {done ? <Check className="w-3 h-3" /> : null}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <div
+                      className={cn(
+                        'text-sm font-medium truncate',
+                        done ? 'text-muted line-through' : 'text-fg',
+                      )}
+                    >
+                      {td.text}
+                    </div>
+                    <div className="text-[11px] text-muted truncate mt-0.5">
+                      Assigned to {assignee}
+                      {dueLabel ? ` · Due ${dueLabel}` : ''}
+                    </div>
+                  </div>
+                  <span
+                    className={cn(
+                      'text-[10px] font-medium px-2 py-0.5 rounded-full border shrink-0 capitalize',
+                      priClass,
+                    )}
+                  >
+                    {pri}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         )}
       </Card>

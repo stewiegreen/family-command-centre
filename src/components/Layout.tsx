@@ -41,7 +41,7 @@ import { isNavViewId, reorderNavDrop } from '../lib/navOrder';
 const NAV: { id: ViewId; label: string; icon: typeof Home }[] = [
   { id: 'dashboard', label: 'Home', icon: Home },
   { id: 'calendar', label: 'Calendar', icon: Calendar },
-  { id: 'todos', label: 'To-Dos', icon: CheckSquare },
+  { id: 'todos', label: 'Tasks', icon: CheckSquare },
   { id: 'chores', label: 'Chores', icon: Sword },
   { id: 'school', label: 'School', icon: GraduationCap },
   { id: 'shopping', label: 'Shopping', icon: ShoppingCart },

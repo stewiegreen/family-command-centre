@@ -272,7 +272,7 @@ export function SettingsPage() {
           <Bell className="w-4 h-4" /> Notifications
         </h2>
         <p className="text-xs text-muted mb-3">
-          Alerts on this device for new messages, due/high-priority to-dos, upcoming events (next hour), and
+          Alerts on this device for new messages, due/high-priority tasks, upcoming events (next hour), and
           announcement changes. Works while the site is open or in a background tab — not when the browser is fully
           closed (that needs cloud push later).
         </p>
@@ -303,7 +303,7 @@ export function SettingsPage() {
                 setNotifOn(true);
                 window.dispatchEvent(new Event('fcc:notif-pref'));
                 await showLocalNotification('Notifications on', {
-                  body: 'You’ll get alerts for messages, to-dos, and events on this device.',
+                  body: 'You’ll get alerts for messages, tasks, and events on this device.',
                   tag: 'fcc-test',
                   data: { view: 'dashboard' },
                 });

@@ -35,7 +35,7 @@ function toLocalInput(iso?: string): string {
 }
 
 const COLUMNS: { id: TodoStatus; label: string; hint: string }[] = [
-  { id: 'todo', label: 'To Do', hint: 'Queued' },
+  { id: 'todo', label: 'Open', hint: 'Queued' },
   { id: 'doing', label: 'Doing', hint: 'In progress' },
   { id: 'done', label: 'Done', hint: 'Finished' },
 ];
@@ -265,7 +265,7 @@ export function TodosPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
             <CheckSquare className="w-6 h-6 text-accent" />
-            To-Dos
+            Tasks
           </h1>
           <p className="text-sm text-muted mt-1">
             Kanban board{listOwner ? ` · ${listOwner.name}` : ''}. Drag cards between columns.
