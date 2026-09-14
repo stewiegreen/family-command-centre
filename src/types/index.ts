@@ -648,6 +648,8 @@ export interface FamilyData {
       avatarPortraitId?: string | null;
       /** Uploaded custom photo avatar URL (R2). Prefer over portrait packs when set. */
       avatarCustomUrl?: string | null;
+      /** Saved photo avatars (newest first). Switching style keeps these for re-pick. */
+      avatarCustomUrls?: string[];
       color?: string;
       theme?: ThemeId;
       /** Permanent shop unlocks */

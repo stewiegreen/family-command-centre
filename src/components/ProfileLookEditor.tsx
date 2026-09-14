@@ -7,6 +7,7 @@ import { Modal } from './ui/Modal';
 import { Input } from './ui/Input';
 import { EmojiPickerPanel } from './EmojiPicker';
 import { AvatarPhotoCropper } from './AvatarPhotoCropper';
+import { mergeAvatarPhotoLibrary } from '../lib/avatarLibrary';
 import { getFirebaseAuth } from '../lib/firebase';
 import { MEMBER_COLORS } from '../lib/defaults';
 import { withAppearance } from '../lib/appearance';
@@ -59,6 +60,8 @@ function LookEditorBody({
   portraitId,
   customUrl,
   onCustomUrl,
+  photoLibrary,
+  onRemovePhoto,
   familyId,
   flairShape,
   flairColor,
@@ -86,6 +89,8 @@ function LookEditorBody({
   portraitId: string | null;
   customUrl: string | null;
   onCustomUrl: (url: string | null) => void;
+  photoLibrary: string[];
+  onRemovePhoto: (url: string) => void;
   familyId?: string;
   flairShape?: string;
   flairColor?: string;
@@ -460,33 +465,53 @@ function LookEditorBody({
             onChange={(e) => onPickPhoto(e.target.files?.[0] || null)}
           />
           {!cropSrc ? (
-            <div className="space-y-2">
-              {customUrl ? (
-                <div className="flex flex-col items-center gap-2">
-                  <Avatar
-                    name={name}
-                    emoji={emoji}
-                    color={color}
-                    avatarCustomUrl={customUrl}
-                    avatarFlairShape={flairShape}
-                    avatarFlairColor={flairColor}
-                    size="lg"
-                    className="!w-20 !h-20"
-                  />
-                  <p className="text-xs text-muted">Current photo icon</p>
+            <div className="space-y-3">
+              {photoLibrary.length > 0 ? (
+                <div>
+                  <p className="text-[11px] text-muted mb-1.5">Saved photos — tap to use</p>
+                  <div className="grid grid-cols-4 sm:grid-cols-5 gap-2">
+                    {photoLibrary.map((url) => {
+                      const active = customUrl === url;
+                      return (
+                        <div key={url} className="relative group">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onCustomUrl(url);
+                              onPortrait(null);
+                            }}
+                            className={cn(
+                              'w-full aspect-square rounded-xl overflow-hidden border-2 bg-surface-2',
+                              active ? 'border-accent ring-2 ring-accent/30' : 'border-border hover:border-border-strong',
+                            )}
+                            title="Use this photo"
+                          >
+                            <img src={url} alt="" className="w-full h-full object-cover" />
+                          </button>
+                          <button
+                            type="button"
+                            className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-elevated border border-border text-[10px] text-muted hover:text-red-500 opacity-0 group-hover:opacity-100 focus:opacity-100"
+                            title="Remove from saved"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onRemovePhoto(url);
+                            }}
+                          >
+                            ×
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               ) : null}
               <Button className="w-full" onClick={() => photoInputRef.current?.click()}>
-                Choose photo
+                {photoLibrary.length ? 'Upload another photo' : 'Choose photo'}
               </Button>
               {customUrl ? (
-                <button
-                  type="button"
-                  className="w-full text-xs text-muted hover:text-fg underline"
-                  onClick={() => onCustomUrl(null)}
-                >
-                  Remove photo icon
-                </button>
+                <p className="text-[11px] text-muted text-center">
+                  Active photo is selected above. Switch to Emoji / Faces anytime — your photos stay saved.
+                </p>
               ) : null}
             </div>
           ) : (
@@ -643,6 +668,7 @@ function useLookEditorState() {
   const [color, setColor] = useState('#6366f1');
   const [portraitId, setPortraitId] = useState<string | null>(null);
   const [customUrl, setCustomUrl] = useState<string | null>(null);
+  const [photoLibrary, setPhotoLibrary] = useState<string[]>([]);
   const [flairShape, setFlairShape] = useState('circle');
   const [flairColor, setFlairColor] = useState('');
   const [nameFlairText, setNameFlairText] = useState('');
@@ -661,6 +687,9 @@ function useLookEditorState() {
     const curl = (l.avatarCustomUrl || null) as string | null;
     setPortraitId(pid);
     setCustomUrl(curl);
+    setPhotoLibrary(
+      mergeAvatarPhotoLibrary(a?.avatarCustomUrls, curl),
+    );
     setMode(curl ? 'photo' : pid ? 'portrait' : 'emoji');
     if (isCobraPortraitId(pid)) {
       setPortraitLib('cobra');
@@ -687,6 +716,11 @@ function useLookEditorState() {
 
   const save = () => {
     if (!currentUser) return;
+    const lib = mergeAvatarPhotoLibrary(
+      photoLibrary,
+      mode === 'photo' ? customUrl : null,
+    );
+    // Keep library even when switching to emoji/portrait; only active url is mode-gated.
     update((d) => {
       const prev = d.appearance?.[currentUser.id] || {};
       return {
@@ -699,6 +733,7 @@ function useLookEditorState() {
             color,
             avatarPortraitId: mode === 'portrait' ? portraitId || null : null,
             avatarCustomUrl: mode === 'photo' ? customUrl || null : null,
+            avatarCustomUrls: lib,
             avatarFlairShape: flairShape || 'circle',
             avatarFlairColor: flairColor || undefined,
             nameFlairText: nameFlairText.trim() || undefined,
@@ -707,7 +742,13 @@ function useLookEditorState() {
         },
       };
     });
+    setPhotoLibrary(lib);
     setOpen(false);
+  };
+
+  const removePhotoFromLibrary = (url: string) => {
+    setPhotoLibrary((prev) => prev.filter((u) => u !== url));
+    if (customUrl === url) setCustomUrl(null);
   };
 
   return {
@@ -726,6 +767,9 @@ function useLookEditorState() {
     setPortraitId,
     customUrl,
     setCustomUrl,
+    photoLibrary,
+    setPhotoLibrary,
+    removePhotoFromLibrary,
     flairShape,
     setFlairShape,
     flairColor,
@@ -755,7 +799,14 @@ function EditorModal({ s }: { s: ReturnType<typeof useLookEditorState> }) {
         color={s.color}
         portraitId={s.portraitId}
         customUrl={s.customUrl}
-        onCustomUrl={s.setCustomUrl}
+        onCustomUrl={(url) => {
+          s.setCustomUrl(url);
+          if (url) {
+            s.setPhotoLibrary(mergeAvatarPhotoLibrary(s.photoLibrary, url));
+          }
+        }}
+        photoLibrary={s.photoLibrary}
+        onRemovePhoto={s.removePhotoFromLibrary}
         familyId={s.familyId}
         flairShape={s.flairShape}
         flairColor={s.flairColor}
