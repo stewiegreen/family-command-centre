@@ -720,21 +720,22 @@ export function Dashboard() {
     });
   }, [tasksFocusDate]);
 
-  /** Tasks due on the focus day (or undated open tasks when viewing today). */
+  /** Only *my* tasks due on the focus day (or my undated open tasks when viewing today). */
   const dayTasks = useMemo(() => {
     const start = tasksFocusDate.getTime();
     const end = start + 86400000;
     const isToday = tasksDayOffset === 0;
     const list = todos.filter((t) => {
+      if (t.memberId !== myId) return false;
       if (t.dueAt) {
         const ts = new Date(t.dueAt).getTime();
         if (Number.isNaN(ts)) return false;
         return ts >= start && ts < end;
       }
-      // No due date: only on "today" view, open items for me / family
+      // No due date: only on "today" view, open items assigned to me
       if (!isToday) return false;
       if (t.completed || t.status === 'done') return false;
-      return t.memberId === myId || t.memberId === FAMILY_LIST_ID || isParent;
+      return true;
     });
     // Open first, then done; high priority first within each
     const rank = (p: string) => (p === 'high' ? 0 : p === 'medium' ? 1 : 2);
@@ -744,7 +745,7 @@ export function Dashboard() {
       if (ac !== bc) return ac - bc;
       return rank(a.priority) - rank(b.priority);
     });
-  }, [todos, myId, isParent, tasksFocusDate, tasksDayOffset]);
+  }, [todos, myId, tasksFocusDate, tasksDayOffset]);
 
 
   const addShopItem = () => {
