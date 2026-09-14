@@ -993,7 +993,7 @@ export function Dashboard() {
       <Card className="!p-4">
         <div className="flex flex-col lg:flex-row lg:items-start gap-3 lg:gap-6">
           <div className="min-w-0 shrink-0">
-            <h2 className="font-semibold text-fg text-sm mb-2">Where is everyone?</h2>
+            <h2 className="font-semibold text-fg mb-2 text-lg">Where is everyone?</h2>
             <div className="flex flex-wrap gap-2">
               {household.map((m) => {
                 const p = presence[m.id];
@@ -1039,7 +1039,7 @@ export function Dashboard() {
     digest: (
       <Card className="!p-5 lg:!p-6">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="font-semibold text-fg flex items-center gap-2">
+          <h2 className="font-semibold text-fg flex items-center gap-2 text-lg">
             <Newspaper className="w-4 h-4 text-accent" />
             This week
             <span className="text-xs font-normal text-muted">({weekLabel})</span>
@@ -1154,7 +1154,7 @@ export function Dashboard() {
 <Card className="h-full flex flex-col">
         <div className="flex items-center justify-between gap-2 mb-3">
           <div className="flex items-center gap-2 min-w-0">
-            <h2 className="font-semibold text-fg shrink-0">Upcoming Events</h2>
+            <h2 className="font-semibold text-fg shrink-0 text-lg">Upcoming Events</h2>
             <div className="relative" ref={eventsFilterRef}>
               <button
                 type="button"
@@ -1304,7 +1304,7 @@ export function Dashboard() {
       <Card>
         <div className="flex items-center justify-between gap-2 mb-3">
           <div className="flex items-center gap-1.5 min-w-0">
-            <h2 className="font-semibold text-fg flex items-center gap-2 shrink-0">
+            <h2 className="font-semibold text-fg flex items-center gap-2 shrink-0 text-lg">
               <CheckSquare className="w-4 h-4 text-accent" />
               {tasksFocusLabel}
             </h2>
@@ -1442,10 +1442,10 @@ export function Dashboard() {
         front={isParent ? (
       <Card className="!p-4 lg:!p-5 space-y-4 h-full flex flex-col">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="font-semibold text-fg flex items-center gap-2">
+          <h2 className="font-semibold text-fg flex items-center gap-2 text-lg">
             <Sword className="w-4 h-4 text-accent" />
             ChoreQuest
-            <span className="text-xs font-normal text-muted">· kids overview</span>
+            <span className="text-sm font-normal text-muted">· kids overview</span>
           </h2>
           <button type="button" onClick={() => setView('chores')} className="text-xs text-accent shrink-0">
             Open board →
@@ -1628,7 +1628,7 @@ export function Dashboard() {
     ) : (
       <Card className="!p-4 lg:!p-5 h-full flex flex-col">
         <div className="flex items-center justify-between gap-3 mb-4">
-          <h2 className="font-semibold text-fg flex items-center gap-2">
+          <h2 className="font-semibold text-fg flex items-center gap-2 text-lg">
             <Sword className="w-4 h-4 text-accent" />
             ChoreQuest
             {currentUser?.role === 'kid' ? (
@@ -1723,7 +1723,7 @@ export function Dashboard() {
     chores: (
       <Card className="h-full flex flex-col">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="font-semibold text-fg flex items-center gap-2">
+          <h2 className="font-semibold text-fg flex items-center gap-2 text-lg">
             <Sword className="w-4 h-4 text-accent" />
             {isParent ? 'Chores to approve' : 'My quests'}
           </h2>
@@ -1788,7 +1788,7 @@ export function Dashboard() {
     shopping: (
       <Card className="h-full flex flex-col">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="font-semibold text-fg flex items-center gap-2">
+          <h2 className="font-semibold text-fg flex items-center gap-2 text-lg">
             <ShoppingCart className="w-4 h-4 text-sky-500" />
             Shopping
           </h2>
@@ -1837,7 +1837,7 @@ export function Dashboard() {
     journal: (
       <Card>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="font-semibold text-fg flex items-center gap-2">
+          <h2 className="font-semibold text-fg flex items-center gap-2 text-lg">
             <BookOpen className="w-4 h-4 text-accent" />
             Journal
           </h2>
@@ -2016,7 +2016,7 @@ export function Dashboard() {
       if (!focusId) {
         return (
           <Card className="!p-4">
-            <h2 className="font-semibold text-fg text-sm mb-1 flex items-center gap-1.5">
+            <h2 className="font-semibold text-fg mb-1 flex items-center gap-1.5 text-lg">
               <GraduationCap className="w-4 h-4 text-accent" /> School
             </h2>
             <p className="text-sm text-muted">Add a kid profile to plan school days.</p>
@@ -2031,7 +2031,7 @@ export function Dashboard() {
       return (
         <Card className="!p-4 space-y-2 h-full flex flex-col">
           <div className="flex items-center justify-between gap-2">
-            <h2 className="font-semibold text-fg text-sm flex items-center gap-1.5">
+            <h2 className="font-semibold text-fg flex items-center gap-1.5 text-lg">
               <GraduationCap className="w-4 h-4 text-accent" />
               School today
             </h2>

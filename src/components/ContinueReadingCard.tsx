@@ -150,7 +150,7 @@ function FaceHeader({
         <Icon className="w-4 h-4" />
       </div>
       <div className="min-w-0 flex-1">
-        <h3 className="font-semibold text-fg text-sm leading-tight">{title}</h3>
+        <h3 className="font-semibold text-fg text-lg leading-tight">{title}</h3>
         <p className="text-[11px] text-muted truncate">{subtitle}</p>
       </div>
       <button
