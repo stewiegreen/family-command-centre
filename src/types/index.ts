@@ -739,6 +739,8 @@ export interface FamilyData {
       homescreenRows?: { ids: string[] }[];
       /** Dashboard widget ids this member has chosen to hide from their homescreen. */
       hiddenWidgets?: string[];
+      /** Sidebar page order for this member only (ViewIds; settings stays pinned). */
+      navOrder?: string[];
     }
   >;
   /** memberId → earned screen-time minutes balance. */

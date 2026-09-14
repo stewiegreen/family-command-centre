@@ -19,6 +19,7 @@ import {
 } from '../lib/storage';
 import { migratePayload } from '../lib/defaults';
 import { withAppearance } from '../lib/appearance';
+import { resolveNavOrder } from '../lib/navOrder';
 import {
   resolveHomescreenRows,
   toHomescreenRowDocs,
@@ -102,6 +103,8 @@ interface AppContextValue {
   myHiddenWidgets: string[];
   /** Persist the hidden-widget list for the current member only. */
   setMyHiddenWidgets: (ids: string[]) => void;
+  myNavOrder: import('../types').ViewId[];
+  setMyNavOrder: (order: import('../types').ViewId[]) => void;
   connectCloud: (cfg: FirebaseConfig) => Promise<boolean>;
   createFamily: (displayName: string) => Promise<string>;
   joinFamily: (inviteCode: string, displayName: string) => Promise<string>;
@@ -847,6 +850,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [update],
   );
 
+
+  const myNavOrder = resolveNavOrder(data.appearance?.[data.settings.currentUserId]?.navOrder);
+
+  const setMyNavOrder = useCallback(
+    (order: import('../types').ViewId[]) => {
+      update((d) => {
+        const id = d.settings.currentUserId;
+        if (!id) return d;
+        const prev = d.appearance?.[id] || {};
+        return {
+          ...d,
+          appearance: {
+            ...(d.appearance || {}),
+            [id]: {
+              ...prev,
+              navOrder: order,
+            },
+          },
+        };
+      });
+    },
+    [update],
+  );
+
   const value: AppContextValue = {
     data,
     update,
@@ -876,6 +903,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setMyHomescreenRows,
     myHiddenWidgets,
     setMyHiddenWidgets,
+    myNavOrder,
+    setMyNavOrder,
     connectCloud,
     createFamily,
     joinFamily,

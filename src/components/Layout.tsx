@@ -19,6 +19,9 @@ import {
   ShoppingCart,
   PanelLeftClose,
   PanelLeftOpen,
+  ChevronUp,
+  ChevronDown,
+  ListOrdered,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Avatar } from './ui/Avatar';
@@ -35,6 +38,7 @@ import {
 } from '../lib/notifications';
 import { registerFcmToken, syncFcmToken, disableFcmForMember } from '../lib/fcm';
 import { hasLocalThemeStudioUnlock } from '../lib/themeStudioUnlock';
+import { DEFAULT_NAV_ORDER, moveNavItem } from '../lib/navOrder';
 
 const NAV: { id: ViewId; label: string; icon: typeof Home }[] = [
   { id: 'dashboard', label: 'Home', icon: Home },
@@ -62,12 +66,13 @@ function loadCollapsed(): boolean {
 }
 
 export function Layout({ children }: { children: ReactNode }) {
-  const { data, view, setView, currentUser, isParent, isMediaOnly, syncStatus, cloudError, pendingWrites, familyId, signOut, authUser, update } = useApp();
+  const { data, view, setView, currentUser, isParent, isMediaOnly, syncStatus, cloudError, pendingWrites, familyId, signOut, authUser, update, myNavOrder, setMyNavOrder } = useApp();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [collapsed, setCollapsedState] = useState(loadCollapsed);
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [notifOn, setNotifOn] = useState(isNotificationsEnabled);
+  const [navEditOpen, setNavEditOpen] = useState(false);
 
   const { settings } = data;
 
@@ -146,9 +151,18 @@ export function Layout({ children }: { children: ReactNode }) {
     (data.appearance?.[currentUser.id]?.unlockThemeStudio ||
       hasLocalThemeStudioUnlock(currentUser.id))
   );
-  const navItems = isMediaOnly
-    ? NAV.filter((i) => i.id === 'media')
-    : NAV.filter((i) => i.id !== 'themestudio' || themeStudioUnlocked);
+  const navById = Object.fromEntries(NAV.map((i) => [i.id, i])) as Record<
+    string,
+    (typeof NAV)[number]
+  >;
+  const orderedIds = isMediaOnly
+    ? (['media'] as ViewId[])
+    : myNavOrder.filter((id) => id !== 'themestudio' || themeStudioUnlocked);
+  const navItems = orderedIds
+    .map((id) => navById[id])
+    .filter(Boolean) as typeof NAV;
+
+  const editableNavIds = myNavOrder.filter((id) => id !== 'themestudio' || themeStudioUnlocked);
 
   const navBtn = (active: boolean) =>
     cn(
@@ -268,6 +282,17 @@ export function Layout({ children }: { children: ReactNode }) {
         </nav>
 
         <div className={cn('border-t border-border space-y-2', collapsed ? 'p-2' : 'p-3')}>
+          {!isMediaOnly && (
+            <button
+              type="button"
+              onClick={() => setNavEditOpen(true)}
+              className={navBtn(false)}
+              title="Reorder menu"
+            >
+              <ListOrdered className="w-5 h-5 shrink-0" />
+              {!collapsed && 'Reorder menu'}
+            </button>
+          )}
           {isParent && (
             <button
               type="button"
@@ -587,6 +612,85 @@ export function Layout({ children }: { children: ReactNode }) {
       )}
       <ProfileSwitcher open={switcherOpen} onClose={() => setSwitcherOpen(false)} />
     </div>
+
+      {navEditOpen && !isMediaOnly && (
+        <div
+          className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-black/50 p-0 sm:p-4"
+          onClick={() => setNavEditOpen(false)}
+        >
+          <div
+            className="w-full sm:max-w-md max-h-[85dvh] overflow-hidden rounded-t-2xl sm:rounded-2xl bg-elevated border border-border shadow-xl flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-border shrink-0">
+              <div>
+                <h2 className="font-semibold text-fg">Menu order</h2>
+                <p className="text-xs text-muted">Only for you — other family members keep their own order.</p>
+              </div>
+              <button
+                type="button"
+                className="p-2 rounded-xl text-muted hover:bg-nav-hover"
+                onClick={() => setNavEditOpen(false)}
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <ul className="flex-1 overflow-y-auto p-3 space-y-1">
+              {myNavOrder
+                .filter((id) => id !== 'themestudio' || themeStudioUnlocked)
+                .map((id, idx, arr) => {
+                  const item = navById[id];
+                  if (!item) return null;
+                  const Icon = item.icon;
+                  return (
+                    <li
+                      key={id}
+                      className="flex items-center gap-2 rounded-xl border border-border bg-surface px-2 py-2"
+                    >
+                      <Icon className="w-4 h-4 text-muted shrink-0 ml-1" />
+                      <span className="flex-1 text-sm font-medium text-fg">{item.label}</span>
+                      <button
+                        type="button"
+                        disabled={idx === 0}
+                        className="p-2 rounded-lg text-muted hover:text-fg hover:bg-inset disabled:opacity-30"
+                        onClick={() => setMyNavOrder(moveNavItem(myNavOrder, id, -1))}
+                        title="Move up"
+                      >
+                        <ChevronUp className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        disabled={idx === arr.length - 1}
+                        className="p-2 rounded-lg text-muted hover:text-fg hover:bg-inset disabled:opacity-30"
+                        onClick={() => setMyNavOrder(moveNavItem(myNavOrder, id, 1))}
+                        title="Move down"
+                      >
+                        <ChevronDown className="w-4 h-4" />
+                      </button>
+                    </li>
+                  );
+                })}
+            </ul>
+            <div className="p-3 border-t border-border flex gap-2 shrink-0">
+              <button
+                type="button"
+                className="flex-1 px-3 py-2.5 rounded-xl text-sm font-medium text-muted hover:bg-inset"
+                onClick={() => setMyNavOrder([...DEFAULT_NAV_ORDER])}
+              >
+                Reset default
+              </button>
+              <button
+                type="button"
+                className="flex-1 px-3 py-2.5 rounded-xl text-sm font-medium bg-accent text-accent-ink"
+                onClick={() => setNavEditOpen(false)}
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
   );
 }
 
