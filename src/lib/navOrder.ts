@@ -44,14 +44,16 @@ export function resolveNavOrder(saved?: string[] | null): ViewId[] {
   return out;
 }
 
-export function moveNavItem(order: ViewId[], id: ViewId, dir: -1 | 1): ViewId[] {
-  const i = order.indexOf(id);
-  if (i < 0) return order;
-  const j = i + dir;
-  if (j < 0 || j >= order.length) return order;
+/** Move fromId so it sits at toId's index (HTML5 drop-on-item). */
+export function reorderNavDrop(order: ViewId[], fromId: string, toId: string): ViewId[] {
+  if (!isNavViewId(fromId) || !isNavViewId(toId) || fromId === toId) return order;
+  const from = order.indexOf(fromId);
+  const to = order.indexOf(toId);
+  if (from < 0 || to < 0) return order;
   const next = order.slice();
-  const tmp = next[i]!;
-  next[i] = next[j]!;
-  next[j] = tmp;
+  next.splice(from, 1);
+  const insertAt = next.indexOf(toId);
+  if (insertAt < 0) return order;
+  next.splice(insertAt, 0, fromId);
   return next;
 }

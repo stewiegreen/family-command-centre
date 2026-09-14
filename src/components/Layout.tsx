@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, type DragEvent, type ReactNode } from 'react';
 import {
   Home,
   Calendar,
@@ -19,9 +19,7 @@ import {
   ShoppingCart,
   PanelLeftClose,
   PanelLeftOpen,
-  ChevronUp,
-  ChevronDown,
-  ListOrdered,
+  GripVertical,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Avatar } from './ui/Avatar';
@@ -38,7 +36,7 @@ import {
 } from '../lib/notifications';
 import { registerFcmToken, syncFcmToken, disableFcmForMember } from '../lib/fcm';
 import { hasLocalThemeStudioUnlock } from '../lib/themeStudioUnlock';
-import { DEFAULT_NAV_ORDER, moveNavItem } from '../lib/navOrder';
+import { isNavViewId, reorderNavDrop } from '../lib/navOrder';
 
 const NAV: { id: ViewId; label: string; icon: typeof Home }[] = [
   { id: 'dashboard', label: 'Home', icon: Home },
@@ -72,7 +70,8 @@ export function Layout({ children }: { children: ReactNode }) {
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [notifOn, setNotifOn] = useState(isNotificationsEnabled);
-  const [navEditOpen, setNavEditOpen] = useState(false);
+  const [navDragging, setNavDragging] = useState<string | null>(null);
+  const [navDropTarget, setNavDropTarget] = useState<string | null>(null);
 
   const { settings } = data;
 
@@ -162,12 +161,46 @@ export function Layout({ children }: { children: ReactNode }) {
     .map((id) => navById[id])
     .filter(Boolean) as typeof NAV;
 
+  const canReorderNav = !isMediaOnly;
 
-  const navBtn = (active: boolean) =>
+  const onNavDragStart = (e: DragEvent, id: ViewId) => {
+    if (!canReorderNav) return;
+    e.dataTransfer.setData('text/hq-nav', id);
+    e.dataTransfer.effectAllowed = 'move';
+    setNavDragging(id);
+  };
+
+  const onNavDragEnd = () => {
+    setNavDragging(null);
+    setNavDropTarget(null);
+  };
+
+  const onNavDragOver = (e: DragEvent, id: ViewId) => {
+    if (!canReorderNav || !navDragging || navDragging === id) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (navDropTarget !== id) setNavDropTarget(id);
+  };
+
+  const onNavDrop = (e: DragEvent, toId: ViewId) => {
+    if (!canReorderNav) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const fromId = e.dataTransfer.getData('text/hq-nav') || navDragging || '';
+    setNavDragging(null);
+    setNavDropTarget(null);
+    if (!isNavViewId(fromId) || fromId === toId) return;
+    setMyNavOrder(reorderNavDrop(myNavOrder, fromId, toId));
+  };
+
+  const navBtn = (active: boolean, opts?: { dragging?: boolean; dropTarget?: boolean }) =>
     cn(
       'w-full flex items-center rounded-xl text-sm font-medium transition-all',
-      collapsed ? 'justify-center px-2 py-2.5' : 'gap-3 px-3 py-2.5',
+      collapsed ? 'justify-center px-2 py-2.5' : 'gap-2.5 px-3 py-2.5',
       active ? 'bg-accent/15 text-accent' : 'text-muted hover:bg-nav-hover hover:text-fg',
+      opts?.dragging && 'opacity-40',
+      opts?.dropTarget && 'ring-2 ring-accent/50 bg-accent/10',
+      canReorderNav && 'cursor-grab active:cursor-grabbing',
     );
 
   return (
@@ -254,10 +287,21 @@ export function Layout({ children }: { children: ReactNode }) {
             <button
               key={item.id}
               type="button"
+              draggable={canReorderNav}
+              onDragStart={(e) => onNavDragStart(e, item.id)}
+              onDragEnd={onNavDragEnd}
+              onDragOver={(e) => onNavDragOver(e, item.id)}
+              onDrop={(e) => onNavDrop(e, item.id)}
               onClick={() => setView(item.id)}
-              className={navBtn(view === item.id)}
-              title={item.label}
+              className={navBtn(view === item.id, {
+                dragging: navDragging === item.id,
+                dropTarget: navDropTarget === item.id && navDragging !== item.id,
+              })}
+              title={canReorderNav ? `${item.label} — drag to reorder` : item.label}
             >
+              {!collapsed && canReorderNav && (
+                <GripVertical className="w-3.5 h-3.5 shrink-0 opacity-40" aria-hidden />
+              )}
               <span className="relative">
                 <item.icon className="w-5 h-5 shrink-0" />
                 {item.id === 'messages' && unread > 0 && collapsed && (
@@ -281,17 +325,6 @@ export function Layout({ children }: { children: ReactNode }) {
         </nav>
 
         <div className={cn('border-t border-border space-y-2', collapsed ? 'p-2' : 'p-3')}>
-          {!isMediaOnly && (
-            <button
-              type="button"
-              onClick={() => setNavEditOpen(true)}
-              className={navBtn(false)}
-              title="Reorder menu"
-            >
-              <ListOrdered className="w-5 h-5 shrink-0" />
-              {!collapsed && 'Reorder menu'}
-            </button>
-          )}
           {isParent && (
             <button
               type="button"
@@ -517,35 +550,31 @@ export function Layout({ children }: { children: ReactNode }) {
                 <button
                   key={item.id}
                   type="button"
+                  draggable={canReorderNav}
+                  onDragStart={(e) => onNavDragStart(e, item.id)}
+                  onDragEnd={onNavDragEnd}
+                  onDragOver={(e) => onNavDragOver(e, item.id)}
+                  onDrop={(e) => onNavDrop(e, item.id)}
                   onClick={() => {
                     setView(item.id);
                     setSidebarOpen(false);
                   }}
                   className={cn(
-                    'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all',
+                    'w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-all',
                     view === item.id
                       ? 'bg-accent/15 text-accent'
                       : 'text-muted hover:bg-nav-hover hover:text-fg',
+                    navDragging === item.id && 'opacity-40',
+                    navDropTarget === item.id && navDragging !== item.id && 'ring-2 ring-accent/50 bg-accent/10',
+                    canReorderNav && 'cursor-grab active:cursor-grabbing',
                   )}
                 >
+                  {canReorderNav && (
+                    <GripVertical className="w-3.5 h-3.5 shrink-0 opacity-40" aria-hidden />
+                  )}
                   <item.icon className="w-5 h-5" /> {item.label}
                 </button>
               ))}
-              {!isMediaOnly && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setNavEditOpen(true);
-                    setSidebarOpen(false);
-                  }}
-                  className={cn(
-                    'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all',
-                    'text-muted hover:bg-nav-hover hover:text-fg',
-                  )}
-                >
-                  <ListOrdered className="w-5 h-5" /> Reorder menu
-                </button>
-              )}
               {isParent && (
                 <button
                   type="button"
@@ -626,83 +655,6 @@ export function Layout({ children }: { children: ReactNode }) {
       )}
       <ProfileSwitcher open={switcherOpen} onClose={() => setSwitcherOpen(false)} />
 
-      {navEditOpen && !isMediaOnly && (
-        <div
-          className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-black/50 p-0 sm:p-4"
-          onClick={() => setNavEditOpen(false)}
-        >
-          <div
-            className="w-full sm:max-w-md max-h-[85dvh] overflow-hidden rounded-t-2xl sm:rounded-2xl bg-elevated border border-border shadow-xl flex flex-col"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-border shrink-0">
-              <div>
-                <h2 className="font-semibold text-fg">Menu order</h2>
-                <p className="text-xs text-muted">Only for you — other family members keep their own order.</p>
-              </div>
-              <button
-                type="button"
-                className="p-2 rounded-xl text-muted hover:bg-nav-hover"
-                onClick={() => setNavEditOpen(false)}
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <ul className="flex-1 overflow-y-auto p-3 space-y-1">
-              {myNavOrder
-                .filter((id) => id !== 'themestudio' || themeStudioUnlocked)
-                .map((id, idx, arr) => {
-                  const item = navById[id];
-                  if (!item) return null;
-                  const Icon = item.icon;
-                  return (
-                    <li
-                      key={id}
-                      className="flex items-center gap-2 rounded-xl border border-border bg-surface px-2 py-2"
-                    >
-                      <Icon className="w-4 h-4 text-muted shrink-0 ml-1" />
-                      <span className="flex-1 text-sm font-medium text-fg">{item.label}</span>
-                      <button
-                        type="button"
-                        disabled={idx === 0}
-                        className="p-2 rounded-lg text-muted hover:text-fg hover:bg-inset disabled:opacity-30"
-                        onClick={() => setMyNavOrder(moveNavItem(myNavOrder, id, -1))}
-                        title="Move up"
-                      >
-                        <ChevronUp className="w-4 h-4" />
-                      </button>
-                      <button
-                        type="button"
-                        disabled={idx === arr.length - 1}
-                        className="p-2 rounded-lg text-muted hover:text-fg hover:bg-inset disabled:opacity-30"
-                        onClick={() => setMyNavOrder(moveNavItem(myNavOrder, id, 1))}
-                        title="Move down"
-                      >
-                        <ChevronDown className="w-4 h-4" />
-                      </button>
-                    </li>
-                  );
-                })}
-            </ul>
-            <div className="p-3 border-t border-border flex gap-2 shrink-0">
-              <button
-                type="button"
-                className="flex-1 px-3 py-2.5 rounded-xl text-sm font-medium text-muted hover:bg-inset"
-                onClick={() => setMyNavOrder([...DEFAULT_NAV_ORDER])}
-              >
-                Reset default
-              </button>
-              <button
-                type="button"
-                className="flex-1 px-3 py-2.5 rounded-xl text-sm font-medium bg-accent text-accent-ink"
-                onClick={() => setNavEditOpen(false)}
-              >
-                Done
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
