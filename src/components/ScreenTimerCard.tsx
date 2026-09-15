@@ -180,7 +180,7 @@ export function ScreenTimerCard() {
           <Timer className="w-4 h-4 text-accent" />
           Screen timer
         </h3>
-        <span className="text-xs text-muted tabular-nums">{bal}m bank</span>
+        <span className="text-xs text-muted tabular-nums shrink-0">{bal}m bank</span>
       </div>
       {isParent && kids.length > 0 && (
         <div

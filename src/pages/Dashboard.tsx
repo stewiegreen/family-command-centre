@@ -238,10 +238,11 @@ function SectionChrome({
       <div
         className={cn(
           'min-w-0 flex flex-col',
-          // Extra right padding *inside* the card so "Full list →" / "Calendar →" clear the hide control.
-          // !important beats Card's !p-4 on the padding-right side only.
+          // Extra right padding inside every homescreen card surface so header
+          // actions clear the hide control. Covers direct <Card> and FlipCard faces.
           '[&>*]:!pr-10',
-          paired && 'flex-1 [&>*]:h-full',
+          '[&_.hq-flip-face-body>*]:!pr-10',
+          paired && 'flex-1 [&>*]:h-full [&_.hq-flip-face-body>*]:h-full',
         )}
       >
         {children}
@@ -1162,7 +1163,7 @@ export function Dashboard() {
               )}
             </div>
           </div>
-          <button type="button" onClick={() => setView('calendar')} className="text-xs text-accent shrink-0">
+          <button type="button" onClick={() => setView('calendar')} className="text-xs text-accent shrink-0 mr-1">
             Calendar →
           </button>
         </div>
@@ -1723,7 +1724,7 @@ export function Dashboard() {
             <ShoppingCart className="w-4 h-4 text-sky-500" />
             Shopping
           </h2>
-          <button type="button" onClick={() => setView('shopping')} className="text-xs text-accent">
+          <button type="button" onClick={() => setView('shopping')} className="text-xs text-accent shrink-0">
             Full list →
           </button>
         </div>
@@ -1772,7 +1773,7 @@ export function Dashboard() {
             <BookOpen className="w-4 h-4 text-accent" />
             Journal
           </h2>
-          <button type="button" onClick={() => setView('journal')} className="text-xs text-accent">
+          <button type="button" onClick={() => setView('journal')} className="text-xs text-accent shrink-0">
             Open →
           </button>
         </div>
