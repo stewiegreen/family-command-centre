@@ -278,9 +278,12 @@ function SectionChrome({
       <div
         className={cn(
           'min-w-0 flex flex-col flex-1',
-          // Reserve a header band inside the card so controls never cover content
-          '[&>*]:!pt-10',
-          paired && '[&>*]:h-full',
+          // Reserve a header band *inside* the card surface.
+          // Direct Card children: pad the card.
+          // FlipCard: pad the face Cards, not the flip root (that would sit outside).
+          '[&>*:not(.hq-flip-root)]:!pt-10',
+          '[&_.hq-flip-face-body>*]:!pt-10',
+          paired && '[&>*]:h-full [&_.hq-flip-face-body>*]:h-full',
         )}
       >
         {children}

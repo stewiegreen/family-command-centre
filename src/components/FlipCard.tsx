@@ -122,7 +122,7 @@ export function FlipCard({
     // Still mount both faces (one visually hidden) so height matches and effects run once each max
     return (
       <div
-        className={cn('relative h-full min-h-0', className)}
+        className={cn('hq-flip-root relative h-full min-h-0', className)}
         style={contentMinH ? { minHeight: contentMinH } : undefined}
       >
         <div
@@ -147,7 +147,7 @@ export function FlipCard({
 
   return (
     <div
-      className={cn('hq-flip-scene h-full min-h-0', className)}
+      className={cn('hq-flip-root hq-flip-scene h-full min-h-0', className)}
       style={contentMinH ? { minHeight: contentMinH } : undefined}
     >
       <div
