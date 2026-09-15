@@ -378,11 +378,13 @@ h3,
   perspective-origin: 50% 50%;
   height: 100%;
   min-height: 0;
+  width: 100%;
 }
 .hq-flip-inner {
   display: grid;
   height: 100%;
   min-height: 0;
+  width: 100%;
   transform-style: preserve-3d;
   transition: transform 0.45s cubic-bezier(0.4, 0.2, 0.2, 1);
 }
@@ -394,6 +396,7 @@ h3,
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
   min-width: 0;
+  width: 100%;
   height: 100%;
   min-height: 100%;
 }
@@ -407,44 +410,29 @@ h3,
   position: relative;
   height: 100%;
   min-height: 100%;
+  width: 100%;
+  min-width: 0;
   display: flex;
   flex-direction: column;
 }
-.hq-flip-face-body > *:first-child {
+.hq-flip-face-main {
   flex: 1 1 auto;
-  height: 100%;
-  min-height: 100%;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
   display: flex;
   flex-direction: column;
-  box-sizing: border-box;
-  padding-bottom: 2.75rem !important;
+}
+.hq-flip-face-main > * {
+  width: 100%;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.hq-flip-footer {
+  width: 100%;
 }
 .hq-flip-measure {
   width: 100%;
-}
-
-/* Body fills the face; first child Card stretches so the flip chip sits on the card */
-.hq-flip-face-body {
-  position: relative;
-  height: 100%;
-  min-height: 100%;
-  display: flex;
-  flex-direction: column;
-}
-.hq-flip-face-body > *:first-child {
-  flex: 1 1 auto;
-  height: 100%;
-  min-height: 100%;
-  display: flex;
-  flex-direction: column;
-  box-sizing: border-box;
-  /* room for absolute flip chip at bottom-right */
-  padding-bottom: 2.75rem !important;
-}
-
-/* Keep flip chip clear of card header text */
-.hq-flip-pad > * {
-  box-sizing: border-box;
 }
 
 @media (prefers-reduced-motion: reduce) {

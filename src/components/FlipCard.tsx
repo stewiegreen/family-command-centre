@@ -13,7 +13,6 @@ type Props = {
   storageKey: string;
   frontLabel: string;
   backLabel: string;
-  /** Optional chip on Flip to Timer (front face only) */
   frontBadge?: string;
   front: ReactNode;
   back: ReactNode;
@@ -21,11 +20,9 @@ type Props = {
 };
 
 /**
- * Two-faced home card. Fills parent height when paired (h-full chain).
- * Faces share max(content) min-height so front/back match each other.
- *
- * IMPORTANT: front/back are each mounted exactly once. A previous measure
- * clone re-mounted ScreenTimerCard and caused every expiry to fire 2 pushes.
+ * Two-face card. Front/back are each mounted exactly once.
+ * Flip control is a compact bar at the bottom of the face — not a floating
+ * chip in empty side space.
  */
 export function FlipCard({
   storageKey,
@@ -94,89 +91,98 @@ export function FlipCard({
     const otherLabel = onBack ? frontLabel : backLabel;
     const badge = onBack ? undefined : frontBadge;
     return (
-      <button
-        type="button"
-        onClick={toggle}
-        onMouseDown={(e) => e.stopPropagation()}
-        onPointerDown={(e) => e.stopPropagation()}
-        className={cn(
-          'absolute bottom-3 right-3 z-20',
-          'inline-flex items-center gap-1.5 rounded-full border border-border bg-surface/95',
-          'px-2.5 py-1 text-[11px] font-medium text-muted hover:text-fg hover:border-border-strong',
-          'shadow-sm backdrop-blur-sm transition-colors',
-        )}
-        title={`Show ${otherLabel}`}
-      >
-        <RefreshCw className={cn('w-3 h-3 shrink-0', onBack && 'rotate-180')} />
-        <span className="whitespace-nowrap">
-          Flip to {otherLabel}
-          {badge ? (
-            <span className="ml-1 text-accent font-semibold tabular-nums">· {badge}</span>
-          ) : null}
-        </span>
-      </button>
+      <div className="hq-flip-footer shrink-0 w-full flex justify-end pt-1">
+        <button
+          type="button"
+          onClick={toggle}
+          onMouseDown={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
+          className={cn(
+            'inline-flex items-center gap-1.5 rounded-full border border-border bg-surface/95',
+            'px-2.5 py-1 text-[11px] font-medium text-muted hover:text-fg hover:border-border-strong',
+            'shadow-sm backdrop-blur-sm transition-colors',
+          )}
+          title={`Show ${otherLabel}`}
+        >
+          <RefreshCw className={cn('w-3 h-3 shrink-0', onBack && 'rotate-180')} />
+          <span className="whitespace-nowrap">
+            Flip to {otherLabel}
+            {badge ? (
+              <span className="ml-1 text-accent font-semibold tabular-nums">· {badge}</span>
+            ) : null}
+          </span>
+        </button>
+      </div>
     );
   };
 
+  const faceBody = (
+    side: 'front' | 'back',
+    ref: typeof frontRef,
+    content: ReactNode,
+    visible: boolean,
+  ) => (
+    <div
+      ref={ref}
+      className={cn(
+        'hq-flip-face-body w-full min-w-0',
+        !visible && 'hidden',
+      )}
+      aria-hidden={!visible}
+    >
+      <div className="hq-flip-face-main w-full min-w-0 flex-1 flex flex-col min-h-0">
+        {content}
+      </div>
+      {visible ? makeBtn(side) : null}
+    </div>
+  );
+
   if (reduceMotion) {
-    // Still mount both faces (one visually hidden) so height matches and effects run once each max
     return (
       <div
-        className={cn('hq-flip-root relative h-full min-h-0', className)}
+        className={cn('hq-flip-root relative h-full min-h-0 w-full', className)}
         style={contentMinH ? { minHeight: contentMinH } : undefined}
       >
-        <div
-          ref={frontRef}
-          className={cn('hq-flip-face-body', flipped && 'hidden')}
-          aria-hidden={flipped}
-        >
-          {front}
-          {!flipped ? makeBtn('front') : null}
-        </div>
-        <div
-          ref={backRef}
-          className={cn('hq-flip-face-body', !flipped && 'hidden')}
-          aria-hidden={!flipped}
-        >
-          {back}
-          {flipped ? makeBtn('back') : null}
-        </div>
+        {faceBody('front', frontRef, front, !flipped)}
+        {faceBody('back', backRef, back, flipped)}
       </div>
     );
   }
 
   return (
     <div
-      className={cn('hq-flip-root hq-flip-scene h-full min-h-0', className)}
+      className={cn('hq-flip-root hq-flip-scene h-full min-h-0 w-full', className)}
       style={contentMinH ? { minHeight: contentMinH } : undefined}
     >
       <div
-        className={cn('hq-flip-inner h-full', flipped && 'hq-flip-inner--flipped')}
+        className={cn('hq-flip-inner h-full w-full', flipped && 'hq-flip-inner--flipped')}
         style={contentMinH ? { minHeight: contentMinH } : undefined}
       >
         <div
-          ref={frontRef}
           className={cn(
-            'hq-flip-face hq-flip-face--front',
+            'hq-flip-face hq-flip-face--front w-full',
             flipped && 'pointer-events-none',
           )}
           aria-hidden={flipped}
         >
-          <div className="hq-flip-face-body">
-            {front}
+          <div ref={frontRef} className="hq-flip-face-body w-full min-w-0">
+            <div className="hq-flip-face-main w-full min-w-0 flex-1 flex flex-col min-h-0">
+              {front}
+            </div>
             {makeBtn('front')}
           </div>
         </div>
         <div
-          ref={backRef}
           className={cn(
-            'hq-flip-face hq-flip-face--back',
+            'hq-flip-face hq-flip-face--back w-full',
             !flipped && 'pointer-events-none',
           )}
           aria-hidden={!flipped}
         >
-          <div className="hq-flip-face-body">
-            {back}
+          <div ref={backRef} className="hq-flip-face-body w-full min-w-0">
+            <div className="hq-flip-face-main w-full min-w-0 flex-1 flex flex-col min-h-0">
+              {back}
+            </div>
             {makeBtn('back')}
           </div>
         </div>

@@ -209,7 +209,7 @@ export function ContinueReadingCard() {
   const openBook = (b: KomgaBook) => setReading(b);
 
   // h-full + flex-1 chain so covers can consume leftover height; pb for flip chip
-  const faceClass = '!p-4 pb-12 h-full flex flex-col min-h-[16rem]';
+  const faceClass = '!p-4 h-full flex flex-col min-h-[16rem]';
 
   return (
     <>
