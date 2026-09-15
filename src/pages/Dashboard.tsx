@@ -14,9 +14,6 @@ import {
   ShoppingCart,
   Newspaper,
   RefreshCw,
-  GripVertical,
-  Columns2,
-  Square,
   Sword,
   Trophy,
   Package,
@@ -65,8 +62,6 @@ import {
 import { FAMILY_LIST_ID, PRESENCE_OPTIONS } from '../types';
 import { upcomingExpanded } from '../lib/recurrence';
 import {
-  pairOrReorder,
-  popOutToFullRow,
   applyHomescreenDrop,
   isPaired,
   visibleHomescreenRows,
@@ -157,7 +152,7 @@ function startOfWeekMonday(d: Date) {
 }
 
 
-/** Stable chrome — outside Dashboard so inputs don't remount on keystroke. */
+/** Stable chrome — drag whole card; hide control lives inside the card. */
 function SectionChrome({
   id,
   paired,
@@ -167,10 +162,7 @@ function SectionChrome({
   onDragOver,
   onDrop,
   onDragEnd,
-  onPopOut,
   onHide,
-  partnerOptions,
-  onChoosePartner,
   children,
 }: {
   id: SectionId;
@@ -181,14 +173,9 @@ function SectionChrome({
   onDragOver: (e: DragEvent, id: SectionId) => void;
   onDrop: (e: DragEvent, id: SectionId) => void;
   onDragEnd: () => void;
-  onPopOut: (id: SectionId) => void;
   onHide: (id: SectionId) => void;
-  partnerOptions: { id: SectionId; label: string }[];
-  onChoosePartner: (fromId: SectionId, toId: SectionId) => void;
   children: ReactNode;
 }) {
-  const [menuOpen, setMenuOpen] = useState(false);
-
   return (
     <div
       className={cn(
@@ -229,73 +216,25 @@ function SectionChrome({
       {dropSide === 'right' && (
         <div className="pointer-events-none absolute inset-y-2 right-0 w-1.5 rounded-full bg-accent z-10 shadow-[0_0_8px_var(--app-accent,#38bdf8)]" />
       )}
-      <div className="flex items-center justify-end gap-1 mb-1 shrink-0">
-        <div className="relative">
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              if (paired) {
-                onPopOut(id);
-              } else {
-                setMenuOpen((v) => !v);
-              }
-            }}
-            className="p-1 rounded-md text-faint hover:text-fg hover:bg-nav-hover"
-            title={paired ? 'Make full width' : 'Share row with another card'}
-          >
-            {paired ? (
-              <Square className="w-3.5 h-3.5" />
-            ) : (
-              <Columns2 className="w-3.5 h-3.5" />
-            )}
-          </button>
-          {menuOpen && !paired && (
-            <>
-              <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
-              <div className="absolute right-0 top-full mt-1 z-20 w-48 rounded-xl border border-border bg-surface shadow-lg overflow-hidden">
-                <p className="px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-faint border-b border-border">
-                  Share row with…
-                </p>
-                {partnerOptions.length === 0 ? (
-                  <p className="px-3 py-2.5 text-xs text-muted">No other cards free right now.</p>
-                ) : (
-                  partnerOptions.map((opt) => (
-                    <button
-                      key={opt.id}
-                      type="button"
-                      onClick={() => {
-                        onChoosePartner(id, opt.id);
-                        setMenuOpen(false);
-                      }}
-                      className="w-full text-left px-3 py-2 text-sm text-fg hover:bg-nav-hover"
-                    >
-                      {opt.label}
-                    </button>
-                  ))
-                )}
-              </div>
-            </>
-          )}
-        </div>
-        <span
-          className="p-1 rounded-md text-faint cursor-grab active:cursor-grabbing hover:text-fg hover:bg-nav-hover"
-          title="Drag left/right of a card to share a row · between rows for full width"
-        >
-          <GripVertical className="w-3.5 h-3.5" />
-        </span>
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onHide(id);
-          }}
-          className="p-1 rounded-md text-faint hover:text-fg hover:bg-nav-hover"
-          title="Hide this card"
-        >
-          <EyeOff className="w-3.5 h-3.5" />
-        </button>
-      </div>
+      {/* Hide — inside the card, only on hover / focus so the gap stays tight */}
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onHide(id);
+        }}
+        className={cn(
+          'absolute top-2 right-2 z-20 p-1.5 rounded-lg',
+          'bg-elevated/90 border border-border text-muted hover:text-fg shadow-sm',
+          'opacity-0 pointer-events-none',
+          'group-hover/section:opacity-100 group-hover/section:pointer-events-auto',
+          'focus-visible:opacity-100 focus-visible:pointer-events-auto',
+        )}
+        title="Hide this card"
+        aria-label="Hide this card"
+      >
+        <EyeOff className="w-3.5 h-3.5" />
+      </button>
       <div
         className={cn(
           'min-w-0 flex flex-col',
@@ -492,12 +431,6 @@ export function Dashboard() {
     dropHintRef.current = hint;
   };
 
-  /** Menu: share row with… (join on the right). */
-  const pairSections = (fromId: SectionId, toId: SectionId) => {
-    if (fromId === toId) return;
-    setMyHomescreenRows(pairOrReorder(rows, fromId, toId));
-  };
-
   const commitDrop = (placement: HomescreenDropPlacement) => {
     const fromId = dragIdRef.current;
     setDragId(null);
@@ -539,9 +472,6 @@ export function Dashboard() {
     setDropHint(null);
     dropHintRef.current = null;
   };
-  const onPopOut = (id: SectionId) => {
-    setMyHomescreenRows(popOutToFullRow(rows, id));
-  };
   const hideWidget = (id: SectionId) => {
     if (hiddenSet.has(id)) return;
     setMyHiddenWidgets([...myHiddenWidgets, id]);
@@ -549,12 +479,6 @@ export function Dashboard() {
   const showWidget = (id: SectionId) => {
     setMyHiddenWidgets(myHiddenWidgets.filter((x) => x !== id));
   };
-  /** Other visible cards currently alone in their row — valid drop/pick targets to share a row with. */
-  const soloPartnersFor = (id: SectionId): { id: SectionId; label: string }[] =>
-    rows
-      .filter((row) => row.length === 1 && row[0] !== id && !hiddenSet.has(row[0]!))
-      .map((row) => ({ id: row[0]!, label: SECTION_LABELS[row[0]!] }));
-
   const progressMap = data.memberProgress || {};
   const coinBalances = data.coinBalances || {};
   const screenTimeMap = data.screenTime || {};
@@ -2340,7 +2264,7 @@ export function Dashboard() {
           <div key={`row-${ri}-${row.join('-')}`}>
             <div
               className={cn(
-                'grid gap-2 items-stretch',
+                'grid gap-1.5 items-stretch',
                 row.length > 1 ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1',
               )}
             >
@@ -2361,10 +2285,7 @@ export function Dashboard() {
                   onDragOver={onSectionDragOver}
                   onDrop={onSectionDrop}
                   onDragEnd={onSectionDragEnd}
-                  onPopOut={onPopOut}
                   onHide={hideWidget}
-                  partnerOptions={soloPartnersFor(id)}
-                  onChoosePartner={pairSections}
                 >
                   {sections[id]}
                 </SectionChrome>
