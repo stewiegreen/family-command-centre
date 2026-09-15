@@ -179,9 +179,7 @@ function SectionChrome({
   return (
     <div
       className={cn(
-        // pr-9 reserves a permanent strip so header actions (Full list, Open →, etc.)
-        // never sit under the hide control.
-        'relative group/section transition-opacity min-h-0 flex flex-col pr-9',
+        'relative group/section transition-opacity min-h-0 flex flex-col',
         paired && 'h-full',
         dragging && 'opacity-40',
       )}
@@ -226,9 +224,8 @@ function SectionChrome({
           onHide(id);
         }}
         className={cn(
-          // Sit in the reserved right strip (pr-9), not over card text.
-          'absolute top-2 right-1 z-20 p-1.5 rounded-lg',
-          'bg-elevated/90 border border-border text-muted hover:text-fg shadow-sm',
+          'absolute top-2.5 right-2.5 z-20 p-1.5 rounded-lg',
+          'bg-elevated/95 border border-border text-muted hover:text-fg shadow-sm',
           'opacity-0 pointer-events-none',
           'group-hover/section:opacity-100 group-hover/section:pointer-events-auto',
           'focus-visible:opacity-100 focus-visible:pointer-events-auto',
@@ -241,6 +238,9 @@ function SectionChrome({
       <div
         className={cn(
           'min-w-0 flex flex-col',
+          // Extra right padding *inside* the card so "Full list →" / "Calendar →" clear the hide control.
+          // !important beats Card's !p-4 on the padding-right side only.
+          '[&>*]:!pr-10',
           paired && 'flex-1 [&>*]:h-full',
         )}
       >
