@@ -348,7 +348,7 @@ export function KomgaLibrary() {
                   <p>Unread</p>}
               </div>
               <div className="flex flex-wrap gap-2">
-                <Button onClick={() => setReading(selectedBook)}>
+                <Button onClick={() => { setReading(selectedBook); setSelectedBook(null); }}>
                   <BookOpen className="w-4 h-4" /> {bookProgressPercent(selectedBook) > 0 && bookProgressPercent(selectedBook) < 100 ? 'Continue' : 'Read'}
                 </Button>
                 {selectedBook.readProgress?.completed ? (

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ArrowLeft, ChevronLeft, ChevronRight, Loader2, X } from 'lucide-react';
 import {
   bookTitle,
@@ -77,6 +78,15 @@ export function ComicReader({ book, memberId, onClose, onOpenBook }: Props) {
 
   const goNext = useCallback(() => goTo(pageIndexRef.current + 1), [goTo]);
   const goPrev = useCallback(() => goTo(pageIndexRef.current - 1), [goTo]);
+
+  // Prevent background scroll while the reader is open
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
 
   // Load pages on open / book change
   useEffect(() => {
@@ -192,8 +202,10 @@ export function ComicReader({ book, memberId, onClose, onOpenBook }: Props) {
 
   const atEnd = total > 0 && pageIndex >= total - 1;
 
-  return (
-    <div className="fixed inset-0 z-[60] flex flex-col bg-black text-white">
+  // Portal to body so FlipCard 3D transforms / layout overflow cannot trap
+  // position:fixed — otherwise the reader stays "in the Komga card frame".
+  const ui = (
+    <div className="fixed inset-0 z-[200] flex flex-col bg-black text-white">
       {/* Top chrome */}
       <div
         className={cn(
@@ -368,4 +380,7 @@ export function ComicReader({ book, memberId, onClose, onOpenBook }: Props) {
       )}
     </div>
   );
+
+  if (typeof document === 'undefined') return ui;
+  return createPortal(ui, document.body);
 }
