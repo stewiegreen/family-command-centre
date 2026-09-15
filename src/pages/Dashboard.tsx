@@ -216,7 +216,11 @@ function SectionChrome({
       {dropSide === 'right' && (
         <div className="pointer-events-none absolute inset-y-2 right-0 w-1.5 rounded-full bg-accent z-10 shadow-[0_0_8px_var(--app-accent,#38bdf8)]" />
       )}
-      {/* Hide — inside the card, only on hover / focus so the gap stays tight */}
+      {/*
+        Hide control: inside the card corner, hover only.
+        Do NOT pad the whole card (that left huge empty strips).
+        Header rows use pr-9 so title actions clear this ~32px control.
+      */}
       <button
         type="button"
         onClick={(e) => {
@@ -224,7 +228,7 @@ function SectionChrome({
           onHide(id);
         }}
         className={cn(
-          'absolute top-2.5 right-2.5 z-20 p-1.5 rounded-lg',
+          'absolute top-2.5 right-2.5 z-30 p-1.5 rounded-lg',
           'bg-elevated/95 border border-border text-muted hover:text-fg shadow-sm',
           'opacity-0 pointer-events-none',
           'group-hover/section:opacity-100 group-hover/section:pointer-events-auto',
@@ -238,11 +242,7 @@ function SectionChrome({
       <div
         className={cn(
           'min-w-0 flex flex-col',
-          // Extra right padding inside every homescreen card surface so header
-          // actions clear the hide control. Covers direct <Card> and FlipCard faces.
-          '[&>*]:!pr-10',
-          '[&_.hq-flip-face-body>*]:!pr-10',
-          paired && 'flex-1 [&>*]:h-full [&_.hq-flip-face-body>*]:h-full',
+          paired && 'flex-1 [&>*]:h-full',
         )}
       >
         {children}
@@ -1084,7 +1084,7 @@ export function Dashboard() {
         backLabel="Calendar"
         front={
 <Card className="h-full flex flex-col">
-        <div className="flex items-center justify-between gap-2 mb-3">
+        <div className="flex items-center justify-between gap-2 mb-3 pr-9">
           <div className="flex items-center gap-2 min-w-0">
             <h2 className="font-semibold text-fg shrink-0 text-lg">Upcoming Events</h2>
             <div className="relative" ref={eventsFilterRef}>
@@ -1373,7 +1373,7 @@ export function Dashboard() {
         }
         front={isParent ? (
       <Card className="!p-4 lg:!p-5 space-y-4 h-full flex flex-col">
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center justify-between gap-3 pr-9">
           <h2 className="font-semibold text-fg flex items-center gap-2 text-lg">
             <Sword className="w-4 h-4 text-accent" />
             ChoreQuest
@@ -1559,7 +1559,7 @@ export function Dashboard() {
       </Card>
     ) : (
       <Card className="!p-4 lg:!p-5 h-full flex flex-col">
-        <div className="flex items-center justify-between gap-3 mb-4">
+        <div className="flex items-center justify-between gap-3 mb-4 pr-9">
           <h2 className="font-semibold text-fg flex items-center gap-2 text-lg">
             <Sword className="w-4 h-4 text-accent" />
             ChoreQuest
@@ -1654,7 +1654,7 @@ export function Dashboard() {
 
     chores: (
       <Card className="h-full flex flex-col">
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center justify-between mb-3 pr-9">
           <h2 className="font-semibold text-fg flex items-center gap-2 text-lg">
             <Sword className="w-4 h-4 text-accent" />
             {isParent ? 'Chores to approve' : 'My quests'}
@@ -1719,7 +1719,7 @@ export function Dashboard() {
 
     shopping: (
       <Card className="h-full flex flex-col">
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center justify-between mb-3 pr-9">
           <h2 className="font-semibold text-fg flex items-center gap-2 text-lg">
             <ShoppingCart className="w-4 h-4 text-sky-500" />
             Shopping
@@ -1768,7 +1768,7 @@ export function Dashboard() {
 
     journal: (
       <Card>
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center justify-between mb-3 pr-9">
           <h2 className="font-semibold text-fg flex items-center gap-2 text-lg">
             <BookOpen className="w-4 h-4 text-accent" />
             Journal

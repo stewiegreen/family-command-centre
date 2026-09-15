@@ -869,7 +869,7 @@ export function ProfileLookCard() {
   return (
     <>
       <Card className="!p-4">
-        <div className="flex items-center justify-between gap-3 mb-3">
+        <div className="flex items-center justify-between gap-3 mb-3 pr-9">
           <div>
             <h2 className="font-semibold text-fg text-lg">Your look</h2>
           </div>
