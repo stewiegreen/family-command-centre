@@ -1,3 +1,4 @@
+import { getFirebaseAuth } from './firebase';
 import type { Recipe, RecipeIngredient, ShoppingItem } from '../types';
 
 /** Suggested tag chips — users can still add any custom tag. */
@@ -183,9 +184,16 @@ export type ParsedRecipeResponse = {
 };
 
 export async function parseRecipeFromText(text: string): Promise<ParsedRecipeResponse> {
+  const auth = getFirebaseAuth();
+  const user = auth?.currentUser;
+  if (!user) throw new Error('Not signed in');
+  const idToken = await user.getIdToken();
   const res = await fetch('/api/recipe/parse', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${idToken}`,
+    },
     body: JSON.stringify({ text }),
   });
   const data = (await res.json()) as ParsedRecipeResponse;

@@ -3,6 +3,7 @@ import { Lightbulb, LightbulbOff, Loader2 } from 'lucide-react';
 import { Card } from './ui/Card';
 import { Button } from './ui/Button';
 import { getFirebaseAuth } from '../lib/firebase';
+import { useApp } from '../context/AppContext';
 import { cn } from '../lib/cn';
 
 type Busy = 'on' | 'off' | 'dim' | null;
@@ -10,11 +11,13 @@ type Busy = 'on' | 'off' | 'dim' | null;
 const BRIGHTNESS_KEY = 'fcc_lights_brightness';
 
 async function postLights(
+  familyId: string,
   body: { action: 'on' | 'off' } | { action: 'dim'; percent: number },
 ): Promise<void> {
   const auth = getFirebaseAuth();
   const user = auth?.currentUser;
   if (!user) throw new Error('Not signed in');
+  if (!familyId) throw new Error('No family');
   const idToken = await user.getIdToken();
   const res = await fetch('/api/lights/control', {
     method: 'POST',
@@ -22,7 +25,7 @@ async function postLights(
       'Content-Type': 'application/json',
       Authorization: `Bearer ${idToken}`,
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify({ familyId, ...body }),
   });
   const data = (await res.json().catch(() => ({}))) as { error?: string };
   if (!res.ok) {
@@ -42,6 +45,7 @@ function loadBrightness(): number {
 
 /** Parents-only living-room lights: On / Off + shared dimmer for both bulbs. */
 export function LightsCard() {
+  const { familyId } = useApp();
   const [busy, setBusy] = useState<Busy>(null);
   const [err, setErr] = useState<string | null>(null);
   const [last, setLast] = useState<'on' | 'off' | null>(null);
@@ -61,12 +65,12 @@ export function LightsCard() {
     setBusy(action);
     setErr(null);
     try {
-      await postLights({ action });
+      await postLights(familyId, { action });
       setLast(action);
       if (action === 'on') {
         // Apply current slider level after power-on so both match the dimmer
         try {
-          await postLights({ action: 'dim', percent: brightnessRef.current });
+          await postLights(familyId, { action: 'dim', percent: brightnessRef.current });
         } catch {
           /* on succeeded; dim is best-effort */
         }
@@ -88,7 +92,7 @@ export function LightsCard() {
     setBusy('dim');
     setErr(null);
     try {
-      await postLights({ action: 'dim', percent: pct });
+      await postLights(familyId, { action: 'dim', percent: pct });
       setLast('on');
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));

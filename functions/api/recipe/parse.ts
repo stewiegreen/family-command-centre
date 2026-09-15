@@ -9,38 +9,11 @@
  * Cloudflare dashboard → Pages → Settings → Functions → Workers AI binding:
  *   Variable name: AI
  *
- * ⚠️ SECURITY / COST NOTE — read before deploying:
- * This endpoint is public (any Cloudflare Pages Function is, by default) and
- * every successful call triggers a real, billed Workers AI inference. As
- * shipped, there is no check that the caller is a signed-in family member —
- * anyone who finds this URL could script requests against it and run up
- * inference costs with no limit, the same class of problem as the earlier
- * Emby proxy (a public endpoint that costs real money/access per hit needs
- * *something* gating it, not just a narrow allowlist of what it does).
- *
- * The Origin check below only catches requests that send a *mismatched*
- * Origin header (e.g. another website's client-side JS calling this on a
- * visitor's behalf) — it does nothing against a bare curl/script that omits
- * the Origin header entirely, which is the more likely form this kind of
- * abuse actually takes. It is NOT a real security boundary on its own, same
- * as we learned firsthand when debugging the Emby proxy's Cloudflare rules.
- * Treat it as one small speed bump, not a lock.
- *
- * For an actual fix, do ONE of these (both are outside what this file alone
- * can guarantee — same as the Emby API key living in Cloudflare env vars
- * rather than code):
- *   1. Add a Cloudflare Rate Limiting Rule on `/api/recipe/parse` in the
- *      dashboard (Rules → Rate limiting rules) — e.g. cap requests per IP
- *      per minute. Quick, no code change, doesn't require touching auth.
- *   2. Verify the caller is a real signed-in family member by checking their
- *      Firebase ID token server-side (fetch Google's public JWKS, verify the
- *      RS256 signature + issuer + audience via the Workers runtime's Web
- *      Crypto API). Stronger, but meaningfully more code — worth doing if
- *      (1) alone doesn't feel sufficient once this is live.
- * Do at least (1) before relying on this in production.
+ * Auth: Firebase ID token (Bearer). Any signed-in family member.
+ * Also put a Cloudflare Rate Limiting Rule on /api/recipe/parse (defense in depth).
  */
 
-const ALLOWED_ORIGINS = new Set(['https://greenhq.io', 'https://www.greenhq.io']);
+import { verifyUser, toErrorResponse } from '../../_lib/auth';
 
 type AiBinding = {
   run: (model: string, input: Record<string, unknown>) => Promise<unknown>;
@@ -48,6 +21,7 @@ type AiBinding = {
 
 type Env = {
   AI?: AiBinding;
+  FIREBASE_PROJECT_ID: string;
 };
 
 export type ParsedIngredient = {
@@ -512,9 +486,10 @@ async function aiParse(ai: AiBinding, text: string): Promise<ParsedRecipe | null
 }
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
-  const origin = context.request.headers.get('Origin');
-  if (origin && !ALLOWED_ORIGINS.has(origin)) {
-    return jsonResponse({ error: 'Forbidden' }, 403);
+  try {
+    await verifyUser(context.request, context.env);
+  } catch (err) {
+    return toErrorResponse(err);
   }
 
   let body: { text?: string };
