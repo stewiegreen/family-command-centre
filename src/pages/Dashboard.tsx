@@ -36,12 +36,11 @@ import { useApp } from '../context/AppContext';
 import { cloudCreateJournalEntry } from '../lib/firebase';
 import {
   getWeather,
-  weatherCodeMeta,
-  daytimeHours,
   weatherDayTip,
-  formatHour,
   type WeatherSnapshot,
 } from '../lib/weather';
+import { WeatherCard } from '../components/WeatherCard';
+
 import { uid } from '../lib/uid';
 import { Avatar } from '../components/ui/Avatar';
 import { Button } from '../components/ui/Button';
@@ -281,7 +280,7 @@ function SectionChrome({
           // Reserve a header band *inside* the card surface for hide/width.
           // Direct Card children: pad the card.
           // FlipCard: pad the face Card (first child of face-body), not the flip root.
-          '[&>*:not(.hq-flip-root)]:!pt-10',
+          '[&>*:not(.hq-flip-root):not(.hq-no-chrome-pad)]:!pt-10',
           '[&_.hq-flip-face-body>*:first-child]:!pt-10',
           paired && '[&>*]:h-full [&_.hq-flip-face-body>*:first-child]:h-full',
         )}
@@ -1887,100 +1886,14 @@ export function Dashboard() {
     ),
 
     weather: (
-      <Card className="!p-4 lg:!p-5 space-y-3 h-full flex flex-col">
-        {/* Compact header: icon + current temp + hi/lo, refresh tucked away as an icon */}
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <span className="text-2xl leading-none shrink-0" aria-hidden>
-              {weatherSnap ? weatherCodeMeta(weatherSnap.current.weatherCode).emoji : '🌡️'}
-            </span>
-            <div className="min-w-0">
-              <div className="flex items-baseline gap-1.5">
-                <span className="text-2xl font-bold tabular-nums text-fg">
-                  {weatherSnap ? `${weatherSnap.current.tempC}°` : '--°'}
-                </span>
-                {weatherSnap && (
-                  <span className="text-xs text-muted tabular-nums shrink-0">
-                    H{weatherSnap.today.tempMaxC}° · L{weatherSnap.today.tempMinC}°
-                  </span>
-                )}
-              </div>
-              <p className="text-xs text-muted truncate">
-                {weatherSnap
-                  ? `${weatherCodeMeta(weatherSnap.current.weatherCode).label} · ${weatherSnap.current.label}`
-                  : 'Loading…'}
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => void refreshWeather(true)}
-            disabled={weatherLoading}
-            className="p-1.5 rounded-lg text-faint hover:text-fg hover:bg-nav-hover shrink-0"
-            title="Refresh weather"
-          >
-            <RefreshCw className={cn('w-3.5 h-3.5', weatherLoading && 'animate-spin')} />
-          </button>
-        </div>
-
-        {weatherErr && <p className="text-xs text-warn">{weatherErr}</p>}
-        {!weatherSnap && !weatherErr && (
-          <p className="text-sm text-muted">Loading today&apos;s forecast…</p>
-        )}
-
-        {weatherSnap && (
-          <>
-            {weatherDayTip(weatherSnap.hourly || []) && (
-              <p className="text-xs text-accent bg-accent/10 rounded-lg px-2.5 py-1.5 leading-snug">
-                {weatherDayTip(weatherSnap.hourly || [])}
-              </p>
-            )}
-
-            {/* Hourly strip is the main event — compact per-hour tiles so this still
-                reads well at half width, sharing a row with another card. */}
-            <div className="-mx-1 overflow-x-auto">
-              <div className="flex gap-1 min-w-min px-1">
-                {daytimeHours(weatherSnap.hourly || []).map((h) => {
-                  const meta = weatherCodeMeta(h.weatherCode);
-                  const nowH = new Date().getHours();
-                  const isNow = h.hour === nowH;
-                  const wet = h.precipProb >= 40;
-                  return (
-                    <div
-                      key={h.time}
-                      className={cn(
-                        'flex flex-col items-center gap-0.5 rounded-lg px-1.5 py-1.5 min-w-[2.75rem]',
-                        isNow ? 'bg-accent/15 ring-1 ring-accent/50' : 'bg-surface-2/40',
-                      )}
-                      title={`${formatHour(h.hour)}: ${meta.label}, ${h.tempC}°${wet ? ` · ${h.precipProb}% rain` : ''}`}
-                    >
-                      <span className="text-[9px] text-faint tabular-nums">
-                        {formatHour(h.hour)}
-                      </span>
-                      <span className="text-sm leading-none" aria-hidden>
-                        {meta.emoji}
-                      </span>
-                      <span className="text-xs font-semibold tabular-nums text-fg">
-                        {h.tempC}°
-                      </span>
-                      <span
-                        className={cn(
-                          'text-[9px] tabular-nums',
-                          wet ? 'text-sky-400 font-medium' : 'invisible',
-                        )}
-                      >
-                        {h.precipProb}%
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </>
-        )}
-      </Card>
+      <WeatherCard
+        snap={weatherSnap}
+        tip={weatherSnap ? weatherDayTip(weatherSnap.hourly || []) : null}
+        loading={weatherLoading}
+        error={weatherErr}
+        onRefresh={() => void refreshWeather(true)}
+      />
     ),
-
 
     school: (() => {
       const today = schoolLocalDate();

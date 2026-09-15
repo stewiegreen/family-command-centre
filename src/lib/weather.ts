@@ -29,7 +29,9 @@ export type WeatherHour = {
 export type WeatherSnapshot = {
   current: WeatherCurrent;
   today: WeatherDay;
-  /** Today's hours (local), usually 0–23 */
+  /** Next few days including today (from daily forecast). */
+  days: WeatherDay[];
+  /** Today's hours (local) — used for umbrella tips, not shown hour-by-hour. */
   hourly: WeatherHour[];
   latitude: number;
   longitude: number;
@@ -41,7 +43,7 @@ export type WeatherLocation = {
   label: string;
 };
 
-const CACHE_KEY = 'fcc-weather-cache-v2';
+const CACHE_KEY = 'fcc-weather-cache-v3';
 const LOC_KEY = 'fcc-weather-loc-v1';
 const CACHE_MS = 20 * 60 * 1000; // 20 min
 
@@ -67,6 +69,42 @@ export function weatherCodeMeta(code: number): { emoji: string; label: string } 
   if (code === 95) return { emoji: '⛈️', label: 'Thunderstorm' };
   if (code === 96 || code === 99) return { emoji: '⛈️', label: 'Storm' };
   return { emoji: '🌡️', label: 'Weather' };
+}
+
+/** Map WMO code → coarse condition for the dashboard WeatherCard icons. */
+export type WeatherCondition =
+  | 'clear'
+  | 'partly-cloudy'
+  | 'cloudy'
+  | 'rain'
+  | 'storm'
+  | 'snow'
+  | 'fog';
+
+export function weatherCodeToCondition(code: number): WeatherCondition {
+  if (code === 0 || code === 1) return 'clear';
+  if (code === 2) return 'partly-cloudy';
+  if (code === 3) return 'cloudy';
+  if (code === 45 || code === 48) return 'fog';
+  if (code >= 71 && code <= 77) return 'snow';
+  if (code >= 85 && code <= 86) return 'snow';
+  if (code === 95 || code === 96 || code === 99) return 'storm';
+  if (
+    (code >= 51 && code <= 67) ||
+    (code >= 80 && code <= 82)
+  ) {
+    return 'rain';
+  }
+  return 'cloudy';
+}
+
+export function weekdayShort(dateStr: string): string {
+  try {
+    const d = new Date(dateStr + 'T12:00:00');
+    return d.toLocaleDateString(undefined, { weekday: 'short' });
+  } catch {
+    return dateStr.slice(5);
+  }
 }
 
 export function loadCachedWeather(): WeatherSnapshot | null {
@@ -135,7 +173,7 @@ export async function fetchWeather(loc: WeatherLocation): Promise<WeatherSnapsho
     daily: 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max',
     hourly: 'temperature_2m,weather_code,precipitation_probability',
     timezone: 'auto',
-    forecast_days: '1',
+    forecast_days: '5',
     wind_speed_unit: 'kmh',
   });
   const res = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`);
@@ -173,6 +211,14 @@ export async function fetchWeather(loc: WeatherLocation): Promise<WeatherSnapsho
     };
   });
 
+  const days: WeatherDay[] = (data.daily?.time || []).map((date, i) => ({
+    date,
+    weatherCode: data.daily.weather_code[i] ?? 0,
+    tempMaxC: Math.round(data.daily.temperature_2m_max[i] ?? 0),
+    tempMinC: Math.round(data.daily.temperature_2m_min[i] ?? 0),
+    precipProb: data.daily.precipitation_probability_max?.[i],
+  }));
+
   const snap: WeatherSnapshot = {
     latitude: loc.latitude,
     longitude: loc.longitude,
@@ -187,13 +233,13 @@ export async function fetchWeather(loc: WeatherLocation): Promise<WeatherSnapsho
       label: loc.label,
       fetchedAt: Date.now(),
     },
-    today: {
-      date: data.daily.time[0] || '',
-      weatherCode: data.daily.weather_code[0] ?? data.current.weather_code,
-      tempMaxC: Math.round(data.daily.temperature_2m_max[0] ?? data.current.temperature_2m),
-      tempMinC: Math.round(data.daily.temperature_2m_min[0] ?? data.current.temperature_2m),
-      precipProb: data.daily.precipitation_probability_max?.[0],
+    today: days[0] || {
+      date: data.daily?.time?.[0] || '',
+      weatherCode: data.current.weather_code,
+      tempMaxC: Math.round(data.current.temperature_2m),
+      tempMinC: Math.round(data.current.temperature_2m),
     },
+    days,
     hourly,
   };
   saveCache(snap);
@@ -297,6 +343,8 @@ export async function getWeather(
     cached &&
     Array.isArray(cached.hourly) &&
     cached.hourly.length > 0 &&
+    Array.isArray(cached.days) &&
+    cached.days.length > 0 &&
     Date.now() - cached.current.fetchedAt < CACHE_MS &&
     Math.abs(cached.latitude - loc.latitude) < 0.05 &&
     Math.abs(cached.longitude - loc.longitude) < 0.05
