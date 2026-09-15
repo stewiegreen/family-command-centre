@@ -1,0 +1,946 @@
+// src/context/FamilyDataContext.tsx
+//
+// Owns family data + the cloud sync engine: the live Firestore listener,
+// optimistic local state, write-guarding against server echoes, family
+// lifecycle (join/leave), invites, messages, device PIN gates, and each
+// member's per-device UI prefs (homescreen layout, nav order, theme).
+//
+// Sits *inside* AuthProvider and reacts to authUser/authReady from useAuth()
+// — it never touches Firebase Auth directly beyond that. See AuthContext.tsx
+// for the connection/identity piece, and AppContext.tsx for the
+// backward-compatible combined useApp() hook.
+
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
+import type { FamilyData, FirebaseConfig, Invite, Member, Message, Role, SyncStatus, ViewId } from '../types';
+import {
+  CURRENT_USER_KEY,
+  FAMILY_ID_KEY,
+  loadCloudConfig,
+  loadLocalData,
+  saveLocalData,
+} from '../lib/storage';
+import { PROFILE_OVERRIDE_KEY } from '../lib/actingMember';
+import { migratePayload } from '../lib/defaults';
+import { withAppearance } from '../lib/appearance';
+import { resolveNavOrder } from '../lib/navOrder';
+import {
+  resolveHomescreenRows,
+  toHomescreenRowDocs,
+  type HomescreenRow,
+} from '../lib/homescreen';
+import {
+  applyCustomThemeToDocument,
+  applyWallpaperToDocument,
+  applyCardStyleToDocument,
+  applyCardShadowToDocument,
+  applyAccentGlowToDocument,
+  applyCardOpacityToDocument,
+  applyWallpaperBlurToDocument,
+  applyFontPackToDocument,
+  clearCustomThemeProperties,
+} from '../lib/themeTokens';
+import {
+  cloudCreateInvite,
+  cloudDeleteMessage,
+  cloudJoinWithInvite,
+  cloudPeekInvite,
+  deleteCurrentUser,
+  cloudListInvites,
+  cloudMarkMessageRead,
+  cloudRevokeInvite,
+  cloudSendMessage,
+  cloudWrite,
+  clearUserFamily,
+  fetchUserFamily,
+  getDb,
+  getFirebaseAuth,
+  partitionMessagesForPrune,
+  subscribeFamily,
+  subscribeMessages,
+  updateProfile,
+} from '../lib/firebase';
+import { useAuth } from './AuthContext';
+
+const PARENT_PIN_SESSION_KEY = 'fcc_parent_pin_ok';
+const KID_PIN_SESSION_KEY = 'fcc_kid_pin_ok';
+
+export interface FamilyDataContextValue {
+  data: FamilyData;
+  update: (updater: FamilyData | ((prev: FamilyData) => FamilyData)) => void;
+  view: ViewId;
+  setView: (v: ViewId) => void;
+  currentUser: Member | undefined;
+  getMember: (id: string) => Member | undefined;
+  isParent: boolean;
+  isMediaOnly: boolean;
+  cloudError: string | null;
+  /** Number of writes currently in flight to Firestore. 0 = fully saved. */
+  pendingWrites: number;
+  familyId: string;
+  syncStatus: SyncStatus;
+  needsFamilySetup: boolean;
+  /** Parent PIN unlocked for this browser session (sensitive settings). */
+  parentPinUnlocked: boolean;
+  unlockParentPin: (pin: string) => boolean;
+  lockParentPin: () => void;
+  /** Kid profile PIN gate (app unlock). */
+  kidPinRequired: boolean;
+  kidPinUnlocked: boolean;
+  unlockKidPin: (pin: string) => boolean;
+  /** Switch active profile on this device (PIN required if target has one). */
+  switchProfile: (memberId: string, pin?: string) => { ok: boolean; error?: string };
+  /** Set theme for the current member (kids can change their own). */
+  setMyTheme: (theme: import('../types').ThemeId) => void;
+  myHomescreenRows: HomescreenRow[];
+  setMyHomescreenRows: (rows: HomescreenRow[]) => void;
+  myHiddenWidgets: string[];
+  setMyHiddenWidgets: (ids: string[]) => void;
+  myHomescreenSpans: Record<string, 1 | 2>;
+  setMyHomescreenSpans: (spans: Record<string, 1 | 2>) => void;
+  myNavOrder: import('../types').ViewId[];
+  setMyNavOrder: (order: import('../types').ViewId[]) => void;
+  connectCloud: (cfg: FirebaseConfig) => Promise<boolean>;
+  createFamily: (displayName: string) => Promise<string>;
+  joinFamily: (inviteCode: string, displayName: string) => Promise<string>;
+  leaveFamily: () => Promise<void>;
+  disconnectCloud: () => Promise<void>;
+  createInvite: (opts: { role: Role; label: string }) => Promise<Invite>;
+  listInvites: () => Promise<Invite[]>;
+  revokeInvite: (code: string) => Promise<void>;
+  sendMessage: (toMemberId: string, text: string) => Promise<void>;
+  markThreadRead: (fromMemberId: string) => Promise<void>;
+  signUp: (email: string, password: string, displayName: string, inviteCode: string) => Promise<import('firebase/auth').User>;
+  signOut: () => Promise<void>;
+}
+
+const FamilyDataCtx = createContext<FamilyDataContextValue | null>(null);
+
+export function useFamilyData(): FamilyDataContextValue {
+  const ctx = useContext(FamilyDataCtx);
+  if (!ctx) throw new Error('useFamilyData must be used within FamilyDataProvider');
+  return ctx;
+}
+
+export function FamilyDataProvider({ children }: { children: ReactNode }) {
+  const {
+    authUser,
+    authReady,
+    cloudReady,
+    connectCloud: authConnectCloud,
+    disconnectFirebase,
+    createAccount,
+    signOut: authSignOutRaw,
+    loadCloudConfig: authLoadCloudConfig,
+  } = useAuth();
+
+  const [data, setData] = useState<FamilyData>(loadLocalData);
+  const [view, setView] = useState<ViewId>('dashboard');
+  const [cloudError, setCloudError] = useState<string | null>(null);
+  const [pendingWrites, setPendingWrites] = useState(0);
+  const [familyId, setFamilyId] = useState(() => localStorage.getItem(FAMILY_ID_KEY) || '');
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>('local');
+  const [needsFamilySetup, setNeedsFamilySetup] = useState(false);
+  const [parentPinUnlocked, setParentPinUnlocked] = useState(
+    () => sessionStorage.getItem(PARENT_PIN_SESSION_KEY) === '1',
+  );
+  const [kidPinUnlocked, setKidPinUnlocked] = useState(
+    () => sessionStorage.getItem(KID_PIN_SESSION_KEY) === '1',
+  );
+  const unsubRef = useRef<(() => void) | null>(null);
+  const unsubMsgRef = useRef<(() => void) | null>(null);
+  const writingRef = useRef(false);
+  /** True after the first successful family snapshot this session. Until then, never write to cloud. */
+  const cloudHydratedRef = useRef(false);
+  const dataRef = useRef(data);
+  dataRef.current = data;
+
+  const startFamilyListener = useCallback((fid: string, preferredMemberId?: string | null) => {
+    if (unsubRef.current) unsubRef.current();
+    if (unsubMsgRef.current) unsubMsgRef.current();
+    cloudHydratedRef.current = false;
+    setFamilyId(fid);
+    setSyncStatus('connecting');
+    unsubRef.current = subscribeFamily(
+      fid,
+      (remote) => {
+        if (writingRef.current) return;
+        setData((prev) => {
+          let currentUserId = preferredMemberId || prev.settings.currentUserId;
+          const auth = getFirebaseAuth();
+          const linked = remote.members.find((m) => m.uid && auth?.currentUser && m.uid === auth.currentUser.uid);
+          const override = sessionStorage.getItem(PROFILE_OVERRIDE_KEY);
+          if (override && remote.members.some((m) => m.id === override)) {
+            // Explicit profile switch on this device
+            currentUserId = override;
+          } else if (linked) {
+            currentUserId = linked.id;
+          } else if (!remote.members.some((m) => m.id === currentUserId)) {
+            currentUserId = remote.members[0]?.id || currentUserId;
+          }
+          let migrated = remote;
+          try {
+            migrated = migratePayload(remote);
+          } catch (err) {
+            console.error('migratePayload failed', err);
+          }
+          const next = {
+            ...migrated,
+            // Messages come from the subcollection listener — keep them.
+            messages: prev.messages,
+            settings: { ...migrated.settings, currentUserId },
+          };
+          // Keep localStorage in sync with cloud so a future cold start never
+          // bootstraps from empty/stale defaults and re-writes them upstream.
+          try {
+            saveLocalData(next);
+          } catch {
+            /* ignore quota */
+          }
+          return next;
+        });
+        cloudHydratedRef.current = true;
+        setSyncStatus('live');
+        setCloudError(null);
+        setNeedsFamilySetup(false);
+      },
+      (err) => {
+        console.error(err);
+        setCloudError(err.message || 'Sync error');
+        setSyncStatus('error');
+      },
+    );
+    const auth = getFirebaseAuth();
+    const uid = auth?.currentUser?.uid;
+    if (uid) {
+      unsubMsgRef.current = subscribeMessages(
+        fid,
+        uid,
+        (messages) => {
+          const me = dataRef.current.members.find(
+            (m) => m.id === dataRef.current.settings.currentUserId,
+          );
+          const isParentRole = me?.role === 'parent';
+          const { toDelete } = partitionMessagesForPrune(messages, {
+            myMemberId: me?.id || '',
+            myUid: uid,
+            canDeleteAny: isParentRole,
+          });
+          if (toDelete.length) {
+            void Promise.all(
+              toDelete.map((m) => cloudDeleteMessage(fid, m.id).catch(() => {})),
+            );
+          }
+          // Keep full server list in state; UI shows last 50 per thread.
+          // Deletes above will shrink the snapshot on the next event.
+          setData((prev) => ({ ...prev, messages }));
+        },
+        (err) => console.error('messages sync', err),
+      );
+    }
+  }, []);
+
+  useEffect(() => {
+    const savedUser = localStorage.getItem(CURRENT_USER_KEY);
+    if (savedUser) {
+      setData((prev) => {
+        if (prev.members.some((m) => m.id === savedUser)) {
+          return { ...prev, settings: { ...prev.settings, currentUserId: savedUser } };
+        }
+        return prev;
+      });
+    }
+  }, []);
+
+  // Reacts to identity changes from AuthContext: look up (or clear) the
+  // signed-in user's family and start/stop the live listener accordingly.
+  // This replaces the "post sign-in" half of the old combined boot effect.
+  useEffect(() => {
+    if (!authReady) return;
+    if (!authUser) {
+      if (unsubRef.current) {
+        unsubRef.current();
+        unsubRef.current = null;
+      }
+      if (unsubMsgRef.current) {
+        unsubMsgRef.current();
+        unsubMsgRef.current = null;
+      }
+      cloudHydratedRef.current = false;
+      setFamilyId('');
+      setSyncStatus(cloudReady ? 'auth' : 'local');
+      setNeedsFamilySetup(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const userDoc = await fetchUserFamily(authUser.uid);
+        let fid = userDoc?.familyId || '';
+        const memberId = userDoc?.memberId || null;
+        if (!fid) fid = localStorage.getItem(FAMILY_ID_KEY) || '';
+        if (cancelled) return;
+        if (fid) {
+          // Membership is enforced by Firestore rules (members-only read).
+          // If not a member, the listener errors and we fall through to setup.
+          localStorage.setItem(FAMILY_ID_KEY, fid);
+          startFamilyListener(fid, memberId);
+          return;
+        }
+        localStorage.removeItem(FAMILY_ID_KEY);
+        setFamilyId('');
+        setNeedsFamilySetup(true);
+        setSyncStatus('auth');
+      } catch (e) {
+        if (cancelled) return;
+        console.error(e);
+        setCloudError(e instanceof Error ? e.message : 'Auth/family lookup failed');
+        setNeedsFamilySetup(true);
+        setSyncStatus('auth');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [authUser, authReady, cloudReady, startFamilyListener]);
+
+  const persist = useCallback(async (next: FamilyData) => {
+    // Always mirror to localStorage for offline resilience.
+    saveLocalData(next);
+    const fid = localStorage.getItem(FAMILY_ID_KEY);
+    const cfg = loadCloudConfig();
+    const auth = getFirebaseAuth();
+    // CRITICAL: never push state to Firestore until we have applied at least one
+    // live family snapshot. Writing local bootstrap / DEFAULT_DATA / stale cache
+    // before hydrate is what wiped progress and settings on deploys.
+    const canCloud =
+      !!cfg && !!fid && !!getDb() && !!auth?.currentUser && cloudHydratedRef.current;
+    if (!canCloud) {
+      console.info('[persist] skip cloud write', {
+        hasCfg: !!cfg,
+        fid: fid || null,
+        hasDb: !!getDb(),
+        hasUser: !!auth?.currentUser,
+        hydrated: cloudHydratedRef.current,
+      });
+      return;
+    }
+    writingRef.current = true;
+    setPendingWrites((n) => n + 1);
+    try {
+      await cloudWrite(fid!, next);
+      setSyncStatus('live');
+      setCloudError(null);
+    } catch (e) {
+      console.error('[persist] write failed', e);
+      setCloudError(e instanceof Error ? e.message : 'Write failed');
+      // Deliberately NOT setSyncStatus('error') here — that value already
+      // means "disconnected" elsewhere in the app and renders as "Offline",
+      // which is actively misleading for a write that failed for some other
+      // reason (e.g. a permissions rejection) while the connection is fine.
+    } finally {
+      setPendingWrites((n) => Math.max(0, n - 1));
+      // Keep ignoring inbound snapshots a bit longer so a lagging server
+      // echo of the *previous* doc cannot clobber a successful write
+      // (e.g. shop unlock flags). Was 400ms — too short under load.
+      setTimeout(() => {
+        writingRef.current = false;
+      }, 1500);
+    }
+  }, []);
+
+  const update = useCallback(
+    (updater: FamilyData | ((prev: FamilyData) => FamilyData)) => {
+      setData((prev) => {
+        const next = typeof updater === 'function' ? updater(prev) : updater;
+        // Keep profile override if set; otherwise stay on auth-linked member.
+        const auth = getFirebaseAuth();
+        const override = sessionStorage.getItem(PROFILE_OVERRIDE_KEY);
+        if (override && next.members.some((m) => m.id === override)) {
+          if (next.settings.currentUserId !== override) {
+            next.settings = { ...next.settings, currentUserId: override };
+          }
+        } else if (auth?.currentUser) {
+          const linked = next.members.find((m) => m.uid === auth.currentUser!.uid)
+            || prev.members.find((m) => m.uid === auth.currentUser!.uid);
+          if (linked && next.settings.currentUserId !== linked.id) {
+            next.settings = { ...next.settings, currentUserId: linked.id };
+          }
+        }
+        if (next.settings?.currentUserId) {
+          localStorage.setItem(CURRENT_USER_KEY, next.settings.currentUserId);
+        }
+        void persist(next);
+        return next;
+      });
+    },
+    [persist],
+  );
+
+  // Warn before the tab closes/refreshes while a save is still in flight —
+  // this is the window where a kid's just-earned XP/coins could be lost if
+  // they refresh before the write actually reaches Firestore.
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (pendingWrites > 0) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [pendingWrites]);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const uid = data.settings.currentUserId;
+    const personal = data.appearance?.[uid]?.theme;
+    const t = personal || data.settings.theme || 'dark';
+    root.classList.toggle('dark', t === 'dark');
+    root.classList.toggle('light', t === 'light');
+    root.classList.toggle('neon', t === 'neon');
+    root.classList.toggle('spyfamily', t === 'spyfamily');
+
+    // Custom Theme Studio overrides (layered on the preset class above)
+    const appearance = data.appearance?.[uid];
+    const customId = appearance?.activeCustomThemeId;
+    const custom =
+      customId && typeof customId === 'string'
+        ? appearance?.customThemes?.find((c) => c.id === customId)
+        : undefined;
+    if (custom?.tokens) {
+      applyCustomThemeToDocument(custom.tokens);
+    } else {
+      clearCustomThemeProperties(root);
+    }
+    // Wallpaper add-on (pack id or picture-frame photo)
+    const wallId = appearance?.activeWallpaperId;
+    const frameUrl =
+      wallId === 'frame:1'
+        ? appearance?.pictureFrameUrl
+        : wallId === 'frame:2'
+          ? appearance?.pictureFrameUrl2
+          : undefined;
+    applyWallpaperToDocument(wallId, frameUrl);
+
+    applyCardStyleToDocument(appearance?.cardStyle || 'soft');
+    applyCardShadowToDocument(appearance?.cardShadow || 'soft');
+    applyAccentGlowToDocument(!!appearance?.accentGlow);
+    applyCardOpacityToDocument(appearance?.cardOpacity);
+    applyWallpaperBlurToDocument(appearance?.wallpaperBlur);
+    applyFontPackToDocument(
+      appearance?.unlockFontPacks ? appearance?.activeFontPackId : 'default',
+    );
+  }, [data.settings.theme, data.settings.currentUserId, data.appearance]);
+
+  const currentUserRaw = data.members.find((m) => m.id === data.settings.currentUserId);
+  const currentUser = currentUserRaw ? withAppearance(currentUserRaw, data) : undefined;
+  const getMember = useCallback(
+    (id: string) => {
+      const m = data.members.find((x) => x.id === id);
+      return m ? withAppearance(m, data) : undefined;
+    },
+    [data.members, data.appearance],
+  );
+  const isParent = currentUser?.role === 'parent';
+  const isMediaOnly = currentUser?.role === 'media';
+  const kidPinRequired = !!(currentUser && currentUser.role === 'kid' && currentUser.pin && currentUser.pin.length >= 4);
+
+  const unlockParentPin = useCallback(
+    (pin: string) => {
+      const expected = data.settings.parentPin || '';
+      if (!expected) {
+        setParentPinUnlocked(true);
+        sessionStorage.setItem(PARENT_PIN_SESSION_KEY, '1');
+        return true;
+      }
+      if (pin === expected) {
+        setParentPinUnlocked(true);
+        sessionStorage.setItem(PARENT_PIN_SESSION_KEY, '1');
+        return true;
+      }
+      return false;
+    },
+    [data.settings.parentPin],
+  );
+
+  const lockParentPin = useCallback(() => {
+    setParentPinUnlocked(false);
+    sessionStorage.removeItem(PARENT_PIN_SESSION_KEY);
+  }, []);
+
+  const unlockKidPin = useCallback(
+    (pin: string) => {
+      if (!currentUser?.pin) {
+        setKidPinUnlocked(true);
+        sessionStorage.setItem(KID_PIN_SESSION_KEY, '1');
+        return true;
+      }
+      if (pin === currentUser.pin) {
+        setKidPinUnlocked(true);
+        sessionStorage.setItem(KID_PIN_SESSION_KEY, '1');
+        return true;
+      }
+      return false;
+    },
+    [currentUser?.pin],
+  );
+
+  const sendMessage = useCallback(
+    async (toMemberId: string, text: string) => {
+      const auth = getFirebaseAuth();
+      const fid = localStorage.getItem(FAMILY_ID_KEY);
+      const me = dataRef.current.members.find((m) => m.id === dataRef.current.settings.currentUserId);
+      const to = dataRef.current.members.find((m) => m.id === toMemberId);
+      if (!text.trim() || !me || !to) return;
+      const trimmed = text.trim();
+      if (fid && getDb() && auth?.currentUser) {
+        const msg = await cloudSendMessage(fid, {
+          fromId: me.id,
+          toId: to.id,
+          fromUid: auth.currentUser.uid,
+          toUid: to.uid || '',
+          text: trimmed,
+          timestamp: new Date().toISOString(),
+          read: false,
+        });
+        setData((prev) => {
+          if (prev.messages.some((m) => m.id === msg.id)) return prev;
+          const next = [...prev.messages, msg];
+          const { kept, toDelete } = partitionMessagesForPrune(next, {
+            myMemberId: me.id,
+            myUid: auth.currentUser!.uid,
+            canDeleteAny: me.role === 'parent',
+          });
+          if (toDelete.length) {
+            void Promise.all(
+              toDelete.map((m) => cloudDeleteMessage(fid, m.id).catch(() => {})),
+            );
+          }
+          return { ...prev, messages: kept };
+        });
+      } else {
+        const local: Message = {
+          id: `local_${Date.now()}`,
+          fromId: me.id,
+          toId: to.id,
+          text: trimmed,
+          timestamp: new Date().toISOString(),
+          read: false,
+        };
+        update((d) => {
+          const next = [...d.messages, local];
+          const { kept } = partitionMessagesForPrune(next, {
+            myMemberId: me.id,
+            canDeleteAny: me.role === 'parent',
+          });
+          return { ...d, messages: kept };
+        });
+      }
+    },
+    [update],
+  );
+
+  const markThreadRead = useCallback(async (fromMemberId: string) => {
+    const me = dataRef.current.members.find((m) => m.id === dataRef.current.settings.currentUserId);
+    if (!me) return;
+    const unread = dataRef.current.messages.filter(
+      (m) => m.toId === me.id && m.fromId === fromMemberId && !m.read,
+    );
+    if (!unread.length) return;
+    const fid = localStorage.getItem(FAMILY_ID_KEY);
+    if (fid && getDb()) {
+      await Promise.all(unread.map((m) => cloudMarkMessageRead(fid, m.id).catch(() => {})));
+      setData((prev) => ({
+        ...prev,
+        messages: prev.messages.map((m) =>
+          m.toId === me.id && m.fromId === fromMemberId && !m.read ? { ...m, read: true } : m,
+        ),
+      }));
+    } else {
+      update((d) => ({
+        ...d,
+        messages: d.messages.map((m) =>
+          m.toId === me.id && m.fromId === fromMemberId && !m.read ? { ...m, read: true } : m,
+        ),
+      }));
+    }
+  }, [update]);
+
+  const connectCloud = useCallback(
+    async (cfg: FirebaseConfig) => {
+      const ok = await authConnectCloud(cfg);
+      if (!ok) {
+        setCloudError('Invalid Firebase config');
+        setSyncStatus('error');
+        return false;
+      }
+      setCloudError(null);
+      // Identity effect above will re-run once authUser resolves and correct
+      // this to 'live'/'auth' as appropriate — 'auth' is just the interim state.
+      setSyncStatus('auth');
+      return true;
+    },
+    [authConnectCloud],
+  );
+
+  const signUp = useCallback(async (
+    email: string,
+    password: string,
+    displayName: string,
+    inviteCode: string,
+  ) => {
+    const name = displayName.trim();
+    if (!name) throw new Error('Enter your name');
+    // Reject bad invites before creating an Auth user (stops casual / bot signups).
+    await cloudPeekInvite(inviteCode);
+    const user = await createAccount(email, password);
+    try {
+      if (name) await updateProfile(user, { displayName: name });
+      const { familyId: fid, memberId, data: remote } = await cloudJoinWithInvite(
+        inviteCode,
+        user,
+        name,
+      );
+      localStorage.setItem(FAMILY_ID_KEY, fid);
+      if (memberId) localStorage.setItem(CURRENT_USER_KEY, memberId);
+      setFamilyId(fid);
+      setData(remote);
+      setNeedsFamilySetup(false);
+      setSyncStatus('live');
+      cloudHydratedRef.current = true;
+      startFamilyListener(fid, memberId);
+    } catch (err) {
+      // Roll back orphan Auth user so they cannot sit on FamilySetup / empty shell.
+      try {
+        await deleteCurrentUser();
+      } catch {
+        /* best-effort */
+      }
+      throw err instanceof Error ? err : new Error('Could not join with that invite');
+    }
+    return user;
+  }, [createAccount, startFamilyListener]);
+
+  const signOut = useCallback(async () => {
+    sessionStorage.removeItem(PROFILE_OVERRIDE_KEY);
+    sessionStorage.removeItem(KID_PIN_SESSION_KEY);
+    setKidPinUnlocked(false);
+    if (unsubRef.current) {
+      unsubRef.current();
+      unsubRef.current = null;
+    }
+    if (unsubMsgRef.current) {
+      unsubMsgRef.current();
+      unsubMsgRef.current = null;
+    }
+    localStorage.removeItem(FAMILY_ID_KEY);
+    sessionStorage.removeItem(PARENT_PIN_SESSION_KEY);
+    sessionStorage.removeItem(KID_PIN_SESSION_KEY);
+    setParentPinUnlocked(false);
+    setFamilyId('');
+    setNeedsFamilySetup(false);
+    await authSignOutRaw();
+    setSyncStatus(authLoadCloudConfig() ? 'auth' : 'local');
+  }, [authSignOutRaw, authLoadCloudConfig]);
+
+  const createFamily = useCallback(async (_displayName: string) => {
+    // Disabled: single-family app. New users must join via invite only.
+    throw new Error('Creating a new family is disabled. Ask a parent for an invite code.');
+  }, []);
+
+  const joinFamily = useCallback(
+    async (inviteCode: string, displayName: string) => {
+      const auth = getFirebaseAuth();
+      if (!getDb() || !auth?.currentUser) throw new Error('You must be signed in');
+      setSyncStatus('connecting');
+      const { familyId: fid, memberId, data: remote } = await cloudJoinWithInvite(
+        inviteCode,
+        auth.currentUser,
+        displayName,
+      );
+      const joined = {
+        ...remote,
+        settings: { ...remote.settings, currentUserId: memberId },
+      };
+      setData(joined);
+      saveLocalData(joined);
+      // Join already returned the family doc — safe to write from this point.
+      cloudHydratedRef.current = true;
+      startFamilyListener(fid, memberId);
+      return fid;
+    },
+    [startFamilyListener],
+  );
+
+  const createInvite = useCallback(async ({ role, label }: { role: Role; label: string }) => {
+    const auth = getFirebaseAuth();
+    if (!getDb() || !auth?.currentUser) throw new Error('You must be signed in');
+    const fid = localStorage.getItem(FAMILY_ID_KEY);
+    if (!fid) throw new Error('No family linked');
+    return cloudCreateInvite(fid, auth.currentUser, { role, label });
+  }, []);
+
+  const listInvites = useCallback(async () => {
+    const fid = localStorage.getItem(FAMILY_ID_KEY);
+    if (!fid || !getDb()) return [];
+    return cloudListInvites(fid);
+  }, []);
+
+  const revokeInvite = useCallback(async (code: string) => {
+    if (!getDb()) throw new Error('Cloud not connected');
+    await cloudRevokeInvite(code);
+  }, []);
+
+  const leaveFamily = useCallback(async () => {
+    if (unsubRef.current) unsubRef.current();
+    unsubRef.current = null;
+    if (unsubMsgRef.current) {
+      unsubMsgRef.current();
+      unsubMsgRef.current = null;
+    }
+    cloudHydratedRef.current = false;
+    localStorage.removeItem(FAMILY_ID_KEY);
+    setFamilyId('');
+    const auth = getFirebaseAuth();
+    if (auth?.currentUser) {
+      try {
+        await clearUserFamily(auth.currentUser.uid);
+      } catch {
+        /* ignore */
+      }
+    }
+    setNeedsFamilySetup(!!auth?.currentUser);
+    setSyncStatus(auth?.currentUser ? 'auth' : 'local');
+  }, []);
+
+  const disconnectCloud = useCallback(async () => {
+    await leaveFamily();
+    await disconnectFirebase();
+    setSyncStatus('local');
+    setNeedsFamilySetup(false);
+  }, [leaveFamily, disconnectFirebase]);
+
+  const switchProfile = useCallback(
+    (memberId: string, pin?: string): { ok: boolean; error?: string } => {
+      const target = dataRef.current.members.find((m) => m.id === memberId);
+      if (!target) return { ok: false, error: 'Member not found' };
+      if (target.id === dataRef.current.settings.currentUserId) {
+        return { ok: true };
+      }
+      const hasPin = !!(target.pin && target.pin.length >= 4);
+      if (hasPin) {
+        if (!pin || pin !== target.pin) return { ok: false, error: 'Wrong PIN' };
+      } else if (target.role === 'parent' && dataRef.current.settings.parentPin) {
+        // Protect parent profiles with the family parent PIN when no personal PIN
+        if (!pin || pin !== dataRef.current.settings.parentPin) {
+          return { ok: false, error: 'Parent PIN required' };
+        }
+      }
+      sessionStorage.setItem(PROFILE_OVERRIDE_KEY, memberId);
+      localStorage.setItem(CURRENT_USER_KEY, memberId);
+      // Fresh PIN session for the new profile
+      if (hasPin || target.role === 'kid') {
+        setKidPinUnlocked(true);
+        sessionStorage.setItem(KID_PIN_SESSION_KEY, '1');
+      }
+      setData((prev) => {
+        const next = {
+          ...prev,
+          settings: { ...prev.settings, currentUserId: memberId },
+        };
+        void persist(next);
+        return next;
+      });
+      return { ok: true };
+    },
+    [persist],
+  );
+
+  const setMyTheme = useCallback(
+    (theme: import('../types').ThemeId) => {
+      update((d) => {
+        const id = d.settings.currentUserId;
+        if (!id) return d;
+        const prev = d.appearance?.[id] || {};
+        // Choosing a built-in preset must drop Theme Studio overrides — otherwise
+        // inline --app-* vars stay on <html> and mix with the new class.
+        return {
+          ...d,
+          appearance: {
+            ...(d.appearance || {}),
+            [id]: {
+              ...prev,
+              theme,
+              // null (not undefined) so Firestore merge actually clears the field
+              activeCustomThemeId: null,
+            },
+          },
+        };
+      });
+      // Clear immediately so the UI doesn't flash a hybrid for one frame
+      // before the appearance effect re-runs.
+      clearCustomThemeProperties(document.documentElement);
+    },
+    [update],
+  );
+
+  const myHomescreenRows = resolveHomescreenRows(
+    data.appearance?.[data.settings.currentUserId]?.homescreenRows,
+    data.appearance?.[data.settings.currentUserId]?.homescreenLayout as
+      | { id: string; span: 'full' | 'half' }[]
+      | undefined,
+    data.appearance?.[data.settings.currentUserId]?.homescreenOrder,
+  );
+
+  const setMyHomescreenRows = useCallback(
+    (rows: HomescreenRow[]) => {
+      update((d) => {
+        const id = d.settings.currentUserId;
+        if (!id) return d;
+        const prev = d.appearance?.[id] || {};
+        return {
+          ...d,
+          appearance: {
+            ...(d.appearance || {}),
+            [id]: {
+              ...prev,
+              // Stored as { ids: string[] }[], never string[][] —
+              // Firestore rejects arrays nested directly in arrays.
+              homescreenRows: toHomescreenRowDocs(rows),
+              // Keep legacy fields in sync so an older build reading this
+              // family's data (unlikely, but possible mid-rollout) still
+              // gets a sane full-width fallback rather than crashing.
+              homescreenOrder: rows.flat(),
+              homescreenLayout: undefined,
+            },
+          },
+        };
+      });
+    },
+    [update],
+  );
+
+  const myHiddenWidgets = data.appearance?.[data.settings.currentUserId]?.hiddenWidgets || [];
+
+  const setMyHiddenWidgets = useCallback(
+    (ids: string[]) => {
+      update((d) => {
+        const id = d.settings.currentUserId;
+        if (!id) return d;
+        const prev = d.appearance?.[id] || {};
+        return {
+          ...d,
+          appearance: {
+            ...(d.appearance || {}),
+            [id]: {
+              ...prev,
+              hiddenWidgets: ids,
+            },
+          },
+        };
+      });
+    },
+    [update],
+  );
+
+  const myHomescreenSpans: Record<string, 1 | 2> =
+    data.appearance?.[data.settings.currentUserId]?.homescreenSpans || {};
+
+  const setMyHomescreenSpans = useCallback(
+    (spans: Record<string, 1 | 2>) => {
+      update((d) => {
+        const id = d.settings.currentUserId;
+        if (!id) return d;
+        const prev = d.appearance?.[id] || {};
+        return {
+          ...d,
+          appearance: {
+            ...(d.appearance || {}),
+            [id]: {
+              ...prev,
+              homescreenSpans: spans,
+            },
+          },
+        };
+      });
+    },
+    [update],
+  );
+
+  const myNavOrder = resolveNavOrder(data.appearance?.[data.settings.currentUserId]?.navOrder);
+
+  const setMyNavOrder = useCallback(
+    (order: import('../types').ViewId[]) => {
+      update((d) => {
+        const id = d.settings.currentUserId;
+        if (!id) return d;
+        const prev = d.appearance?.[id] || {};
+        return {
+          ...d,
+          appearance: {
+            ...(d.appearance || {}),
+            [id]: {
+              ...prev,
+              navOrder: order,
+            },
+          },
+        };
+      });
+    },
+    [update],
+  );
+
+  const value: FamilyDataContextValue = {
+    data,
+    update,
+    view,
+    setView,
+    currentUser,
+    getMember,
+    isParent,
+    isMediaOnly,
+    cloudError,
+    pendingWrites,
+    familyId,
+    syncStatus,
+    needsFamilySetup,
+    parentPinUnlocked: parentPinUnlocked || !data.settings.parentPin,
+    unlockParentPin,
+    lockParentPin,
+    kidPinRequired,
+    kidPinUnlocked: kidPinUnlocked || !kidPinRequired,
+    unlockKidPin,
+    switchProfile,
+    setMyTheme,
+    myHomescreenRows,
+    setMyHomescreenRows,
+    myHiddenWidgets,
+    setMyHiddenWidgets,
+    myHomescreenSpans,
+    setMyHomescreenSpans,
+    myNavOrder,
+    setMyNavOrder,
+    connectCloud,
+    createFamily,
+    joinFamily,
+    leaveFamily,
+    disconnectCloud,
+    createInvite,
+    listInvites,
+    revokeInvite,
+    sendMessage,
+    markThreadRead,
+    signUp,
+    signOut,
+  };
+
+  return <FamilyDataCtx.Provider value={value}>{children}</FamilyDataCtx.Provider>;
+}
