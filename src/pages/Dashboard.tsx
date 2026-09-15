@@ -2052,7 +2052,7 @@ export function Dashboard() {
   };
 
   return (
-    <div className="p-4 lg:p-6 max-w-6xl mx-auto space-y-6">
+    <div className="p-3 sm:p-4 lg:p-5 max-w-7xl mx-auto space-y-5">
       {/* Toolbar — date lives in the app header only */}
       <div className="flex items-center justify-between gap-3">
         <p className="text-[11px] text-faint hidden sm:block">
@@ -2249,7 +2249,7 @@ export function Dashboard() {
         )}
       </Modal>
 
-      <div className="space-y-1">
+      <div className="space-y-3">
         {/* Top gap — drop here to become the new first row */}
         <div
           className={cn(
@@ -2268,7 +2268,7 @@ export function Dashboard() {
           <div key={`row-${ri}-${row.join('-')}`}>
             <div
               className={cn(
-                'grid gap-1.5 items-stretch',
+                'grid gap-3 items-stretch',
                 row.length > 1 ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1',
               )}
             >
