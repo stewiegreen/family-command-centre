@@ -40,7 +40,7 @@ import {
   joePortraitPath,
   isJoePortraitId,
 } from '../lib/joeAvatars';
-import { isAnyPortraitId, portraitSrc } from '../lib/portraitPath';
+import { isAnyPortraitId } from '../lib/portraitPath';
 
 type PortraitLib = 'roster' | 'cobra' | 'joe' | FanPackId;
 import {
@@ -868,29 +868,24 @@ export function ProfileLookCard() {
 
   return (
     <>
-      <Card className="!p-4">
-        <div className="flex items-center justify-between gap-3 mb-3">
-          <div>
-            <h2 className="font-semibold text-fg text-lg">Your look</h2>
-          </div>
-          <Avatar {...s.look} size="md" className="!text-2xl" />
-        </div>
-
+      <Card className="!p-4 h-full flex flex-col">
+        <h2 className="font-semibold text-fg text-lg shrink-0 mb-3">Your look</h2>
         <button
           type="button"
           onClick={s.openEditor}
-          className="w-full flex items-center justify-center gap-3 py-3 rounded-xl border border-border bg-inset hover:bg-nav-hover transition-colors"
-        >
-          {portraitSrc(s.look.avatarPortraitId) ? (
-            <img
-              src={portraitSrc(s.look.avatarPortraitId)!}
-              alt=""
-              className="w-10 h-10 rounded-full object-cover"
-            />
-          ) : (
-            <span className="text-4xl leading-none">{s.look.emoji || '😀'}</span>
+          className={cn(
+            'flex-1 w-full min-h-[10rem] flex flex-col items-center justify-center gap-3',
+            'rounded-xl border border-border/60 bg-inset/40',
+            'hover:bg-nav-hover hover:border-border-strong transition-colors',
+            'px-4 py-5',
           )}
-          <span className="text-sm text-muted">Tap to change look</span>
+        >
+          <Avatar
+            {...s.look}
+            size="lg"
+            className="!w-24 !h-24 !text-5xl sm:!w-28 sm:!h-28"
+          />
+          <span className="text-sm font-medium text-muted">Tap to change</span>
         </button>
       </Card>
       <EditorModal s={s} />
