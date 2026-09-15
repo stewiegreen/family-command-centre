@@ -13,7 +13,6 @@ import {
   Plus,
   ShoppingCart,
   Newspaper,
-  RefreshCw,
   Sword,
   Trophy,
   Package,
