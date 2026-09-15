@@ -182,11 +182,6 @@ export function ScreenTimerCard() {
         </h3>
         <span className="text-xs text-muted tabular-nums">{bal}m bank</span>
       </div>
-      <p className="text-[11px] text-faint">
-        For Nintendo, YouTube, TV — not Emby (that meters itself). Starts by spending minutes from
-        the bank; unused time is refunded if you stop early.
-      </p>
-
       {isParent && kids.length > 0 && (
         <div
           className={cn(

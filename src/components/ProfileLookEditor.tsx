@@ -872,10 +872,6 @@ export function ProfileLookCard() {
         <div className="flex items-center justify-between gap-3 mb-3">
           <div>
             <h2 className="font-semibold text-fg text-lg">Your look</h2>
-            <p className="text-xs text-muted">
-              Emoji, portrait
-              {s.unlockAvatarFlair || s.unlockNameFlair ? ', and flair' : ''}
-            </p>
           </div>
           <Avatar {...s.look} size="md" className="!text-2xl" />
         </div>

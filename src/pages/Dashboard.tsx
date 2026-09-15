@@ -128,19 +128,6 @@ const SECTION_LABELS: Record<SectionId, string> = {
 };
 
 const HOME_JOURNAL_MOODS = ['😊', '😌', '😐', '😔', '😤', '🤩', '😴', '🙏'] as const;
-const HOME_JOURNAL_PROMPTS = [
-  'What made you smile today?',
-  'One thing you’re grateful for…',
-  'What felt hard — and what helped?',
-  'A small win from today…',
-  'What do you want more of in your days?',
-  'If today had a title, what would it be?',
-  'What’s one kindness you noticed?',
-];
-function homeJournalPrompt(): string {
-  const day = Math.floor(Date.now() / 86_400_000) % HOME_JOURNAL_PROMPTS.length;
-  return HOME_JOURNAL_PROMPTS[day]!;
-}
 
 function startOfWeekMonday(d: Date) {
   const x = new Date(d);
@@ -279,7 +266,6 @@ export function Dashboard() {
   const [weatherSnap, setWeatherSnap] = useState<WeatherSnapshot | null>(null);
   const [weatherErr, setWeatherErr] = useState<string | null>(null);
   const [weatherLoading, setWeatherLoading] = useState(false);
-  const journalPrompt = useMemo(() => homeJournalPrompt(), []);
 
   const refreshWeather = async (force = false) => {
     setWeatherLoading(true);
@@ -1177,7 +1163,6 @@ export function Dashboard() {
             <Plus className="w-4 h-4" />
           </Button>
         </div>
-        <p className="text-[11px] text-faint mb-2">Quick add creates an all-day event for today. Open Calendar for times.</p>
         {upcoming.length === 0 ? (
           <p className="text-sm text-muted py-4 text-center">No upcoming events. Enjoy the calm! ☀️</p>
         ) : (
@@ -1773,7 +1758,6 @@ export function Dashboard() {
             Open →
           </button>
         </div>
-        <p className="text-xs text-muted italic mb-2">{journalPrompt}</p>
         {!journalHasOwnAuth && currentUser && (
           <p className="text-[11px] text-muted mb-2 leading-relaxed">
             <Lock className="w-3 h-3 inline relative -top-px mr-0.5" />

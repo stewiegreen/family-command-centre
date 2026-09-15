@@ -120,10 +120,6 @@ export function LightsCard() {
         <Lightbulb className="w-4 h-4 text-amber-500 shrink-0" />
         <h2 className="text-lg font-semibold text-fg">Living room lights</h2>
       </div>
-      <p className="text-[11px] text-muted">
-        Both Genio lights · parents only
-      </p>
-
       <div className="grid grid-cols-2 gap-2">
         <Button
           className={cn(

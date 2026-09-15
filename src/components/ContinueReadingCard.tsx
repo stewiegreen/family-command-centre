@@ -134,7 +134,7 @@ function FaceHeader({
 }: {
   icon: 'deck' | 'progress';
   title: string;
-  subtitle: string;
+  subtitle?: string;
   loading: boolean;
   onRefresh: () => void;
 }) {
@@ -151,7 +151,7 @@ function FaceHeader({
       </div>
       <div className="min-w-0 flex-1">
         <h3 className="font-semibold text-fg text-lg leading-tight">{title}</h3>
-        <p className="text-[11px] text-muted truncate">{subtitle}</p>
+        {subtitle ? <p className="text-[11px] text-muted truncate">{subtitle}</p> : null}
       </div>
       <button
         type="button"
@@ -222,7 +222,6 @@ export function ContinueReadingCard() {
             <FaceHeader
               icon="deck"
               title="On Deck"
-              subtitle="Next up in your library"
               loading={loading}
               onRefresh={() => void load()}
             />
@@ -243,7 +242,6 @@ export function ContinueReadingCard() {
             <FaceHeader
               icon="progress"
               title="Continue reading"
-              subtitle="Started — not finished yet"
               loading={loading}
               onRefresh={() => void load()}
             />
