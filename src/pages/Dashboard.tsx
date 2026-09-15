@@ -234,17 +234,11 @@ function SectionChrome({
       )}
 
       {/*
-        Dedicated chrome strip — hide + width live here so they never
-        cover card titles, filters, or actions.
+        Controls sit in the card's top padding zone (inside the border).
+        Extra pt on the Card pushes titles/actions below this row.
       */}
-      <div
-        className={cn(
-          'flex items-center justify-between gap-2 shrink-0',
-          'px-2.5 pt-1.5 pb-0.5',
-          'rounded-t-[inherit]',
-        )}
-      >
-        <div className="flex items-center gap-1 min-h-[28px]">
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-30 flex items-center justify-between gap-2 px-2.5 pt-2">
+        <div className="pointer-events-auto min-h-[28px] flex items-center">
           {paired && onCycleWidth ? (
             <button
               type="button"
@@ -254,7 +248,7 @@ function SectionChrome({
               }}
               className={cn(
                 'p-1.5 rounded-lg border shadow-sm',
-                'bg-elevated/90 border-border text-muted hover:text-fg',
+                'bg-elevated/95 border-border text-muted hover:text-fg',
                 widthMode && widthMode !== 'equal' && 'text-accent border-accent/40',
               )}
               title={widthTitle}
@@ -262,9 +256,7 @@ function SectionChrome({
             >
               <Columns2 className="w-3.5 h-3.5" />
             </button>
-          ) : (
-            <span className="w-[28px]" aria-hidden />
-          )}
+          ) : null}
         </div>
         <button
           type="button"
@@ -273,8 +265,8 @@ function SectionChrome({
             onHide(id);
           }}
           className={cn(
-            'p-1.5 rounded-lg border shadow-sm',
-            'bg-elevated/90 border-border text-muted hover:text-fg',
+            'pointer-events-auto p-1.5 rounded-lg border shadow-sm',
+            'bg-elevated/95 border-border text-muted hover:text-fg',
           )}
           title="Hide this card"
           aria-label="Hide this card"
@@ -286,6 +278,8 @@ function SectionChrome({
       <div
         className={cn(
           'min-w-0 flex flex-col flex-1',
+          // Reserve a header band inside the card so controls never cover content
+          '[&>*]:!pt-10',
           paired && '[&>*]:h-full',
         )}
       >
