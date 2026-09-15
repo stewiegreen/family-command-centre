@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ArrowLeft, ChevronLeft, ChevronRight, Loader2, X } from 'lucide-react';
 import {
   bookTitle,
@@ -192,8 +193,12 @@ export function ComicReader({ book, memberId, onClose, onOpenBook }: Props) {
 
   const atEnd = total > 0 && pageIndex >= total - 1;
 
-  return (
-    <div className="fixed inset-0 z-[60] flex flex-col bg-black text-white">
+  // Render outside the app's scrollable/content containers. This guarantees the
+  // reader's fixed positioning is relative to the viewport rather than any
+  // ancestor that may establish a containing block (for example via a filter,
+  // transform, or other visual effect).
+  const reader = (
+    <div className="fixed inset-0 z-[9999] flex flex-col bg-black text-white">
       {/* Top chrome */}
       <div
         className={cn(
@@ -368,4 +373,6 @@ export function ComicReader({ book, memberId, onClose, onOpenBook }: Props) {
       )}
     </div>
   );
+
+  return createPortal(reader, document.body);
 }
