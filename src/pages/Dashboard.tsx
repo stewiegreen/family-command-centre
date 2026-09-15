@@ -128,6 +128,19 @@ const SECTION_LABELS: Record<SectionId, string> = {
 };
 
 const HOME_JOURNAL_MOODS = ['😊', '😌', '😐', '😔', '😤', '🤩', '😴', '🙏'] as const;
+const HOME_JOURNAL_PROMPTS = [
+  'What made you smile today?',
+  'One thing you’re grateful for…',
+  'What felt hard — and what helped?',
+  'A small win from today…',
+  'What do you want more of in your days?',
+  'If today had a title, what would it be?',
+  'What’s one kindness you noticed?',
+];
+function homeJournalPrompt(): string {
+  const day = Math.floor(Date.now() / 86_400_000) % HOME_JOURNAL_PROMPTS.length;
+  return HOME_JOURNAL_PROMPTS[day]!;
+}
 
 function startOfWeekMonday(d: Date) {
   const x = new Date(d);
@@ -166,7 +179,9 @@ function SectionChrome({
   return (
     <div
       className={cn(
-        'relative group/section transition-opacity min-h-0 flex flex-col',
+        // pr-9 reserves a permanent strip so header actions (Full list, Open →, etc.)
+        // never sit under the hide control.
+        'relative group/section transition-opacity min-h-0 flex flex-col pr-9',
         paired && 'h-full',
         dragging && 'opacity-40',
       )}
@@ -211,7 +226,8 @@ function SectionChrome({
           onHide(id);
         }}
         className={cn(
-          'absolute top-2 right-2 z-20 p-1.5 rounded-lg',
+          // Sit in the reserved right strip (pr-9), not over card text.
+          'absolute top-2 right-1 z-20 p-1.5 rounded-lg',
           'bg-elevated/90 border border-border text-muted hover:text-fg shadow-sm',
           'opacity-0 pointer-events-none',
           'group-hover/section:opacity-100 group-hover/section:pointer-events-auto',
@@ -266,6 +282,7 @@ export function Dashboard() {
   const [weatherSnap, setWeatherSnap] = useState<WeatherSnapshot | null>(null);
   const [weatherErr, setWeatherErr] = useState<string | null>(null);
   const [weatherLoading, setWeatherLoading] = useState(false);
+  const journalPrompt = useMemo(() => homeJournalPrompt(), []);
 
   const refreshWeather = async (force = false) => {
     setWeatherLoading(true);
@@ -1163,6 +1180,7 @@ export function Dashboard() {
             <Plus className="w-4 h-4" />
           </Button>
         </div>
+        <p className="text-[11px] text-faint mb-2">Quick add creates an all-day event for today. Open Calendar for times.</p>
         {upcoming.length === 0 ? (
           <p className="text-sm text-muted py-4 text-center">No upcoming events. Enjoy the calm! ☀️</p>
         ) : (
@@ -1758,6 +1776,7 @@ export function Dashboard() {
             Open →
           </button>
         </div>
+        <p className="text-xs text-muted italic mb-2">{journalPrompt}</p>
         {!journalHasOwnAuth && currentUser && (
           <p className="text-[11px] text-muted mb-2 leading-relaxed">
             <Lock className="w-3 h-3 inline relative -top-px mr-0.5" />
