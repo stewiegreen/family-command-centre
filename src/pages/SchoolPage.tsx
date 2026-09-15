@@ -215,9 +215,6 @@ export function SchoolPage() {
             <GraduationCap className="w-6 h-6 text-accent" />
             School
           </h1>
-          <p className="text-sm text-muted mt-1">
-            Plan the day · finish blocks · earn XP &amp; treasure
-          </p>
         </div>
         {isParent && (
           <Button onClick={openCreate}>

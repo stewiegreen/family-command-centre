@@ -268,9 +268,6 @@ export function TodosPage() {
             <CheckSquare className="w-6 h-6 text-accent" />
             Tasks
           </h1>
-          <p className="text-sm text-muted mt-1">
-            Kanban board{listOwner ? ` · ${listOwner.name}` : ''}. Drag cards between columns.
-          </p>
         </div>
         <div className="flex items-center gap-2 self-start">
           {doneCount > 0 && (

@@ -306,9 +306,6 @@ export function RecipesPage() {
             <ChefHat className="w-7 h-7 text-accent" />
             Recipes
           </h1>
-          <p className="text-sm text-muted mt-1">
-            Save recipes and push ingredients to the shopping list.
-          </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="secondary" onClick={() => { setPasteOpen(true); setPasteErr(null); }}>

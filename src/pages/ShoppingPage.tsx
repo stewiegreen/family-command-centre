@@ -598,9 +598,6 @@ export function ShoppingPage() {
             <ShoppingCart className="w-6 h-6 text-accent" />
             Shopping
           </h1>
-          <p className="text-sm text-muted mt-1">
-            Categories, usual items, store tabs — drag to reorder aisle by aisle.
-          </p>
         </div>
         {boughtShop.length > 0 && (
           <button

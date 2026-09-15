@@ -207,7 +207,6 @@ export function MediaPage() {
     <div className="p-4 lg:p-8 max-w-5xl mx-auto space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Media</h1>
-        <p className="text-sm text-muted mt-1">Continue watching & reading</p>
       </div>
 
       {/* Emby */}
@@ -218,10 +217,6 @@ export function MediaPage() {
           </div>
           <div className="min-w-0 flex-1">
             <h2 className="font-semibold">Emby</h2>
-            <p className="text-xs text-muted truncate">
-              {webUrl || 'Web URL not set'}
-              {me?.name ? ` · ${me.name}` : ''}
-            </p>
           </div>
           {embyUserId && (
             <Button size="sm" variant="secondary" onClick={() => void loadEmby()} disabled={embyLoading}>
@@ -317,7 +312,6 @@ export function MediaPage() {
           </div>
           <div className="min-w-0 flex-1">
             <h2 className="font-semibold">Komga</h2>
-            <p className="text-xs text-muted truncate">{komgaWeb || 'Web URL not set'}</p>
           </div>
           <Button size="sm" variant="secondary" onClick={() => void loadKomga()} disabled={komgaLoading}>
             <RefreshCw className={`w-4 h-4 ${komgaLoading ? 'animate-spin' : ''}`} />
@@ -344,11 +338,6 @@ export function MediaPage() {
           <>
             <div>
               <h3 className="text-sm font-semibold text-fg mb-2">Continue Reading</h3>
-              <p className="text-[11px] text-faint mb-2">
-                Progress uses your member key when Cloudflare has{' '}
-                <code className="text-[10px]">KOMGA_API_KEY_&lt;memberId&gt;</code>; otherwise the
-                shared family key.
-              </p>
               {renderBookRow(inProgress, 'Nothing in progress right now.')}
             </div>
             {onDeck.length > 0 && (

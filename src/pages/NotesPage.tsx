@@ -267,9 +267,6 @@ export function NotesPage() {
             <StickyNote className="w-6 h-6 text-accent" />
             Notes
           </h1>
-          <p className="text-sm text-muted mt-1">
-            Shared family reference — facts, checklists, and must-reads. Not a diary.
-          </p>
         </div>
         <Button onClick={openCreate}>
           <Plus className="w-4 h-4" /> New note

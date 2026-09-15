@@ -1283,9 +1283,6 @@ export function ChoresPage() {
             Chores
             <span className="text-sm font-medium text-muted">· ChoreQuest</span>
           </h1>
-          <p className="text-sm text-muted mt-1">
-            Complete quests, earn Treasure, spend it in the shop.
-          </p>
           {me && me.role !== 'media' && (
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <div className="flex items-center gap-2 min-w-0">

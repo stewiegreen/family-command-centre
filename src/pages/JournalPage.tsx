@@ -274,9 +274,6 @@ export function JournalPage() {
             <BookOpen className="w-6 h-6 text-accent" />
             Journal
           </h1>
-          <p className="text-sm text-muted mt-1">
-            Your private space to reflect — share only when you choose.
-          </p>
         </div>
         {streak > 0 && (
           <div className="flex items-center gap-1.5 text-sm font-medium text-amber-600">
