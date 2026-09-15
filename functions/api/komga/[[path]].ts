@@ -38,6 +38,9 @@ function pathAllowed(joined: string, method: string): boolean {
   if (joined === 'v1/books/ondeck') return m === 'GET';
   if (joined === 'v1/books/latest') return m === 'GET';
   if (joined === 'v1/series/latest') return m === 'GET';
+  if (joined === 'v1/series') return m === 'GET';
+  if (/^v1\/series\/[^/]+$/.test(joined)) return m === 'GET';
+  if (/^v1\/series\/[^/]+\/books$/.test(joined)) return m === 'GET';
   if (joined === 'v1/books') return m === 'GET';
   if (/^v1\/books\/[^/]+\/thumbnail$/.test(joined)) return m === 'GET';
   if (/^v1\/series\/[^/]+\/thumbnail$/.test(joined)) return m === 'GET';
