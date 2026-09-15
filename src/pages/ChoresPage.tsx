@@ -47,6 +47,7 @@ import {
   rewardsForDifficultyWithConfig,
 } from '../lib/quest';
 import { creditMemberForQuest } from '../lib/todoQuest';
+import { actingMember } from '../lib/actingMember';
 import { nameFlairLabel } from '../lib/flair';
 import { markThemeStudioUnlockedLocally } from '../lib/themeStudioUnlock';
 import {
@@ -487,20 +488,24 @@ export function ChoresPage() {
   };
 
   const submitQuest = (quest: Quest) => {
-    if (!me || me.role === 'media') return;
-    update((d) => ({
-      ...d,
-      chores: (d.chores || []).map((c) =>
-        c.id === quest.id
-          ? {
-              ...c,
-              status: 'pending' as const,
-              submittedById: me.id,
-              submittedAt: new Date().toISOString(),
-            }
-          : c,
-      ),
-    }));
+    update((d) => {
+      // Resolve actor inside the updater — never close over React `me` after a profile switch.
+      const actor = actingMember(d);
+      if (!actor || actor.role === 'media') return d;
+      return {
+        ...d,
+        chores: (d.chores || []).map((c) =>
+          c.id === quest.id
+            ? {
+                ...c,
+                status: 'pending' as const,
+                submittedById: actor.id,
+                submittedAt: new Date().toISOString(),
+              }
+            : c,
+        ),
+      };
+    });
   };
 
   const approveQuest = (quest: Quest) => {

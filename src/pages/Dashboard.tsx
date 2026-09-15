@@ -55,6 +55,7 @@ import { ContinueReadingCard } from '../components/ContinueReadingCard';
 import { PictureFrameCard } from '../components/PictureFrameCard';
 import type { CalendarEvent, ExpandedEvent, FamilyData, JournalVisibility, Note, PresenceStatus, Quest, ViewId } from '../types';
 import { applyTodoStatus, creditMemberForQuest } from '../lib/todoQuest';
+import { actingMember, actingMemberId } from '../lib/actingMember';
 import {
   blocksForKidDate,
   dayCompletionState,
@@ -783,7 +784,7 @@ export function Dashboard() {
       if (!t) return d;
       const nextDone = !t.completed;
       return applyTodoStatus(d, id, nextDone ? 'done' : 'todo', {
-        actorId: myId,
+        actorId: actingMemberId(d) || myId,
       });
     });
   };
@@ -866,20 +867,23 @@ export function Dashboard() {
   };
 
   const submitQuestHome = (quest: Quest) => {
-    if (!currentUser || currentUser.role === 'media') return;
-    update((d) => ({
-      ...d,
-      chores: (d.chores || []).map((c) =>
-        c.id === quest.id
-          ? {
-              ...c,
-              status: 'pending' as const,
-              submittedById: currentUser.id,
-              submittedAt: new Date().toISOString(),
-            }
-          : c,
-      ),
-    }));
+    update((d) => {
+      const actor = actingMember(d);
+      if (!actor || actor.role === 'media') return d;
+      return {
+        ...d,
+        chores: (d.chores || []).map((c) =>
+          c.id === quest.id
+            ? {
+                ...c,
+                status: 'pending' as const,
+                submittedById: actor.id,
+                submittedAt: new Date().toISOString(),
+              }
+            : c,
+        ),
+      };
+    });
   };
 
   const approveQuestHome = (quest: Quest) => {

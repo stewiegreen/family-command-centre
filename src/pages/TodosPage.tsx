@@ -7,6 +7,7 @@ import { Modal } from '../components/ui/Modal';
 import { Input } from '../components/ui/Input';
 import type { Priority, Todo, TodoRecurrence, TodoStatus } from '../types';
 import { applyTodoStatus, findQuestForTodo, todoStatusOf } from '../lib/todoQuest';
+import { actingMemberId } from '../lib/actingMember';
 import { isRecurringTodo, recurrenceLabel, TODO_RECURRENCE_OPTIONS } from '../lib/todoRecurrence';
 import { cn } from '../lib/cn';
 
@@ -163,7 +164,7 @@ export function TodosPage() {
   };
 
   const setTodoStatus = (id: string, status: TodoStatus) => {
-    update((d) => applyTodoStatus(d, id, status, { actorId: myId }));
+    update((d) => applyTodoStatus(d, id, status, { actorId: actingMemberId(d) || myId }));
   };
 
   const addTodo = () => {

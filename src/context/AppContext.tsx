@@ -17,6 +17,7 @@ import {
   saveCloudConfig,
   saveLocalData,
 } from '../lib/storage';
+import { PROFILE_OVERRIDE_KEY } from '../lib/actingMember';
 import { migratePayload } from '../lib/defaults';
 import { withAppearance } from '../lib/appearance';
 import { resolveNavOrder } from '../lib/navOrder';
@@ -65,7 +66,6 @@ import {
 
 const PARENT_PIN_SESSION_KEY = 'fcc_parent_pin_ok';
 const KID_PIN_SESSION_KEY = 'fcc_kid_pin_ok';
-const PROFILE_OVERRIDE_KEY = 'fcc_profile_override';
 
 interface AppContextValue {
   data: FamilyData;
@@ -273,6 +273,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       setCloudReady(true);
       unsubAuthRef.current = onAuthStateChanged(async (user) => {
+        // Real Firebase user changed — drop pseudo profile override from the previous session.
+        try {
+          sessionStorage.removeItem(PROFILE_OVERRIDE_KEY);
+        } catch {
+          /* ignore */
+        }
         setAuthUser(user);
         setAuthReady(true);
         if (!user) {
@@ -597,6 +603,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // Attach auth listener if not already (first connect from Settings)
       if (!unsubAuthRef.current) {
         unsubAuthRef.current = onAuthStateChanged((user) => {
+          try {
+            sessionStorage.removeItem(PROFILE_OVERRIDE_KEY);
+          } catch {
+            /* ignore */
+          }
           setAuthUser(user);
           if (!user) {
             setSyncStatus('auth');
