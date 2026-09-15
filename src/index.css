@@ -415,21 +415,16 @@ h3,
   display: flex;
   flex-direction: column;
 }
-.hq-flip-face-main {
+/* Card is first child — full width, room at bottom for the flip chip */
+.hq-flip-face-body > *:first-child {
   flex: 1 1 auto;
-  min-height: 0;
-  min-width: 0;
   width: 100%;
+  min-width: 0;
+  min-height: 100%;
   display: flex;
   flex-direction: column;
-}
-.hq-flip-face-main > * {
-  width: 100%;
-  min-width: 0;
-  flex: 1 1 auto;
-}
-.hq-flip-footer {
-  width: 100%;
+  box-sizing: border-box;
+  padding-bottom: 2.75rem !important;
 }
 .hq-flip-measure {
   width: 100%;

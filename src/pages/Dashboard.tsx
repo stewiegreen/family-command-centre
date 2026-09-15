@@ -280,10 +280,10 @@ function SectionChrome({
           'min-w-0 flex flex-col flex-1',
           // Reserve a header band *inside* the card surface for hide/width.
           // Direct Card children: pad the card.
-          // FlipCard: pad the face card (hq-flip-face-main > *), not the flip root.
+          // FlipCard: pad the face Card (first child of face-body), not the flip root.
           '[&>*:not(.hq-flip-root)]:!pt-10',
-          '[&_.hq-flip-face-main>*]:!pt-10',
-          paired && '[&>*]:h-full [&_.hq-flip-face-main>*]:h-full',
+          '[&_.hq-flip-face-body>*:first-child]:!pt-10',
+          paired && '[&>*]:h-full [&_.hq-flip-face-body>*:first-child]:h-full',
         )}
       >
         {children}

@@ -20,9 +20,9 @@ type Props = {
 };
 
 /**
- * Two-face card. Front/back are each mounted exactly once.
- * Flip control is a compact bar at the bottom of the face — not a floating
- * chip in empty side space.
+ * Two-face card. Front/back mounted once each.
+ * Flip control sits absolute bottom-right *on* the card surface
+ * (card gets bottom padding so content stays clear).
  */
 export function FlipCard({
   storageKey,
@@ -91,51 +91,29 @@ export function FlipCard({
     const otherLabel = onBack ? frontLabel : backLabel;
     const badge = onBack ? undefined : frontBadge;
     return (
-      <div className="hq-flip-footer shrink-0 w-full flex justify-end pt-1">
-        <button
-          type="button"
-          onClick={toggle}
-          onMouseDown={(e) => e.stopPropagation()}
-          onPointerDown={(e) => e.stopPropagation()}
-          className={cn(
-            'inline-flex items-center gap-1.5 rounded-full border border-border bg-surface/95',
-            'px-2.5 py-1 text-[11px] font-medium text-muted hover:text-fg hover:border-border-strong',
-            'shadow-sm backdrop-blur-sm transition-colors',
-          )}
-          title={`Show ${otherLabel}`}
-        >
-          <RefreshCw className={cn('w-3 h-3 shrink-0', onBack && 'rotate-180')} />
-          <span className="whitespace-nowrap">
-            Flip to {otherLabel}
-            {badge ? (
-              <span className="ml-1 text-accent font-semibold tabular-nums">· {badge}</span>
-            ) : null}
-          </span>
-        </button>
-      </div>
+      <button
+        type="button"
+        onClick={toggle}
+        onMouseDown={(e) => e.stopPropagation()}
+        onPointerDown={(e) => e.stopPropagation()}
+        className={cn(
+          'absolute bottom-3 right-3 z-20',
+          'inline-flex items-center gap-1.5 rounded-full border border-border bg-surface/95',
+          'px-2.5 py-1 text-[11px] font-medium text-muted hover:text-fg hover:border-border-strong',
+          'shadow-sm backdrop-blur-sm transition-colors',
+        )}
+        title={`Show ${otherLabel}`}
+      >
+        <RefreshCw className={cn('w-3 h-3 shrink-0', onBack && 'rotate-180')} />
+        <span className="whitespace-nowrap">
+          Flip to {otherLabel}
+          {badge ? (
+            <span className="ml-1 text-accent font-semibold tabular-nums">· {badge}</span>
+          ) : null}
+        </span>
+      </button>
     );
   };
-
-  const faceBody = (
-    side: 'front' | 'back',
-    ref: typeof frontRef,
-    content: ReactNode,
-    visible: boolean,
-  ) => (
-    <div
-      ref={ref}
-      className={cn(
-        'hq-flip-face-body w-full min-w-0',
-        !visible && 'hidden',
-      )}
-      aria-hidden={!visible}
-    >
-      <div className="hq-flip-face-main w-full min-w-0 flex-1 flex flex-col min-h-0">
-        {content}
-      </div>
-      {visible ? makeBtn(side) : null}
-    </div>
-  );
 
   if (reduceMotion) {
     return (
@@ -143,8 +121,22 @@ export function FlipCard({
         className={cn('hq-flip-root relative h-full min-h-0 w-full', className)}
         style={contentMinH ? { minHeight: contentMinH } : undefined}
       >
-        {faceBody('front', frontRef, front, !flipped)}
-        {faceBody('back', backRef, back, flipped)}
+        <div
+          ref={frontRef}
+          className={cn('hq-flip-face-body relative w-full min-w-0', flipped && 'hidden')}
+          aria-hidden={flipped}
+        >
+          {front}
+          {!flipped ? makeBtn('front') : null}
+        </div>
+        <div
+          ref={backRef}
+          className={cn('hq-flip-face-body relative w-full min-w-0', !flipped && 'hidden')}
+          aria-hidden={!flipped}
+        >
+          {back}
+          {flipped ? makeBtn('back') : null}
+        </div>
       </div>
     );
   }
@@ -159,30 +151,28 @@ export function FlipCard({
         style={contentMinH ? { minHeight: contentMinH } : undefined}
       >
         <div
+          ref={frontRef}
           className={cn(
             'hq-flip-face hq-flip-face--front w-full',
             flipped && 'pointer-events-none',
           )}
           aria-hidden={flipped}
         >
-          <div ref={frontRef} className="hq-flip-face-body w-full min-w-0">
-            <div className="hq-flip-face-main w-full min-w-0 flex-1 flex flex-col min-h-0">
-              {front}
-            </div>
+          <div className="hq-flip-face-body relative w-full min-w-0 h-full">
+            {front}
             {makeBtn('front')}
           </div>
         </div>
         <div
+          ref={backRef}
           className={cn(
             'hq-flip-face hq-flip-face--back w-full',
             !flipped && 'pointer-events-none',
           )}
           aria-hidden={!flipped}
         >
-          <div ref={backRef} className="hq-flip-face-body w-full min-w-0">
-            <div className="hq-flip-face-main w-full min-w-0 flex-1 flex flex-col min-h-0">
-              {back}
-            </div>
+          <div className="hq-flip-face-body relative w-full min-w-0 h-full">
+            {back}
             {makeBtn('back')}
           </div>
         </div>
