@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   BookMarked,
   Check,
@@ -61,6 +61,7 @@ import {
 } from '../lib/weekCycle';
 import type { ChoreQuestConfig } from '../types';
 import { cn } from '../lib/cn';
+import { fireConfetti } from '../lib/confetti';
 
 function newId() {
   return crypto.randomUUID();
@@ -125,7 +126,24 @@ export function ChoresPage() {
   const [customXp, setCustomXp] = useState(25);
   const [customCoins, setCustomCoins] = useState(12);
   const [alsoSaveToCatalog, setAlsoSaveToCatalog] = useState(false);
+  
   const [levelUp, setLevelUp] = useState<{ name: string; level: number } | null>(null);
+
+  // Celebrate when the level-up modal opens (parent approve path, or self-detect below)
+  useEffect(() => {
+    if (!levelUp) return;
+    fireConfetti({ count: 200, power: 18, origin: { x: 0.5, y: 0.35 } });
+    // second smaller burst a beat later
+    const t = window.setTimeout(
+      () => fireConfetti({ count: 80, power: 12, origin: { x: 0.5, y: 0.5 } }),
+      350,
+    );
+    return () => window.clearTimeout(t);
+  }, [levelUp]);
+
+  // Kid on their own device: detect level increase after parent approves elsewhere
+  const lastLevelRef = useRef<number | null>(null);
+
   const [ratesDraft, setRatesDraft] = useState<ChoreQuestConfig | null>(null);
   const [adjKidId, setAdjKidId] = useState('');
   // String state so users can type "-" without the controlled Number() eating it
@@ -199,6 +217,19 @@ export function ChoresPage() {
 
   const myProgress = ensureProgress(progressMap[myId]);
   const myBar = progressTowardNextLevel(myProgress.xp);
+
+  useEffect(() => {
+    if (!me) return;
+    // Only celebrate for the kid (or non-parent) whose level rose on this device
+    const level = myProgress.level;
+    const prev = lastLevelRef.current;
+    if (prev != null && level > prev) {
+      setLevelUp({ name: me.name || 'Hero', level });
+      // confetti fired by the levelUp effect above
+    }
+    lastLevelRef.current = level;
+  }, [me?.id, myProgress.level, me?.name]);
+
   const myCoins = coinBalances[myId] ?? 0;
   const screenTimeMap = data.screenTime || {};
   const myScreen = screenTimeMap[myId] ?? 0;
