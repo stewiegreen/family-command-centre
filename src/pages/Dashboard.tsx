@@ -21,6 +21,7 @@ import {
   Eye,
   EyeOff,
   LayoutGrid,
+  Columns2,
   Megaphone,
   Home,
   ChevronDown,
@@ -64,6 +65,10 @@ import { upcomingExpanded } from '../lib/recurrence';
 import {
   applyHomescreenDrop,
   isPaired,
+  cyclePairWidth,
+  pairWidthMode,
+  rowUsesThirds,
+  cardColSpanClass,
   visibleHomescreenRows,
   HOMESCREEN_WIDGETS,
   type HomescreenWidgetId,
@@ -158,30 +163,45 @@ function SectionChrome({
   paired,
   dragging,
   dropSide,
+  widthMode,
+  onCycleWidth,
   onDragStart,
   onDragOver,
   onDrop,
   onDragEnd,
   onHide,
   children,
+  className,
 }: {
   id: SectionId;
   paired: boolean;
   dragging: boolean;
   dropSide: 'left' | 'right' | null;
+  /** Only meaningful when paired. */
+  widthMode?: 'equal' | 'wide' | 'narrow';
+  onCycleWidth?: () => void;
   onDragStart: (id: SectionId) => void;
   onDragOver: (e: DragEvent, id: SectionId) => void;
   onDrop: (e: DragEvent, id: SectionId) => void;
   onDragEnd: () => void;
   onHide: (id: SectionId) => void;
   children: ReactNode;
+  className?: string;
 }) {
+  const widthTitle =
+    widthMode === 'wide'
+      ? 'Wide (⅔) — click for narrow'
+      : widthMode === 'narrow'
+        ? 'Narrow (⅓) — click for equal'
+        : 'Equal halves — click for wide';
+
   return (
     <div
       className={cn(
         'relative group/section transition-opacity min-h-0 flex flex-col',
         paired && 'h-full',
         dragging && 'opacity-40',
+        className,
       )}
       // Always leave draggable=true. Toggling it off when dragging=true cancels the
       // active HTML5 drag in Chromium/Safari the moment React re-renders.
@@ -216,11 +236,29 @@ function SectionChrome({
       {dropSide === 'right' && (
         <div className="pointer-events-none absolute inset-y-2 right-0 w-1.5 rounded-full bg-accent z-10 shadow-[0_0_8px_var(--app-accent,#38bdf8)]" />
       )}
-      {/*
-        Hide control: inside the card corner, hover only.
-        Do NOT pad the whole card (that left huge empty strips).
-        Header rows use pr-9 so title actions clear this ~32px control.
-      */}
+      {/* Width cycle — only when sharing a row */}
+      {paired && onCycleWidth && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onCycleWidth();
+          }}
+          className={cn(
+            'absolute top-2.5 left-2.5 z-30 p-1.5 rounded-lg',
+            'bg-elevated/95 border border-border text-muted hover:text-fg shadow-sm',
+            'opacity-0 pointer-events-none',
+            'group-hover/section:opacity-100 group-hover/section:pointer-events-auto',
+            'focus-visible:opacity-100 focus-visible:pointer-events-auto',
+            widthMode && widthMode !== 'equal' && 'text-accent border-accent/40',
+          )}
+          title={widthTitle}
+          aria-label={widthTitle}
+        >
+          <Columns2 className="w-3.5 h-3.5" />
+        </button>
+      )}
+      {/* Hide control: inside the card corner, hover only */}
       <button
         type="button"
         onClick={(e) => {
@@ -261,6 +299,8 @@ export function Dashboard() {
     isParent,
     myHomescreenRows,
     setMyHomescreenRows,
+    myHomescreenSpans,
+    setMyHomescreenSpans,
     myHiddenWidgets,
     setMyHiddenWidgets,
     familyId,
@@ -2056,7 +2096,7 @@ export function Dashboard() {
       {/* Toolbar — date lives in the app header only */}
       <div className="flex items-center justify-between gap-3">
         <p className="text-[11px] text-faint hidden sm:block">
-          Drag left/right of a card to share a row · drop between rows for full width
+          Drag to arrange · hover shared cards for ⅓/⅔ width · drop between rows for full width
         </p>
         <div className="flex items-center gap-3 shrink-0 ml-auto">
           <button
@@ -2269,7 +2309,11 @@ export function Dashboard() {
             <div
               className={cn(
                 'grid gap-3 items-stretch',
-                row.length > 1 ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1',
+                row.length < 2
+                  ? 'grid-cols-1'
+                  : rowUsesThirds(row, myHomescreenSpans)
+                    ? 'grid-cols-1 lg:grid-cols-3'
+                    : 'grid-cols-1 lg:grid-cols-2',
               )}
             >
               {row.map((id) => (
@@ -2285,11 +2329,25 @@ export function Dashboard() {
                       ? dropHint.side
                       : null
                   }
+                  widthMode={
+                    row.length === 2
+                      ? pairWidthMode(row, myHomescreenSpans, id)
+                      : 'equal'
+                  }
+                  onCycleWidth={
+                    row.length === 2
+                      ? () =>
+                          setMyHomescreenSpans(
+                            cyclePairWidth(row, myHomescreenSpans, id),
+                          )
+                      : undefined
+                  }
                   onDragStart={onSectionDragStart}
                   onDragOver={onSectionDragOver}
                   onDrop={onSectionDrop}
                   onDragEnd={onSectionDragEnd}
                   onHide={hideWidget}
+                  className={cardColSpanClass(row, myHomescreenSpans, id)}
                 >
                   {sections[id]}
                 </SectionChrome>

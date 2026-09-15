@@ -105,6 +105,10 @@ interface AppContextValue {
   myHiddenWidgets: string[];
   /** Persist the hidden-widget list for the current member only. */
   setMyHiddenWidgets: (ids: string[]) => void;
+  /** Paired-row width spans (1 = ⅓, 2 = ⅔) for the current member. */
+  myHomescreenSpans: Record<string, 1 | 2>;
+  /** Persist paired-row width spans for the current member only. */
+  setMyHomescreenSpans: (spans: Record<string, 1 | 2>) => void;
   myNavOrder: import('../types').ViewId[];
   setMyNavOrder: (order: import('../types').ViewId[]) => void;
   connectCloud: (cfg: FirebaseConfig) => Promise<boolean>;
@@ -895,6 +899,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [update],
   );
 
+  const myHomescreenSpans: Record<string, 1 | 2> =
+    data.appearance?.[data.settings.currentUserId]?.homescreenSpans || {};
+
+  const setMyHomescreenSpans = useCallback(
+    (spans: Record<string, 1 | 2>) => {
+      update((d) => {
+        const id = d.settings.currentUserId;
+        if (!id) return d;
+        const prev = d.appearance?.[id] || {};
+        return {
+          ...d,
+          appearance: {
+            ...(d.appearance || {}),
+            [id]: {
+              ...prev,
+              homescreenSpans: spans,
+            },
+          },
+        };
+      });
+    },
+    [update],
+  );
+
 
   const myNavOrder = resolveNavOrder(data.appearance?.[data.settings.currentUserId]?.navOrder);
 
@@ -948,6 +976,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setMyHomescreenRows,
     myHiddenWidgets,
     setMyHiddenWidgets,
+    myHomescreenSpans,
+    setMyHomescreenSpans,
     myNavOrder,
     setMyNavOrder,
     connectCloud,

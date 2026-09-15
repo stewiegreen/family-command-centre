@@ -741,6 +741,11 @@ export interface FamilyData {
       homescreenRows?: { ids: string[] }[];
       /** Dashboard widget ids this member has chosen to hide from their homescreen. */
       hiddenWidgets?: string[];
+      /**
+       * Per-widget width when sharing a row: 1 = ⅓ (narrow), 2 = ⅔ (wide).
+       * Both missing or both 1 → equal halves. Solo rows ignore this.
+       */
+      homescreenSpans?: Record<string, 1 | 2>;
       /** Sidebar page order for this member only (ViewIds; settings stays pinned). */
       navOrder?: string[];
     }

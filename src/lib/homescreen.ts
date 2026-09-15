@@ -331,3 +331,63 @@ export function visibleHomescreenRows(
     .map((row) => row.filter((id) => !hiddenSet.has(id)))
     .filter((row) => row.length > 0);
 }
+
+/** 1 = narrow (⅓), 2 = wide (⅔). Missing → treat as equal half when both missing. */
+export type HomescreenSpan = 1 | 2;
+export type HomescreenSpans = Record<string, HomescreenSpan>;
+
+export function pairWidthMode(
+  row: HomescreenRow,
+  spans: HomescreenSpans,
+  id: string,
+): 'equal' | 'wide' | 'narrow' {
+  if (row.length !== 2 || !isWidgetId(id)) return 'equal';
+  const a = row[0]!;
+  const b = row[1]!;
+  const sa = spans[a] ?? 1;
+  const sb = spans[b] ?? 1;
+  if (sa === 2 && sb !== 2) return id === a ? 'wide' : 'narrow';
+  if (sb === 2 && sa !== 2) return id === b ? 'wide' : 'narrow';
+  return 'equal';
+}
+
+/** Cycle this card: equal → wide → narrow → equal. Partner gets the inverse. */
+export function cyclePairWidth(
+  row: HomescreenRow,
+  spans: HomescreenSpans,
+  id: string,
+): HomescreenSpans {
+  if (row.length !== 2 || !isWidgetId(id)) return spans;
+  const partner = row.find((x) => x !== id);
+  if (!partner) return spans;
+  const mode = pairWidthMode(row, spans, id);
+  const next: HomescreenSpans = { ...spans };
+  if (mode === 'equal') {
+    next[id] = 2;
+    next[partner] = 1;
+  } else if (mode === 'wide') {
+    next[id] = 1;
+    next[partner] = 2;
+  } else {
+    delete next[id];
+    delete next[partner];
+  }
+  return next;
+}
+
+export function rowUsesThirds(row: HomescreenRow, spans: HomescreenSpans): boolean {
+  if (row.length !== 2) return false;
+  const a = spans[row[0]!] ?? 1;
+  const b = spans[row[1]!] ?? 1;
+  return (a === 2 && b !== 2) || (b === 2 && a !== 2);
+}
+
+export function cardColSpanClass(
+  row: HomescreenRow,
+  spans: HomescreenSpans,
+  id: string,
+): string {
+  if (!rowUsesThirds(row, spans)) return '';
+  const mine = spans[id] ?? 1;
+  return mine === 2 ? 'lg:col-span-2' : 'lg:col-span-1';
+}
