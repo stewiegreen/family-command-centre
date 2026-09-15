@@ -116,7 +116,7 @@ export function LightsCard() {
 
   return (
     <Card className="!p-4 h-full flex flex-col gap-3">
-      <div className="flex items-center gap-2 pr-9">
+      <div className="flex items-center gap-2">
         <Lightbulb className="w-4 h-4 text-amber-500 shrink-0" />
         <h2 className="text-lg font-semibold text-fg">Living room lights</h2>
       </div>

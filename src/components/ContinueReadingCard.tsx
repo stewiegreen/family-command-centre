@@ -140,7 +140,7 @@ function FaceHeader({
 }) {
   const Icon = icon === 'deck' ? Library : BookOpen;
   return (
-    <div className="flex items-center gap-2 mb-3 shrink-0 pr-9">
+    <div className="flex items-center gap-2 mb-3 shrink-0">
       <div
         className={cn(
           'w-8 h-8 rounded-xl flex items-center justify-center shrink-0',

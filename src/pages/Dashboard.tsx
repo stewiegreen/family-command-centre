@@ -177,7 +177,6 @@ function SectionChrome({
   paired: boolean;
   dragging: boolean;
   dropSide: 'left' | 'right' | null;
-  /** Only meaningful when paired. */
   widthMode?: 'equal' | 'wide' | 'narrow';
   onCycleWidth?: () => void;
   onDragStart: (id: SectionId) => void;
@@ -203,12 +202,9 @@ function SectionChrome({
         dragging && 'opacity-40',
         className,
       )}
-      // Always leave draggable=true. Toggling it off when dragging=true cancels the
-      // active HTML5 drag in Chromium/Safari the moment React re-renders.
       draggable
       onDragStart={(e) => {
         const target = e.target as HTMLElement | null;
-        // Don't start a card drag from form controls or action buttons.
         if (target?.closest('input, textarea, select, button, a, [contenteditable="true"]')) {
           e.preventDefault();
           return;
@@ -236,51 +232,61 @@ function SectionChrome({
       {dropSide === 'right' && (
         <div className="pointer-events-none absolute inset-y-2 right-0 w-1.5 rounded-full bg-accent z-10 shadow-[0_0_8px_var(--app-accent,#38bdf8)]" />
       )}
-      {/* Width cycle — only when sharing a row */}
-      {paired && onCycleWidth && (
+
+      {/*
+        Dedicated chrome strip — hide + width live here so they never
+        cover card titles, filters, or actions.
+      */}
+      <div
+        className={cn(
+          'flex items-center justify-between gap-2 shrink-0',
+          'px-2.5 pt-1.5 pb-0.5',
+          'rounded-t-[inherit]',
+        )}
+      >
+        <div className="flex items-center gap-1 min-h-[28px]">
+          {paired && onCycleWidth ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onCycleWidth();
+              }}
+              className={cn(
+                'p-1.5 rounded-lg border shadow-sm',
+                'bg-elevated/90 border-border text-muted hover:text-fg',
+                widthMode && widthMode !== 'equal' && 'text-accent border-accent/40',
+              )}
+              title={widthTitle}
+              aria-label={widthTitle}
+            >
+              <Columns2 className="w-3.5 h-3.5" />
+            </button>
+          ) : (
+            <span className="w-[28px]" aria-hidden />
+          )}
+        </div>
         <button
           type="button"
           onClick={(e) => {
             e.stopPropagation();
-            onCycleWidth();
+            onHide(id);
           }}
           className={cn(
-            'absolute top-2.5 left-2.5 z-30 p-1.5 rounded-lg',
-            'bg-elevated/95 border border-border text-muted hover:text-fg shadow-sm',
-            'opacity-0 pointer-events-none',
-            'group-hover/section:opacity-100 group-hover/section:pointer-events-auto',
-            'focus-visible:opacity-100 focus-visible:pointer-events-auto',
-            widthMode && widthMode !== 'equal' && 'text-accent border-accent/40',
+            'p-1.5 rounded-lg border shadow-sm',
+            'bg-elevated/90 border-border text-muted hover:text-fg',
           )}
-          title={widthTitle}
-          aria-label={widthTitle}
+          title="Hide this card"
+          aria-label="Hide this card"
         >
-          <Columns2 className="w-3.5 h-3.5" />
+          <EyeOff className="w-3.5 h-3.5" />
         </button>
-      )}
-      {/* Hide control: inside the card corner, hover only */}
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          onHide(id);
-        }}
-        className={cn(
-          'absolute top-2.5 right-2.5 z-30 p-1.5 rounded-lg',
-          'bg-elevated/95 border border-border text-muted hover:text-fg shadow-sm',
-          'opacity-0 pointer-events-none',
-          'group-hover/section:opacity-100 group-hover/section:pointer-events-auto',
-          'focus-visible:opacity-100 focus-visible:pointer-events-auto',
-        )}
-        title="Hide this card"
-        aria-label="Hide this card"
-      >
-        <EyeOff className="w-3.5 h-3.5" />
-      </button>
+      </div>
+
       <div
         className={cn(
-          'min-w-0 flex flex-col',
-          paired && 'flex-1 [&>*]:h-full',
+          'min-w-0 flex flex-col flex-1',
+          paired && '[&>*]:h-full',
         )}
       >
         {children}
@@ -1124,7 +1130,7 @@ export function Dashboard() {
         backLabel="Calendar"
         front={
 <Card className="h-full flex flex-col">
-        <div className="flex items-center justify-between gap-2 mb-3 pr-9">
+        <div className="flex items-center justify-between gap-2 mb-3">
           <div className="flex items-center gap-2 min-w-0">
             <h2 className="font-semibold text-fg shrink-0 text-lg">Upcoming Events</h2>
             <div className="relative" ref={eventsFilterRef}>
@@ -1413,7 +1419,7 @@ export function Dashboard() {
         }
         front={isParent ? (
       <Card className="!p-4 lg:!p-5 space-y-4 h-full flex flex-col">
-        <div className="flex items-center justify-between gap-3 pr-9">
+        <div className="flex items-center justify-between gap-3">
           <h2 className="font-semibold text-fg flex items-center gap-2 text-lg">
             <Sword className="w-4 h-4 text-accent" />
             ChoreQuest
@@ -1599,7 +1605,7 @@ export function Dashboard() {
       </Card>
     ) : (
       <Card className="!p-4 lg:!p-5 h-full flex flex-col">
-        <div className="flex items-center justify-between gap-3 mb-4 pr-9">
+        <div className="flex items-center justify-between gap-3 mb-4">
           <h2 className="font-semibold text-fg flex items-center gap-2 text-lg">
             <Sword className="w-4 h-4 text-accent" />
             ChoreQuest
@@ -1694,7 +1700,7 @@ export function Dashboard() {
 
     chores: (
       <Card className="h-full flex flex-col">
-        <div className="flex items-center justify-between mb-3 pr-9">
+        <div className="flex items-center justify-between mb-3">
           <h2 className="font-semibold text-fg flex items-center gap-2 text-lg">
             <Sword className="w-4 h-4 text-accent" />
             {isParent ? 'Chores to approve' : 'My quests'}
@@ -1759,7 +1765,7 @@ export function Dashboard() {
 
     shopping: (
       <Card className="h-full flex flex-col">
-        <div className="flex items-center justify-between mb-3 pr-9">
+        <div className="flex items-center justify-between mb-3">
           <h2 className="font-semibold text-fg flex items-center gap-2 text-lg">
             <ShoppingCart className="w-4 h-4 text-sky-500" />
             Shopping
@@ -1808,7 +1814,7 @@ export function Dashboard() {
 
     journal: (
       <Card>
-        <div className="flex items-center justify-between mb-3 pr-9">
+        <div className="flex items-center justify-between mb-3">
           <h2 className="font-semibold text-fg flex items-center gap-2 text-lg">
             <BookOpen className="w-4 h-4 text-accent" />
             Journal

@@ -175,7 +175,7 @@ export function ScreenTimerCard() {
 
   return (
     <Card className="!p-4 lg:!p-5 space-y-3 h-full flex flex-col">
-      <div className="flex items-center justify-between gap-2 pr-9">
+      <div className="flex items-center justify-between gap-2">
         <h3 className="font-semibold text-fg text-lg flex items-center gap-2">
           <Timer className="w-4 h-4 text-accent" />
           Screen timer
