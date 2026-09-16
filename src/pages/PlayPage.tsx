@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Gamepad2, Loader2, Trash2, UserPlus, X } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Avatar } from '../components/ui/Avatar';
@@ -886,16 +886,26 @@ function BsBoard({
   }, [game.status, game.winner, role]);
 
   const placeAt = (cell: number) => {
-    if (!placingType || myReady) return;
+    if (myReady) return;
+    if (!placingType) {
+      setErr('Select a ship above (or tap Randomize), then tap the board.');
+      return;
+    }
     const len = SHIP_SIZES[placingType];
     const cells = shipCells(cell, len, horizontal);
-    if (!cells) return;
+    if (!cells) {
+      setErr('Ship does not fit there — try another cell or rotate.');
+      return;
+    }
     const others = ships.filter((s) => s.type !== placingType);
     const occ = occupiedSet(others);
-    if (cells.some((c) => occ.has(c))) return;
+    if (cells.some((c) => occ.has(c))) {
+      setErr('Overlaps another ship — pick empty water.');
+      return;
+    }
+    setErr(null);
     const next = [...others, { type: placingType, cells }];
     setShips(next);
-    // advance to next unplaced ship
     const placed = new Set(next.map((s) => s.type));
     const nextType = SHIP_ORDER.find((t) => !placed.has(t)) || null;
     setPlacingType(nextType);
@@ -927,11 +937,14 @@ function BsBoard({
 
   const fireAt = async (cell: number) => {
     if (!role || game.status !== 'active' || game.pendingShot) return;
-    if (game.turn !== role) return;
+    if (game.turn !== role) {
+      setErr('Not your turn yet.');
+      return;
+    }
     const myShots = role === 'host' ? game.hostShots : game.guestShots;
     if (myShots.some((s) => s.cell === cell)) return;
-    setBusy(true);
     setErr(null);
+    setBusy(true);
     try {
       await cloudBattleshipFire(familyId, game.id, role, cell);
     } catch (e) {
@@ -1052,18 +1065,12 @@ function BsBoard({
           </div>
           <BsGrid
             size={BS_SIZE}
-            renderCell={(i) => {
+            onCell={(i) => placeAt(i)}
+            cellClass={(i) => {
               const hasShip = myOcc.has(i);
-              return (
-                <button
-                  type="button"
-                  onClick={() => placeAt(i)}
-                  className={cn(
-                    'aspect-square rounded-sm border border-border/60',
-                    hasShip ? 'bg-sky-600/80' : 'bg-surface-2/60 hover:bg-accent/20',
-                  )}
-                />
-              );
+              return hasShip
+                ? 'bg-cyan-400 border-cyan-200 shadow-sm'
+                : 'bg-slate-700/80 border-slate-500 hover:bg-accent/40 hover:border-accent';
             }}
           />
           <div className="flex justify-center gap-2">
@@ -1091,21 +1098,14 @@ function BsBoard({
             <p className="text-xs font-bold text-muted mb-1 text-center">Your fleet</p>
             <BsGrid
               size={BS_SIZE}
-              renderCell={(i) => {
+              cellClass={(i) => {
                 const ship = myOcc.has(i);
                 const hit = incomingHits.has(i);
                 const miss = theirShots.some((s) => s.cell === i && s.result === 'miss');
-                return (
-                  <div
-                    className={cn(
-                      'aspect-square rounded-sm border border-border/50',
-                      ship && !hit && 'bg-sky-600/80',
-                      ship && hit && 'bg-red-500',
-                      !ship && miss && 'bg-slate-500/40',
-                      !ship && !miss && 'bg-surface-2/50',
-                    )}
-                  />
-                );
+                if (ship && hit) return 'bg-red-500 border-red-300';
+                if (ship) return 'bg-cyan-400 border-cyan-200';
+                if (miss) return 'bg-slate-500/70 border-slate-400';
+                return 'bg-slate-700/70 border-slate-600';
               }}
             />
           </div>
@@ -1113,31 +1113,29 @@ function BsBoard({
             <p className="text-xs font-bold text-muted mb-1 text-center">Enemy waters</p>
             <BsGrid
               size={BS_SIZE}
-              renderCell={(i) => {
+              onCell={(i) => {
                 const shot = myShotMap.get(i);
                 const canFire =
                   game.status === 'active' &&
                   role === game.turn &&
                   !game.pendingShot &&
-                  !shot &&
-                  !busy;
-                return (
-                  <button
-                    type="button"
-                    disabled={!canFire}
-                    onClick={() => void fireAt(i)}
-                    className={cn(
-                      'aspect-square rounded-sm border border-border/50',
-                      shot?.result === 'hit' && 'bg-red-500',
-                      shot?.result === 'miss' && 'bg-slate-400/50',
-                      !shot && canFire && 'bg-surface-2/50 hover:bg-accent/25 cursor-pointer',
-                      !shot && !canFire && 'bg-surface-2/40 cursor-default',
-                      game.pendingShot?.shooter === role &&
-                        game.pendingShot.cell === i &&
-                        'ring-2 ring-accent animate-pulse',
-                    )}
-                  />
-                );
+                  !shot;
+                if (canFire) void fireAt(i);
+              }}
+              cellClass={(i) => {
+                const shot = myShotMap.get(i);
+                const canFire =
+                  game.status === 'active' &&
+                  role === game.turn &&
+                  !game.pendingShot &&
+                  !shot;
+                const pendingHere =
+                  game.pendingShot?.shooter === role && game.pendingShot.cell === i;
+                if (shot?.result === 'hit') return 'bg-red-500 border-red-300';
+                if (shot?.result === 'miss') return 'bg-slate-400/60 border-slate-300';
+                if (pendingHere) return 'bg-accent/40 border-accent ring-2 ring-accent animate-pulse';
+                if (canFire) return 'bg-slate-700/80 border-slate-500 hover:bg-accent/35 hover:border-accent cursor-pointer';
+                return 'bg-slate-800/60 border-slate-700 cursor-default';
               }}
             />
           </div>
@@ -1155,20 +1153,40 @@ function BsBoard({
   );
 }
 
+/** 10×10 (or N×N) board — cells are real buttons with fixed min size so taps work on mobile. */
 function BsGrid({
   size,
-  renderCell,
+  onCell,
+  cellClass,
 }: {
   size: number;
-  renderCell: (index: number) => ReactNode;
+  onCell?: (index: number) => void;
+  cellClass: (index: number) => string;
 }) {
   return (
     <div
-      className="grid gap-0.5 max-w-[280px] mx-auto"
-      style={{ gridTemplateColumns: `repeat(${size}, minmax(0, 1fr))` }}
+      className="grid gap-1 w-full max-w-[min(100%,320px)] mx-auto select-none"
+      style={{
+        gridTemplateColumns: `repeat(${size}, minmax(0, 1fr))`,
+        // Force square cells: each row height matches column width.
+        gridAutoRows: '1fr',
+        aspectRatio: `1 / 1`,
+      }}
     >
       {Array.from({ length: size * size }, (_, i) => (
-        <div key={i}>{renderCell(i)}</div>
+        <button
+          key={i}
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onCell?.(i);
+          }}
+          className={cn(
+            'min-h-0 min-w-0 w-full h-full rounded-sm border-2 touch-manipulation',
+            cellClass(i),
+          )}
+        />
       ))}
     </div>
   );
