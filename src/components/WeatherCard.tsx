@@ -307,32 +307,33 @@ export function WeatherCard({
         )}
       </div>
 
-      {/* 5-day */}
+      {/* 5-day: day · rain% · big icon · high/low in one row */}
       <ul className="grid grid-cols-5 divide-x divide-border bg-elevated">
         {days.map((d, i) => {
           const c = weatherCodeToCondition(d.weatherCode);
+          const showPop = typeof d.precipProb === 'number' && d.precipProb > 0;
           return (
             <li
               key={`${d.date}-${i}`}
-              className="flex flex-col items-center gap-1 px-0.5 py-3 text-center"
+              className="flex flex-col items-center px-0.5 py-3 text-center min-h-[7.5rem]"
             >
-              <span className="text-[10px] sm:text-xs font-bold text-muted">
+              <span className="text-[10px] sm:text-xs font-bold text-muted leading-none">
                 {i === 0 ? 'Today' : weekdayShort(d.date)}
               </span>
-              <WeatherIcon condition={c} className="h-7 w-7 text-fg" />
-              {typeof d.precipProb === 'number' && d.precipProb > 0 ? (
-                <span className="text-[10px] font-semibold text-sky-500 tabular-nums">
-                  {Math.round(d.precipProb)}%
-                </span>
-              ) : (
-                <span className="text-[10px] font-semibold text-transparent tabular-nums">0%</span>
-              )}
-              <span className="text-xs sm:text-sm font-bold tabular-nums text-fg">
-                {deg(d.tempMaxC)}
+              <span
+                className={`mt-0.5 text-[10px] font-semibold tabular-nums leading-none ${
+                  showPop ? 'text-sky-500' : 'text-transparent'
+                }`}
+              >
+                {showPop ? `${Math.round(d.precipProb!)}%` : '0%'}
               </span>
-              <span className="text-[10px] sm:text-xs text-muted tabular-nums">
-                {deg(d.tempMinC)}
-              </span>
+              <div className="flex-1 flex items-center justify-center my-1">
+                <WeatherIcon condition={c} className="h-11 w-11 sm:h-12 sm:w-12 text-fg" />
+              </div>
+              <div className="flex items-baseline justify-center gap-1 tabular-nums leading-none">
+                <span className="text-xs sm:text-sm font-bold text-fg">{deg(d.tempMaxC)}</span>
+                <span className="text-[10px] sm:text-xs text-muted">{deg(d.tempMinC)}</span>
+              </div>
             </li>
           );
         })}
