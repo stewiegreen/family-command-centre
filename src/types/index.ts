@@ -811,11 +811,11 @@ export interface Invite {
 
 
 /** Live multiplayer games (Firestore subcollection families/{id}/games). */
-export type GameType = 'tictactoe' | 'tictactoe_infinite' | 'connect4';
+export type GameType = 'tictactoe' | 'tictactoe_infinite' | 'connect4' | 'battleship';
 export type TicCell = '' | 'X' | 'O';
 export type Connect4Cell = '' | 'R' | 'Y';
 
-export type GameStatus = 'waiting' | 'active' | 'finished';
+export type GameStatus = 'waiting' | 'placing' | 'active' | 'finished';
 
 export type TicTacToeGame = {
   id: string;
@@ -853,4 +853,41 @@ export type Connect4Game = {
   updatedAt: string;
 };
 
-export type FamilyGame = TicTacToeGame | Connect4Game;
+export type ShipType = 'carrier' | 'battleship' | 'cruiser' | 'submarine' | 'destroyer';
+export type ShotResult = 'hit' | 'miss' | null;
+
+export type BattleshipShot = {
+  cell: number;
+  result: ShotResult;
+  sunkShip?: ShipType;
+};
+
+export type BattleshipGame = {
+  id: string;
+  type: 'battleship';
+  status: GameStatus;
+  hostMemberId: string;
+  hostUid: string;
+  guestMemberId: string | null;
+  guestUid: string | null;
+  hostReady: boolean;
+  guestReady: boolean;
+  turn: 'host' | 'guest';
+  hostShots: BattleshipShot[];
+  guestShots: BattleshipShot[];
+  /** Shot awaiting defender resolution. */
+  pendingShot: { shooter: 'host' | 'guest'; cell: number } | null;
+  winner: null | 'host' | 'guest';
+  lastEvent: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** Private fleet — families/{id}/games/{gameId}/fleets/{uid} only. */
+export type Fleet = {
+  uid: string;
+  ships: { type: ShipType; cells: number[] }[];
+};
+
+export type FamilyGame = TicTacToeGame | Connect4Game | BattleshipGame;
+

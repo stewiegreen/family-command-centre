@@ -148,7 +148,7 @@ service cloud.firestore {
         allow create: if signedIn()
           && isMember(familyId)
           && request.resource.data.hostUid == request.auth.uid
-          && (request.resource.data.type == 'tictactoe' || request.resource.data.type == 'tictactoe_infinite' || request.resource.data.type == 'connect4');
+          && (request.resource.data.type == 'tictactoe' || request.resource.data.type == 'tictactoe_infinite' || request.resource.data.type == 'connect4' || request.resource.data.type == 'battleship');
 
         allow update: if signedIn()
           && isMember(familyId)
@@ -167,6 +167,13 @@ service cloud.firestore {
             request.auth.uid == resource.data.hostUid
             || isParentOf(familyId)
           );
+
+        // Private fleet — only the owning Auth uid can read/write their doc.
+        match /fleets/{uid} {
+          allow read, write: if signedIn()
+            && isMember(familyId)
+            && request.auth.uid == uid;
+        }
       }
 
       // Journal: one doc per entry. Privacy is per-document (not a FamilyData array).

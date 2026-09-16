@@ -98,5 +98,6 @@ export function gameTitle(type: string): string {
   if (type === 'connect4') return 'Connect 4';
   if (type === 'tictactoe_infinite') return 'Infinite Tic-Tac-Toe';
   if (type === 'tictactoe') return 'Classic Tic-Tac-Toe';
+  if (type === 'battleship') return 'Battleship';
   return 'Game';
 }

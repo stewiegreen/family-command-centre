@@ -1,15 +1,21 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Gamepad2, Loader2, Trash2, UserPlus, X } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Avatar } from '../components/ui/Avatar';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import {
+  cloudBattleshipFire,
+  cloudBattleshipReady,
+  cloudBattleshipResolve,
   cloudConnect4Move,
+  cloudCreateBattleship,
   cloudCreateConnect4,
   cloudCreateTicTacToe,
   cloudDeleteGame,
   cloudJoinGame,
+  cloudLoadFleet,
+  cloudSaveFleet,
   cloudTicTacToeMove,
   getFirebaseAuth,
   subscribeGames,
@@ -23,12 +29,28 @@ import {
   dropRow,
   gameTitle,
 } from '../lib/connect4';
+import {
+  BS_SIZE,
+  SHIP_LABEL,
+  SHIP_ORDER,
+  SHIP_SIZES,
+  hitCellsFromShots,
+  isFleetSunk,
+  isValidPlacement,
+  occupiedSet,
+  randomFleet,
+  resolveShotFull,
+  shipCells,
+} from '../lib/battleship';
 import { fireConfetti } from '../lib/confetti';
 import { cn } from '../lib/cn';
 import type {
+  BattleshipGame,
   Connect4Game,
   FamilyGame,
+  Fleet,
   Member,
+  ShipType,
   TicCell,
   TicTacToeGame,
 } from '../types';
@@ -38,6 +60,9 @@ function isTtt(g: FamilyGame): g is TicTacToeGame {
 }
 function isC4(g: FamilyGame): g is Connect4Game {
   return g.type === 'connect4';
+}
+function isBs(g: FamilyGame): g is BattleshipGame {
+  return g.type === 'battleship';
 }
 
 export function PlayPage() {
@@ -110,6 +135,23 @@ export function PlayPage() {
     }
   };
 
+  const startBs = async () => {
+    if (!familyId || !me || !authUid) {
+      setErr('Sign in with your own account to play across devices.');
+      return;
+    }
+    setBusy(true);
+    setErr(null);
+    try {
+      const g = await cloudCreateBattleship(familyId, { memberId: me.id, uid: authUid });
+      setActiveId(g.id);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const joinGame = async (g: FamilyGame) => {
     if (!familyId || !me || !authUid) return;
     if (g.hostMemberId === me.id) {
@@ -119,7 +161,12 @@ export function PlayPage() {
     setBusy(true);
     setErr(null);
     try {
-      await cloudJoinGame(familyId, g.id, { memberId: me.id, uid: authUid });
+      await cloudJoinGame(
+        familyId,
+        g.id,
+        { memberId: me.id, uid: authUid },
+        g.type === 'battleship' ? 'placing' : 'active',
+      );
       setActiveId(g.id);
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
@@ -272,6 +319,17 @@ export function PlayPage() {
             </Button>
           </div>
         </div>
+        <div className="border-t border-border pt-3">
+          <h2 className="text-sm font-bold text-fg">Battleship</h2>
+          <p className="text-xs text-muted mt-0.5">
+            Hide your fleet, take turns firing. Ship positions stay private — only you can see yours.
+          </p>
+          <div className="mt-2">
+            <Button size="sm" onClick={() => void startBs()} disabled={busy}>
+              New Battleship
+            </Button>
+          </div>
+        </div>
       </Card>
 
       {active && isTtt(active) && (
@@ -294,6 +352,18 @@ export function PlayPage() {
           onClose={() => setActiveId(null)}
           onCancel={() => void cancelGame(active)}
           busy={busy}
+        />
+      )}
+      {active && isBs(active) && familyId && authUid && (
+        <BsBoard
+          game={active}
+          me={me}
+          familyId={familyId}
+          authUid={authUid}
+          getMember={getMember}
+          onClose={() => setActiveId(null)}
+          onCancel={() => void cancelGame(active)}
+          setErr={setErr}
         />
       )}
 
@@ -327,7 +397,7 @@ export function PlayPage() {
                   <p className="font-medium text-fg truncate">{gameTitle(g.type)}</p>
                   <p className="text-xs text-muted">
                     {getMember(g.hostMemberId)?.name || 'Someone'} · waiting · you&apos;ll join as{' '}
-                    {isC4(g) ? 'yellow' : 'O'}
+                    {isC4(g) ? 'yellow' : isBs(g) ? 'opponent' : 'O'}
                   </p>
                 </div>
                 <Button size="sm" onClick={() => void joinGame(g)} disabled={busy}>
@@ -374,10 +444,16 @@ function GameRow({
   const title = gameTitle(game.type);
   let result = '';
   if (game.status === 'waiting') result = 'Waiting…';
+  else if (game.status === 'placing') result = 'Placing ships…';
   else if (game.status === 'finished') {
     if (game.winner === 'draw') result = 'Draw';
     else if (isTtt(game)) {
       result = game.winner === 'X' ? `${host?.name || 'Host'} won` : `${guest?.name || 'Guest'} won`;
+    } else if (isBs(game)) {
+      result =
+        game.winner === 'host'
+          ? `${host?.name || 'Host'} won`
+          : `${guest?.name || 'Guest'} won`;
     } else {
       result = game.winner === 'R' ? `${host?.name || 'Host'} won` : `${guest?.name || 'Guest'} won`;
     }
@@ -661,5 +737,439 @@ function C4Board({
         </div>
       )}
     </Card>
+  );
+}
+
+function BsBoard({
+  game,
+  me,
+  familyId,
+  authUid,
+  getMember,
+  onClose,
+  onCancel,
+  setErr,
+}: {
+  game: BattleshipGame;
+  me: Member;
+  familyId: string;
+  authUid: string;
+  getMember: (id: string) => Member | undefined;
+  onClose: () => void;
+  onCancel: () => void;
+  setErr: (s: string | null) => void;
+}) {
+  const host = getMember(game.hostMemberId);
+  const guest = game.guestMemberId ? getMember(game.guestMemberId) : null;
+  const amHost = game.hostMemberId === me.id;
+  const amGuest = game.guestMemberId === me.id;
+  const role: 'host' | 'guest' | null = amHost ? 'host' : amGuest ? 'guest' : null;
+  const myReady = amHost ? game.hostReady : amGuest ? game.guestReady : false;
+  const theirReady = amHost ? game.guestReady : game.hostReady;
+
+  const [ships, setShips] = useState<Fleet['ships']>([]);
+  const [placingType, setPlacingType] = useState<ShipType | null>('carrier');
+  const [horizontal, setHorizontal] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [fleetLoaded, setFleetLoaded] = useState(false);
+
+  // Load own fleet when placing/active
+  useEffect(() => {
+    if (!role) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const f = await cloudLoadFleet(familyId, game.id, authUid);
+        if (!cancelled && f?.ships?.length) {
+          setShips(f.ships);
+          setPlacingType(null);
+        }
+      } catch {
+        /* ignore */
+      } finally {
+        if (!cancelled) setFleetLoaded(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [familyId, game.id, authUid, role]);
+
+  // Defender resolves pending shots aimed at us
+  useEffect(() => {
+    if (!role || game.status !== 'active' || !game.pendingShot) return;
+    const pending = game.pendingShot;
+    const iAmDefender =
+      (pending.shooter === 'host' && role === 'guest') ||
+      (pending.shooter === 'guest' && role === 'host');
+    if (!iAmDefender) return;
+
+    let cancelled = false;
+    void (async () => {
+      setBusy(true);
+      try {
+        let fleet = await cloudLoadFleet(familyId, game.id, authUid);
+        if (!fleet?.ships?.length) {
+          // Should not happen mid-game
+          setErr('Could not load your fleet to resolve the shot.');
+          return;
+        }
+        const shotsAgainstMe = role === 'host' ? game.guestShots : game.hostShots;
+        const priorHits = hitCellsFromShots(shotsAgainstMe);
+        const resolved = resolveShotFull(fleet, pending.cell, priorHits);
+
+        const hostShots = [...game.hostShots];
+        const guestShots = [...game.guestShots];
+        if (pending.shooter === 'host') {
+          hostShots.push({
+            cell: pending.cell,
+            result: resolved.result,
+            sunkShip: resolved.sunkShip,
+          });
+        } else {
+          guestShots.push({
+            cell: pending.cell,
+            result: resolved.result,
+            sunkShip: resolved.sunkShip,
+          });
+        }
+
+        const shotsNowAgainstMe = role === 'host' ? guestShots : hostShots;
+        const allSunk = isFleetSunk(fleet, shotsNowAgainstMe);
+        const winner = allSunk ? pending.shooter : null;
+        let lastEvent = resolved.result === 'miss' ? 'Miss!' : 'Hit!';
+        if (resolved.sunkShip) {
+          lastEvent = `Sunk — ${SHIP_LABEL[resolved.sunkShip]}!`;
+        }
+        if (allSunk) {
+          lastEvent = `${pending.shooter === 'host' ? host?.name || 'Host' : guest?.name || 'Guest'} wins!`;
+        }
+
+        if (cancelled) return;
+        await cloudBattleshipResolve(familyId, game.id, {
+          hostShots,
+          guestShots,
+          pendingShot: null,
+          turn: allSunk ? pending.shooter : role,
+          status: allSunk ? 'finished' : 'active',
+          winner,
+          lastEvent,
+        });
+        if (allSunk && pending.shooter !== role) {
+          // we lost — no confetti
+        }
+      } catch (e) {
+        if (!cancelled) setErr(e instanceof Error ? e.message : String(e));
+      } finally {
+        if (!cancelled) setBusy(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    game.pendingShot?.cell,
+    game.pendingShot?.shooter,
+    game.status,
+    role,
+    familyId,
+    game.id,
+    authUid,
+  ]);
+
+  // Confetti when we win
+  useEffect(() => {
+    if (game.status !== 'finished' || !role) return;
+    if (game.winner === role) {
+      fireConfetti({ count: 160, power: 16, origin: { x: 0.5, y: 0.35 } });
+    }
+  }, [game.status, game.winner, role]);
+
+  const placeAt = (cell: number) => {
+    if (!placingType || myReady) return;
+    const len = SHIP_SIZES[placingType];
+    const cells = shipCells(cell, len, horizontal);
+    if (!cells) return;
+    const others = ships.filter((s) => s.type !== placingType);
+    const occ = occupiedSet(others);
+    if (cells.some((c) => occ.has(c))) return;
+    const next = [...others, { type: placingType, cells }];
+    setShips(next);
+    // advance to next unplaced ship
+    const placed = new Set(next.map((s) => s.type));
+    const nextType = SHIP_ORDER.find((t) => !placed.has(t)) || null;
+    setPlacingType(nextType);
+  };
+
+  const onRandomize = () => {
+    if (myReady) return;
+    setShips(randomFleet());
+    setPlacingType(null);
+  };
+
+  const onReady = async () => {
+    if (!role || !isValidPlacement(ships)) {
+      setErr('Place all five ships without overlapping.');
+      return;
+    }
+    setBusy(true);
+    setErr(null);
+    try {
+      await cloudSaveFleet(familyId, game.id, authUid, ships);
+      const otherReady = role === 'host' ? game.guestReady : game.hostReady;
+      await cloudBattleshipReady(familyId, game.id, role, otherReady);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const fireAt = async (cell: number) => {
+    if (!role || game.status !== 'active' || game.pendingShot) return;
+    if (game.turn !== role) return;
+    const myShots = role === 'host' ? game.hostShots : game.guestShots;
+    if (myShots.some((s) => s.cell === cell)) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      await cloudBattleshipFire(familyId, game.id, role, cell);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const myShots = role === 'host' ? game.hostShots : game.guestShots;
+  const theirShots = role === 'host' ? game.guestShots : game.hostShots;
+  const myOcc = occupiedSet(ships);
+  const incomingHits = new Set(hitCellsFromShots(theirShots));
+  const myShotMap = new Map(myShots.map((s) => [s.cell, s]));
+
+  const iAmShooterPending =
+    game.pendingShot && role && game.pendingShot.shooter === role;
+  const iAmDefenderPending =
+    game.pendingShot &&
+    role &&
+    ((game.pendingShot.shooter === 'host' && role === 'guest') ||
+      (game.pendingShot.shooter === 'guest' && role === 'host'));
+
+  let statusText = '';
+  if (game.status === 'waiting') statusText = 'Waiting for opponent to join…';
+  else if (game.status === 'placing') {
+    if (myReady && !theirReady) statusText = 'Fleet locked — waiting for opponent…';
+    else if (!myReady) statusText = 'Place your ships, then Ready';
+    else statusText = 'Both ready…';
+  } else if (game.status === 'finished') {
+    statusText =
+      game.winner === role
+        ? 'You win! 🎉'
+        : `${game.winner === 'host' ? host?.name : guest?.name} wins`;
+  } else if (iAmShooterPending) statusText = 'Shot pending — waiting for result…';
+  else if (iAmDefenderPending) statusText = 'Resolving incoming shot…';
+  else if (role && game.turn === role) statusText = 'Your turn — fire!';
+  else statusText = `${game.turn === 'host' ? host?.name : guest?.name}'s turn`;
+
+  if (!role) {
+    return (
+      <Card className="p-4 text-sm text-muted">
+        Spectating Battleship — join as a player to place ships and fire.
+        <div className="mt-2">
+          <Button variant="ghost" size="sm" onClick={onClose}>
+            Close
+          </Button>
+        </div>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="p-4 space-y-3">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center gap-3 min-w-0">
+          <Avatar {...(host || { name: '?' })} size="md" />
+          <span className="text-muted text-sm">vs</span>
+          {guest ? (
+            <Avatar {...guest} size="md" />
+          ) : (
+            <div className="w-10 h-10 rounded-full bg-surface-2 flex items-center justify-center">
+              <Loader2 className="w-4 h-4 animate-spin text-muted" />
+            </div>
+          )}
+        </div>
+        <button type="button" onClick={onClose} className="p-1.5 rounded-lg hover:bg-surface-2 text-muted">
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+      <p className="text-center text-[10px] font-bold uppercase tracking-wide text-muted">
+        {gameTitle(game.type)}
+      </p>
+      <p
+        className={cn(
+          'text-center text-sm font-semibold',
+          game.status === 'active' && role === game.turn && !game.pendingShot && 'text-accent',
+          game.status === 'finished' && game.winner === role && 'text-success',
+        )}
+      >
+        {statusText}
+      </p>
+      {game.lastEvent && game.status !== 'waiting' && (
+        <p className="text-center text-xs text-muted">{game.lastEvent}</p>
+      )}
+
+      {/* Placement */}
+      {(game.status === 'placing' || game.status === 'waiting') && !myReady && (
+        <div className="space-y-2">
+          <div className="flex flex-wrap gap-1.5 items-center">
+            {SHIP_ORDER.map((t) => {
+              const placed = ships.some((s) => s.type === t);
+              return (
+                <button
+                  key={t}
+                  type="button"
+                  disabled={placed}
+                  onClick={() => setPlacingType(t)}
+                  className={cn(
+                    'text-[10px] px-2 py-1 rounded-lg border font-semibold',
+                    placingType === t
+                      ? 'border-accent bg-accent/15 text-accent'
+                      : placed
+                        ? 'border-border text-faint opacity-50'
+                        : 'border-border text-muted hover:border-accent/40',
+                  )}
+                >
+                  {SHIP_LABEL[t]} ({SHIP_SIZES[t]})
+                </button>
+              );
+            })}
+            <Button size="sm" variant="secondary" onClick={() => setHorizontal((h) => !h)}>
+              {horizontal ? 'Horizontal' : 'Vertical'}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={onRandomize}>
+              Randomize
+            </Button>
+          </div>
+          <BsGrid
+            size={BS_SIZE}
+            renderCell={(i) => {
+              const hasShip = myOcc.has(i);
+              return (
+                <button
+                  type="button"
+                  onClick={() => placeAt(i)}
+                  className={cn(
+                    'aspect-square rounded-sm border border-border/60',
+                    hasShip ? 'bg-sky-600/80' : 'bg-surface-2/60 hover:bg-accent/20',
+                  )}
+                />
+              );
+            }}
+          />
+          <div className="flex justify-center gap-2">
+            <Button
+              size="sm"
+              disabled={busy || !isValidPlacement(ships) || !fleetLoaded}
+              onClick={() => void onReady()}
+            >
+              Ready
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {game.status === 'placing' && myReady && (
+        <p className="text-center text-sm text-muted py-6">
+          Your fleet is locked. Waiting for {theirReady ? 'battle to start…' : 'opponent…'}
+        </p>
+      )}
+
+      {/* Active / finished dual boards */}
+      {(game.status === 'active' || game.status === 'finished') && (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <p className="text-xs font-bold text-muted mb-1 text-center">Your fleet</p>
+            <BsGrid
+              size={BS_SIZE}
+              renderCell={(i) => {
+                const ship = myOcc.has(i);
+                const hit = incomingHits.has(i);
+                const miss = theirShots.some((s) => s.cell === i && s.result === 'miss');
+                return (
+                  <div
+                    className={cn(
+                      'aspect-square rounded-sm border border-border/50',
+                      ship && !hit && 'bg-sky-600/80',
+                      ship && hit && 'bg-red-500',
+                      !ship && miss && 'bg-slate-500/40',
+                      !ship && !miss && 'bg-surface-2/50',
+                    )}
+                  />
+                );
+              }}
+            />
+          </div>
+          <div>
+            <p className="text-xs font-bold text-muted mb-1 text-center">Enemy waters</p>
+            <BsGrid
+              size={BS_SIZE}
+              renderCell={(i) => {
+                const shot = myShotMap.get(i);
+                const canFire =
+                  game.status === 'active' &&
+                  role === game.turn &&
+                  !game.pendingShot &&
+                  !shot &&
+                  !busy;
+                return (
+                  <button
+                    type="button"
+                    disabled={!canFire}
+                    onClick={() => void fireAt(i)}
+                    className={cn(
+                      'aspect-square rounded-sm border border-border/50',
+                      shot?.result === 'hit' && 'bg-red-500',
+                      shot?.result === 'miss' && 'bg-slate-400/50',
+                      !shot && canFire && 'bg-surface-2/50 hover:bg-accent/25 cursor-pointer',
+                      !shot && !canFire && 'bg-surface-2/40 cursor-default',
+                      game.pendingShot?.shooter === role &&
+                        game.pendingShot.cell === i &&
+                        'ring-2 ring-accent animate-pulse',
+                    )}
+                  />
+                );
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {(amHost || amGuest) && game.status !== 'finished' && (
+        <div className="flex justify-center">
+          <Button variant="ghost" size="sm" onClick={onCancel} className="text-muted">
+            Cancel game
+          </Button>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function BsGrid({
+  size,
+  renderCell,
+}: {
+  size: number;
+  renderCell: (index: number) => ReactNode;
+}) {
+  return (
+    <div
+      className="grid gap-0.5 max-w-[280px] mx-auto"
+      style={{ gridTemplateColumns: `repeat(${size}, minmax(0, 1fr))` }}
+    >
+      {Array.from({ length: size * size }, (_, i) => (
+        <div key={i}>{renderCell(i)}</div>
+      ))}
+    </div>
   );
 }

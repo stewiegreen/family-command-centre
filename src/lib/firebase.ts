@@ -4,7 +4,7 @@
 import type { FirebaseApp } from 'firebase/app';
 import type { Auth, User } from 'firebase/auth';
 import type { Firestore } from 'firebase/firestore';
-import type { FamilyData, FirebaseConfig, Invite, JournalEntry, Member, Message, Role, TicTacToeGame, TicCell, Connect4Game, Connect4Cell, FamilyGame } from '../types';
+import type { FamilyData, FirebaseConfig, Invite, JournalEntry, Member, Message, Role, TicTacToeGame, TicCell, Connect4Game, Connect4Cell, FamilyGame, BattleshipGame, BattleshipShot, Fleet } from '../types';
 import { MEMBER_COLORS, MEMBER_EMOJIS, migratePayload } from './defaults';
 import { makeFamilyCode, makeInviteCode, uid } from './uid';
 import { CURRENT_USER_KEY, FAMILY_ID_KEY } from './storage';
@@ -762,6 +762,20 @@ function gameDocToGame(id: string, data: Record<string, unknown>): FamilyGame | 
       oMoves: Array.isArray(data.oMoves) ? (data.oMoves as number[]) : [],
     };
   }
+  if (type === 'battleship') {
+    return {
+      ...base,
+      type: 'battleship',
+      hostReady: !!data.hostReady,
+      guestReady: !!data.guestReady,
+      turn: data.turn === 'guest' ? 'guest' : 'host',
+      hostShots: Array.isArray(data.hostShots) ? (data.hostShots as BattleshipShot[]) : [],
+      guestShots: Array.isArray(data.guestShots) ? (data.guestShots as BattleshipShot[]) : [],
+      pendingShot: (data.pendingShot as BattleshipGame['pendingShot']) ?? null,
+      winner: (data.winner as BattleshipGame['winner']) ?? null,
+      lastEvent: (data.lastEvent as string | null) ?? null,
+    };
+  }
   return null;
 }
 
@@ -849,15 +863,17 @@ export async function cloudJoinGame(
   familyId: string,
   gameId: string,
   guest: { memberId: string; uid: string },
+  nextStatus: 'active' | 'placing' = 'active',
 ): Promise<void> {
   if (!db || !fsMod) throw new Error('Cloud not connected');
   await fsMod.updateDoc(fsMod.doc(gamesCol(familyId), gameId), {
     guestMemberId: guest.memberId,
     guestUid: guest.uid,
-    status: 'active',
+    status: nextStatus,
     updatedAt: new Date().toISOString(),
   });
 }
+
 
 /** @deprecated use cloudJoinGame */
 export async function cloudJoinTicTacToe(
@@ -907,4 +923,123 @@ export async function cloudConnect4Move(
 export async function cloudDeleteGame(familyId: string, gameId: string): Promise<void> {
   if (!db || !fsMod) throw new Error('Cloud not connected');
   await fsMod.deleteDoc(fsMod.doc(gamesCol(familyId), gameId));
+}
+
+
+export async function cloudCreateBattleship(
+  familyId: string,
+  host: { memberId: string; uid: string },
+): Promise<BattleshipGame> {
+  if (!db || !fsMod) throw new Error('Cloud not connected');
+  const id = uid();
+  const now = new Date().toISOString();
+  const game: BattleshipGame = {
+    id,
+    type: 'battleship',
+    status: 'waiting',
+    hostMemberId: host.memberId,
+    hostUid: host.uid,
+    guestMemberId: null,
+    guestUid: null,
+    hostReady: false,
+    guestReady: false,
+    turn: 'host',
+    hostShots: [],
+    guestShots: [],
+    pendingShot: null,
+    winner: null,
+    lastEvent: null,
+    createdAt: now,
+    updatedAt: now,
+  };
+  const { id: _id, ...payload } = game;
+  await fsMod.setDoc(fsMod.doc(gamesCol(familyId), id), payload);
+  return game;
+}
+
+function fleetDoc(familyId: string, gameId: string, playerUid: string) {
+  return fsMod!.doc(db!, 'families', familyId, 'games', gameId, 'fleets', playerUid);
+}
+
+/** Save private fleet (only the owner can write this doc). */
+export async function cloudSaveFleet(
+  familyId: string,
+  gameId: string,
+  playerUid: string,
+  ships: Fleet['ships'],
+): Promise<void> {
+  if (!db || !fsMod) throw new Error('Cloud not connected');
+  await fsMod.setDoc(fleetDoc(familyId, gameId, playerUid), {
+    uid: playerUid,
+    ships,
+  });
+}
+
+export async function cloudLoadFleet(
+  familyId: string,
+  gameId: string,
+  playerUid: string,
+): Promise<Fleet | null> {
+  if (!db || !fsMod) throw new Error('Cloud not connected');
+  const snap = await fsMod.getDoc(fleetDoc(familyId, gameId, playerUid));
+  if (!snap.exists()) return null;
+  const data = snap.data() as Fleet;
+  return { uid: playerUid, ships: data.ships || [] };
+}
+
+/** Mark ready after placing; when both ready → active. */
+export async function cloudBattleshipReady(
+  familyId: string,
+  gameId: string,
+  role: 'host' | 'guest',
+  bothReady: boolean,
+): Promise<void> {
+  if (!db || !fsMod) throw new Error('Cloud not connected');
+  const patch: Record<string, unknown> = {
+    updatedAt: new Date().toISOString(),
+  };
+  if (role === 'host') patch.hostReady = true;
+  else patch.guestReady = true;
+  if (bothReady) {
+    patch.status = 'active';
+    patch.turn = 'host';
+    patch.lastEvent = 'Both fleets ready — host fires first.';
+  }
+  await fsMod.updateDoc(fsMod.doc(gamesCol(familyId), gameId), patch);
+}
+
+/** Shooter writes a pending shot; defender must resolve. */
+export async function cloudBattleshipFire(
+  familyId: string,
+  gameId: string,
+  shooter: 'host' | 'guest',
+  cell: number,
+): Promise<void> {
+  if (!db || !fsMod) throw new Error('Cloud not connected');
+  await fsMod.updateDoc(fsMod.doc(gamesCol(familyId), gameId), {
+    pendingShot: { shooter, cell },
+    lastEvent: 'Shot fired — waiting for result…',
+    updatedAt: new Date().toISOString(),
+  });
+}
+
+/** Defender resolves pending shot against their private fleet. */
+export async function cloudBattleshipResolve(
+  familyId: string,
+  gameId: string,
+  patch: {
+    hostShots: BattleshipShot[];
+    guestShots: BattleshipShot[];
+    pendingShot: null;
+    turn: 'host' | 'guest';
+    status: BattleshipGame['status'];
+    winner: BattleshipGame['winner'];
+    lastEvent: string;
+  },
+): Promise<void> {
+  if (!db || !fsMod) throw new Error('Cloud not connected');
+  await fsMod.updateDoc(fsMod.doc(gamesCol(familyId), gameId), {
+    ...patch,
+    updatedAt: new Date().toISOString(),
+  });
 }
