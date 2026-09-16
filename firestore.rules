@@ -148,7 +148,7 @@ service cloud.firestore {
         allow create: if signedIn()
           && isMember(familyId)
           && request.resource.data.hostUid == request.auth.uid
-          && (request.resource.data.type == 'tictactoe' || request.resource.data.type == 'tictactoe_infinite');
+          && (request.resource.data.type == 'tictactoe' || request.resource.data.type == 'tictactoe_infinite' || request.resource.data.type == 'connect4');
 
         allow update: if signedIn()
           && isMember(familyId)

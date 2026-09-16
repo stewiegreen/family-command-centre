@@ -4,7 +4,7 @@
 import type { FirebaseApp } from 'firebase/app';
 import type { Auth, User } from 'firebase/auth';
 import type { Firestore } from 'firebase/firestore';
-import type { FamilyData, FirebaseConfig, Invite, JournalEntry, Member, Message, Role, TicTacToeGame, TicCell } from '../types';
+import type { FamilyData, FirebaseConfig, Invite, JournalEntry, Member, Message, Role, TicTacToeGame, TicCell, Connect4Game, Connect4Cell, FamilyGame, GameType } from '../types';
 import { MEMBER_COLORS, MEMBER_EMOJIS, migratePayload } from './defaults';
 import { makeFamilyCode, makeInviteCode, uid } from './uid';
 import { CURRENT_USER_KEY, FAMILY_ID_KEY } from './storage';
@@ -721,50 +721,69 @@ export function onAuthStateChanged(callback: (user: User | null) => void): () =>
 export type { User };
 
 
+
 // ─── Multiplayer games (families/{id}/games) ───────────────────────────────
 
 function gamesCol(familyId: string) {
   return fsMod!.collection(db!, 'families', familyId, 'games');
 }
 
-function gameDocToTtt(id: string, data: Record<string, unknown>): TicTacToeGame {
-  const board = (data.board as TicCell[]) || ['', '', '', '', '', '', '', '', ''];
-  const type = data.type === 'tictactoe_infinite' ? 'tictactoe_infinite' : 'tictactoe';
-  return {
+function gameDocToGame(id: string, data: Record<string, unknown>): FamilyGame | null {
+  const type = data.type as string;
+  const base = {
     id,
-    type,
-    status: (data.status as TicTacToeGame['status']) || 'waiting',
+    status: (data.status as FamilyGame['status']) || 'waiting',
     hostMemberId: String(data.hostMemberId || ''),
     hostUid: String(data.hostUid || ''),
     guestMemberId: (data.guestMemberId as string | null) ?? null,
     guestUid: (data.guestUid as string | null) ?? null,
-    board: board.length === 9 ? board : ['', '', '', '', '', '', '', '', ''],
-    turn: data.turn === 'O' ? 'O' : 'X',
-    winner: (data.winner as TicTacToeGame['winner']) ?? null,
-    xMoves: Array.isArray(data.xMoves) ? (data.xMoves as number[]) : [],
-    oMoves: Array.isArray(data.oMoves) ? (data.oMoves as number[]) : [],
     createdAt: String(data.createdAt || ''),
     updatedAt: String(data.updatedAt || ''),
   };
+  if (type === 'connect4') {
+    const board = (data.board as Connect4Cell[]) || [];
+    return {
+      ...base,
+      type: 'connect4',
+      board: board.length === 42 ? board : Array.from({ length: 42 }, () => '' as Connect4Cell),
+      turn: data.turn === 'Y' ? 'Y' : 'R',
+      winner: (data.winner as Connect4Game['winner']) ?? null,
+    };
+  }
+  if (type === 'tictactoe' || type === 'tictactoe_infinite') {
+    const board = (data.board as TicCell[]) || ['', '', '', '', '', '', '', '', ''];
+    return {
+      ...base,
+      type,
+      board: board.length === 9 ? board : ['', '', '', '', '', '', '', '', ''],
+      turn: data.turn === 'O' ? 'O' : 'X',
+      winner: (data.winner as TicTacToeGame['winner']) ?? null,
+      xMoves: Array.isArray(data.xMoves) ? (data.xMoves as number[]) : [],
+      oMoves: Array.isArray(data.oMoves) ? (data.oMoves as number[]) : [],
+    };
+  }
+  return null;
 }
 
-/** Live list of recent family games (waiting / active / finished). */
+/** Live list of recent family games. */
 export function subscribeGames(
   familyId: string,
-  onData: (games: TicTacToeGame[]) => void,
+  onData: (games: FamilyGame[]) => void,
   onError: (err: Error) => void,
 ): () => void {
   if (!db || !fsMod) {
     onError(new Error('Cloud not connected'));
     return () => {};
   }
-  const q = fsMod.query(gamesCol(familyId), fsMod.orderBy('updatedAt', 'desc'), fsMod.limit(30));
+  const q = fsMod.query(gamesCol(familyId), fsMod.orderBy('updatedAt', 'desc'), fsMod.limit(40));
   return fsMod.onSnapshot(
     q,
     (snap) => {
-      const list = snap.docs
-        .map((d) => gameDocToTtt(d.id, d.data() as Record<string, unknown>))
-        .filter((g) => g.type === 'tictactoe' || g.type === 'tictactoe_infinite');
+      const list: FamilyGame[] = [];
+      for (const d of snap.docs) {
+        const g = gameDocToGame(d.id, d.data() as Record<string, unknown>);
+        if (g) list.push(g);
+      }
       onData(list);
     },
     (err) => onError(err instanceof Error ? err : new Error(String(err))),
@@ -800,19 +819,53 @@ export async function cloudCreateTicTacToe(
   return game;
 }
 
-export async function cloudJoinTicTacToe(
+export async function cloudCreateConnect4(
+  familyId: string,
+  host: { memberId: string; uid: string },
+): Promise<Connect4Game> {
+  if (!db || !fsMod) throw new Error('Cloud not connected');
+  const id = uid();
+  const now = new Date().toISOString();
+  const game: Connect4Game = {
+    id,
+    type: 'connect4',
+    status: 'waiting',
+    hostMemberId: host.memberId,
+    hostUid: host.uid,
+    guestMemberId: null,
+    guestUid: null,
+    board: Array.from({ length: 42 }, () => ''),
+    turn: 'R',
+    winner: null,
+    createdAt: now,
+    updatedAt: now,
+  };
+  const { id: _id, ...payload } = game;
+  await fsMod.setDoc(fsMod.doc(gamesCol(familyId), id), payload);
+  return game;
+}
+
+export async function cloudJoinGame(
   familyId: string,
   gameId: string,
   guest: { memberId: string; uid: string },
 ): Promise<void> {
   if (!db || !fsMod) throw new Error('Cloud not connected');
-  const ref = fsMod.doc(gamesCol(familyId), gameId);
-  await fsMod.updateDoc(ref, {
+  await fsMod.updateDoc(fsMod.doc(gamesCol(familyId), gameId), {
     guestMemberId: guest.memberId,
     guestUid: guest.uid,
     status: 'active',
     updatedAt: new Date().toISOString(),
   });
+}
+
+/** @deprecated use cloudJoinGame */
+export async function cloudJoinTicTacToe(
+  familyId: string,
+  gameId: string,
+  guest: { memberId: string; uid: string },
+): Promise<void> {
+  return cloudJoinGame(familyId, gameId, guest);
 }
 
 export async function cloudTicTacToeMove(
@@ -825,6 +878,23 @@ export async function cloudTicTacToeMove(
     status: TicTacToeGame['status'];
     xMoves: number[];
     oMoves: number[];
+  },
+): Promise<void> {
+  if (!db || !fsMod) throw new Error('Cloud not connected');
+  await fsMod.updateDoc(fsMod.doc(gamesCol(familyId), gameId), {
+    ...patch,
+    updatedAt: new Date().toISOString(),
+  });
+}
+
+export async function cloudConnect4Move(
+  familyId: string,
+  gameId: string,
+  patch: {
+    board: Connect4Cell[];
+    turn: 'R' | 'Y';
+    winner: Connect4Game['winner'];
+    status: Connect4Game['status'];
   },
 ): Promise<void> {
   if (!db || !fsMod) throw new Error('Cloud not connected');

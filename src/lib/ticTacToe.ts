@@ -88,5 +88,8 @@ export function applyMove(
 }
 
 export function gameModeLabel(type: string): string {
-  return isInfiniteTtt(type) ? 'Infinite' : 'Classic';
+  if (type === 'tictactoe_infinite') return 'Infinite Tic-Tac-Toe';
+  if (type === 'tictactoe') return 'Classic Tic-Tac-Toe';
+  if (type === 'connect4') return 'Connect 4';
+  return 'Game';
 }

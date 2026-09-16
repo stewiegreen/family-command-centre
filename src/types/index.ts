@@ -811,12 +811,16 @@ export interface Invite {
 
 
 /** Live multiplayer games (Firestore subcollection families/{id}/games). */
-export type GameType = 'tictactoe' | 'tictactoe_infinite';
+export type GameType = 'tictactoe' | 'tictactoe_infinite' | 'connect4';
 export type TicCell = '' | 'X' | 'O';
+export type Connect4Cell = '' | 'R' | 'Y';
+
+export type GameStatus = 'waiting' | 'active' | 'finished';
+
 export type TicTacToeGame = {
   id: string;
-  type: GameType;
-  status: 'waiting' | 'active' | 'finished';
+  type: 'tictactoe' | 'tictactoe_infinite';
+  status: GameStatus;
   hostMemberId: string;
   hostUid: string;
   guestMemberId: string | null;
@@ -824,14 +828,29 @@ export type TicTacToeGame = {
   /** Length 9, row-major. */
   board: TicCell[];
   turn: 'X' | 'O';
-  /** X = host, O = guest. null while in progress. */
   winner: null | 'X' | 'O' | 'draw';
-  /**
-   * Infinite mode only: cell indices each player has on the board, oldest first.
-   * Max 3 — placing a 4th removes the oldest mark.
-   */
+  /** Infinite: cell indices per player, oldest first (max 3). */
   xMoves?: number[];
   oMoves?: number[];
   createdAt: string;
   updatedAt: string;
 };
+
+/** Connect 4: 7 columns × 6 rows (42 cells). Row 0 = top of the board. */
+export type Connect4Game = {
+  id: string;
+  type: 'connect4';
+  status: GameStatus;
+  hostMemberId: string;
+  hostUid: string;
+  guestMemberId: string | null;
+  guestUid: string | null;
+  board: Connect4Cell[];
+  /** Host plays Red, guest Yellow. */
+  turn: 'R' | 'Y';
+  winner: null | 'R' | 'Y' | 'draw';
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type FamilyGame = TicTacToeGame | Connect4Game;
