@@ -786,6 +786,11 @@ export interface FamilyData {
   createdAt?: string;
   updatedAt?: string;
   lastInviteCode?: string;
+  /** Today's Wordle solve board (shared family banner). */
+  wordleDaily?: {
+    seed: string;
+    solves: { memberId: string; name: string; guesses: number; at: string }[];
+  };
 }
 
 export interface FirebaseConfig {

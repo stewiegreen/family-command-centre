@@ -351,6 +351,7 @@ export async function cloudWrite(familyId: string, data: FamilyData): Promise<vo
     redemptions: (data.redemptions || []).slice(0, 100),
     weekState: data.weekState ?? null,
     choreQuest: data.choreQuest ?? null,
+    wordleDaily: data.wordleDaily ?? null,
     updatedAt: new Date().toISOString(),
   };
 

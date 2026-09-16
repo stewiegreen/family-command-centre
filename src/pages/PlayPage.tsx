@@ -50,6 +50,8 @@ import {
   isValidGuess,
   newWordleGame,
   scoreGuess,
+  todaySeed,
+  upsertWordleSolve,
   type LetterState,
   type WordleState,
 } from '../lib/wordle';
@@ -76,7 +78,7 @@ function isBs(g: FamilyGame): g is BattleshipGame {
 }
 
 export function PlayPage() {
-  const { currentUser, familyId, getMember } = useApp();
+  const { currentUser, familyId, getMember, data, update } = useApp();
   const me = currentUser;
   const authUid = getFirebaseAuth()?.currentUser?.uid || null;
 
@@ -343,6 +345,7 @@ export function PlayPage() {
           Guess the 5-letter word in 6 tries. Solo — no opponent needed. Daily is the same word for
           everyone today; Random is a new puzzle each time.
         </p>
+        <WordleDailyBanner daily={data.wordleDaily} getMember={getMember} />
         <div className="flex flex-wrap gap-2">
           <Button
             size="sm"
@@ -405,7 +408,24 @@ export function PlayPage() {
         <WordleBoard
           key={solo}
           mode={solo === 'wordle' ? 'daily' : 'random'}
+          me={me}
           onClose={() => setSolo(null)}
+          onDailyWin={
+            me
+              ? (guesses) => {
+                  const seed = todaySeed();
+                  update((prev) => ({
+                    ...prev,
+                    wordleDaily: upsertWordleSolve(prev.wordleDaily, seed, {
+                      memberId: me.id,
+                      name: me.name,
+                      guesses,
+                      at: new Date().toISOString(),
+                    }),
+                  }));
+                }
+              : undefined
+          }
         />
       )}
 
@@ -1270,12 +1290,53 @@ function BsGrid({
 
 const KEY_ROWS = ['qwertyuiop', 'asdfghjkl', 'zxcvbnm'];
 
+function WordleDailyBanner({
+  daily,
+  getMember,
+}: {
+  daily: FamilyData['wordleDaily'];
+  getMember: (id: string) => Member | undefined;
+}) {
+  const seed = todaySeed();
+  const solves =
+    daily && daily.seed === seed
+      ? [...daily.solves].sort(
+          (a, b) => a.guesses - b.guesses || a.at.localeCompare(b.at),
+        )
+      : [];
+
+  if (solves.length === 0) {
+    return (
+      <p className="text-xs text-muted bg-surface-2/50 rounded-lg px-3 py-2">
+        Today&apos;s Wordle — nobody has cracked it yet. Be the first!
+      </p>
+    );
+  }
+
+  const names = solves.map((s) => {
+    const m = getMember(s.memberId);
+    const label = m?.name || s.name;
+    return `${label} (${s.guesses}/6)`;
+  });
+
+  return (
+    <p className="text-xs text-fg bg-accent/10 border border-accent/25 rounded-lg px-3 py-2">
+      <span className="font-semibold text-accent">Today&apos;s solvers: </span>
+      {names.join(' · ')}
+    </p>
+  );
+}
+
 function WordleBoard({
   mode,
+  me,
   onClose,
+  onDailyWin,
 }: {
   mode: 'daily' | 'random';
+  me: Member | null | undefined;
   onClose: () => void;
+  onDailyWin?: (guesses: number) => void;
 }) {
   const [game, setGame] = useState<WordleState>(() => newWordleGame(mode));
   const [current, setCurrent] = useState('');
@@ -1286,6 +1347,8 @@ function WordleBoard({
   gameRef.current = game;
   const currentRef = useRef(current);
   currentRef.current = current;
+  const onDailyWinRef = useRef(onDailyWin);
+  onDailyWinRef.current = onDailyWin;
 
   // Physical keyboard
   useEffect(() => {
@@ -1317,6 +1380,7 @@ function WordleBoard({
         setMsg(null);
         if (status === 'won') {
           fireConfetti({ count: 140, power: 14, origin: { x: 0.5, y: 0.4 } });
+          if (g.mode === 'daily') onDailyWinRef.current?.(guesses.length);
         }
         return;
       }
@@ -1365,6 +1429,7 @@ function WordleBoard({
     setMsg(null);
     if (status === 'won') {
       fireConfetti({ count: 140, power: 14, origin: { x: 0.5, y: 0.4 } });
+      if (game.mode === 'daily') onDailyWin?.(guesses.length);
     }
   };
 
@@ -1420,6 +1485,9 @@ function WordleBoard({
           <p className="text-sm font-semibold text-fg">
             {mode === 'daily' ? `Daily · ${game.seed}` : 'Random puzzle'}
           </p>
+          {mode === 'daily' && me && (
+            <p className="text-[10px] text-muted mt-0.5">Solving as {me.name}</p>
+          )}
         </div>
         <button type="button" onClick={onClose} className="p-1.5 rounded-lg hover:bg-surface-2 text-muted">
           <X className="w-4 h-4" />
