@@ -134,7 +134,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     saveCloudConfig(null);
     resetFirebase();
-    unsubAuthRef.current = null;
+    // Tear down the auth listener so a later reconnect can attach a fresh one
+    // and we don't keep firing setState on an unmounted/disconnected tree.
+    if (unsubAuthRef.current) {
+      unsubAuthRef.current();
+      unsubAuthRef.current = null;
+    }
     setAuthUser(null);
     setCloudReady(false);
     setCloudConnectError(null);
