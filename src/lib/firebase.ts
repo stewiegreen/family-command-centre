@@ -4,7 +4,7 @@
 import type { FirebaseApp } from 'firebase/app';
 import type { Auth, User } from 'firebase/auth';
 import type { Firestore } from 'firebase/firestore';
-import type { FamilyData, FirebaseConfig, Invite, JournalEntry, Member, Message, Role } from '../types';
+import type { FamilyData, FirebaseConfig, Invite, JournalEntry, Member, Message, Role, TicTacToeGame, TicCell } from '../types';
 import { MEMBER_COLORS, MEMBER_EMOJIS, migratePayload } from './defaults';
 import { makeFamilyCode, makeInviteCode, uid } from './uid';
 import { CURRENT_USER_KEY, FAMILY_ID_KEY } from './storage';
@@ -719,3 +719,115 @@ export function onAuthStateChanged(callback: (user: User | null) => void): () =>
 }
 
 export type { User };
+
+
+// ─── Multiplayer games (families/{id}/games) ───────────────────────────────
+
+function gamesCol(familyId: string) {
+  return fsMod!.collection(db!, 'families', familyId, 'games');
+}
+
+function gameDocToTtt(id: string, data: Record<string, unknown>): TicTacToeGame {
+  const board = (data.board as TicCell[]) || ['', '', '', '', '', '', '', '', ''];
+  return {
+    id,
+    type: 'tictactoe',
+    status: (data.status as TicTacToeGame['status']) || 'waiting',
+    hostMemberId: String(data.hostMemberId || ''),
+    hostUid: String(data.hostUid || ''),
+    guestMemberId: (data.guestMemberId as string | null) ?? null,
+    guestUid: (data.guestUid as string | null) ?? null,
+    board: board.length === 9 ? board : ['', '', '', '', '', '', '', '', ''],
+    turn: data.turn === 'O' ? 'O' : 'X',
+    winner: (data.winner as TicTacToeGame['winner']) ?? null,
+    createdAt: String(data.createdAt || ''),
+    updatedAt: String(data.updatedAt || ''),
+  };
+}
+
+/** Live list of recent family games (waiting / active / finished). */
+export function subscribeGames(
+  familyId: string,
+  onData: (games: TicTacToeGame[]) => void,
+  onError: (err: Error) => void,
+): () => void {
+  if (!db || !fsMod) {
+    onError(new Error('Cloud not connected'));
+    return () => {};
+  }
+  const q = fsMod.query(gamesCol(familyId), fsMod.orderBy('updatedAt', 'desc'), fsMod.limit(30));
+  return fsMod.onSnapshot(
+    q,
+    (snap) => {
+      const list = snap.docs
+        .map((d) => gameDocToTtt(d.id, d.data() as Record<string, unknown>))
+        .filter((g) => g.type === 'tictactoe');
+      onData(list);
+    },
+    (err) => onError(err instanceof Error ? err : new Error(String(err))),
+  );
+}
+
+export async function cloudCreateTicTacToe(
+  familyId: string,
+  host: { memberId: string; uid: string },
+): Promise<TicTacToeGame> {
+  if (!db || !fsMod) throw new Error('Cloud not connected');
+  const id = uid();
+  const now = new Date().toISOString();
+  const game: TicTacToeGame = {
+    id,
+    type: 'tictactoe',
+    status: 'waiting',
+    hostMemberId: host.memberId,
+    hostUid: host.uid,
+    guestMemberId: null,
+    guestUid: null,
+    board: ['', '', '', '', '', '', '', '', ''],
+    turn: 'X',
+    winner: null,
+    createdAt: now,
+    updatedAt: now,
+  };
+  const { id: _id, ...payload } = game;
+  await fsMod.setDoc(fsMod.doc(gamesCol(familyId), id), payload);
+  return game;
+}
+
+export async function cloudJoinTicTacToe(
+  familyId: string,
+  gameId: string,
+  guest: { memberId: string; uid: string },
+): Promise<void> {
+  if (!db || !fsMod) throw new Error('Cloud not connected');
+  const ref = fsMod.doc(gamesCol(familyId), gameId);
+  await fsMod.updateDoc(ref, {
+    guestMemberId: guest.memberId,
+    guestUid: guest.uid,
+    status: 'active',
+    updatedAt: new Date().toISOString(),
+  });
+}
+
+export async function cloudTicTacToeMove(
+  familyId: string,
+  gameId: string,
+  board: TicCell[],
+  turn: 'X' | 'O',
+  winner: TicTacToeGame['winner'],
+  status: TicTacToeGame['status'],
+): Promise<void> {
+  if (!db || !fsMod) throw new Error('Cloud not connected');
+  await fsMod.updateDoc(fsMod.doc(gamesCol(familyId), gameId), {
+    board,
+    turn,
+    winner,
+    status,
+    updatedAt: new Date().toISOString(),
+  });
+}
+
+export async function cloudDeleteGame(familyId: string, gameId: string): Promise<void> {
+  if (!db || !fsMod) throw new Error('Cloud not connected');
+  await fsMod.deleteDoc(fsMod.doc(gamesCol(familyId), gameId));
+}

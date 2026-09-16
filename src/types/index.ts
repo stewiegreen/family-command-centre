@@ -1,6 +1,6 @@
 export type Role = 'parent' | 'kid' | 'media';
 export type Priority = 'low' | 'medium' | 'high';
-export type ViewId = 'dashboard' | 'calendar' | 'todos' | 'chores' | 'school' | 'shopping' | 'recipes' | 'notes' | 'journal' | 'messages' | 'media' | 'themestudio' | 'settings';
+export type ViewId = 'dashboard' | 'calendar' | 'todos' | 'chores' | 'school' | 'shopping' | 'recipes' | 'notes' | 'journal' | 'messages' | 'media' | 'themestudio' | 'play' | 'settings';
 export type SyncStatus = 'local' | 'connecting' | 'live' | 'error' | 'auth';
 export type ChoreCadence = 'daily' | 'weekly' | 'once'; // legacy
 export type ChoreStatus = 'open' | 'pending' | 'done';
@@ -808,3 +808,24 @@ export interface Invite {
   usedBy?: string | null;
   usedAt?: string;
 }
+
+
+/** Live multiplayer games (Firestore subcollection families/{id}/games). */
+export type GameType = 'tictactoe';
+export type TicCell = '' | 'X' | 'O';
+export type TicTacToeGame = {
+  id: string;
+  type: 'tictactoe';
+  status: 'waiting' | 'active' | 'finished';
+  hostMemberId: string;
+  hostUid: string;
+  guestMemberId: string | null;
+  guestUid: string | null;
+  /** Length 9, row-major. */
+  board: TicCell[];
+  turn: 'X' | 'O';
+  /** X = host, O = guest. null while in progress. */
+  winner: null | 'X' | 'O' | 'draw';
+  createdAt: string;
+  updatedAt: string;
+};

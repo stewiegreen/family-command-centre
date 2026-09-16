@@ -14,6 +14,7 @@ export const DEFAULT_NAV_ORDER: ViewId[] = [
   'messages',
   'media',
   'themestudio',
+  'play',
 ];
 
 const NAV_SET = new Set<string>(DEFAULT_NAV_ORDER);

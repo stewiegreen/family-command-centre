@@ -5,7 +5,9 @@ import {
   CheckSquare,
   Sword,
   StickyNote,
-  BookOpen, GraduationCap,
+  BookOpen,
+  Gamepad2,
+  GraduationCap,
   ChefHat,
   MessageCircle,
   Film,
@@ -51,6 +53,7 @@ const NAV: { id: ViewId; label: string; icon: typeof Home }[] = [
   { id: 'messages', label: 'Messages', icon: MessageCircle },
   { id: 'media', label: 'Media', icon: Film },
   { id: 'themestudio', label: 'Theme Studio', icon: Palette },
+  { id: 'play', label: 'Play', icon: Gamepad2 },
 ];
 
 const SIDEBAR_KEY = 'fcc-sidebar-collapsed';
