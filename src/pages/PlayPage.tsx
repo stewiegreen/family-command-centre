@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Gamepad2, Loader2, Trash2, UserPlus, X } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Avatar } from '../components/ui/Avatar';
@@ -772,15 +772,27 @@ function BsBoard({
   const [horizontal, setHorizontal] = useState(true);
   const [busy, setBusy] = useState(false);
   const [fleetLoaded, setFleetLoaded] = useState(false);
+  /** Keep fleet in memory so every shot does not wait on a Firestore getDoc. */
+  const fleetRef = useRef<Fleet | null>(null);
+  /** Avoid double-resolve of the same pending shot (Strict Mode / snapshot churn). */
+  const resolvingKeyRef = useRef<string | null>(null);
+  const gameRef = useRef(game);
+  gameRef.current = game;
+  const hostNameRef = useRef(host?.name);
+  hostNameRef.current = host?.name;
+  const guestNameRef = useRef(guest?.name);
+  guestNameRef.current = guest?.name;
 
-  // Load own fleet when placing/active
+  // Load own fleet once per game (placement + combat reuse the cache)
   useEffect(() => {
     if (!role) return;
     let cancelled = false;
     void (async () => {
       try {
         const f = await cloudLoadFleet(familyId, game.id, authUid);
-        if (!cancelled && f?.ships?.length) {
+        if (cancelled) return;
+        if (f?.ships?.length) {
+          fleetRef.current = f;
           setShips(f.ships);
           setPlacingType(null);
         }
@@ -795,7 +807,14 @@ function BsBoard({
     };
   }, [familyId, game.id, authUid, role]);
 
-  // Defender resolves pending shots aimed at us
+  // Keep cache in sync when local placement changes
+  useEffect(() => {
+    if (ships.length && role) {
+      fleetRef.current = { uid: authUid, ships };
+    }
+  }, [ships, role, authUid]);
+
+  // Defender resolves pending shots aimed at us — no cancel of in-flight writes
   useEffect(() => {
     if (!role || game.status !== 'active' || !game.pendingShot) return;
     const pending = game.pendingShot;
@@ -804,22 +823,38 @@ function BsBoard({
       (pending.shooter === 'guest' && role === 'host');
     if (!iAmDefender) return;
 
-    let cancelled = false;
+    const key = `${pending.shooter}:${pending.cell}`;
+    if (resolvingKeyRef.current === key) return;
+    resolvingKeyRef.current = key;
+
     void (async () => {
       setBusy(true);
       try {
-        let fleet = await cloudLoadFleet(familyId, game.id, authUid);
+        let fleet = fleetRef.current;
         if (!fleet?.ships?.length) {
-          // Should not happen mid-game
+          fleet = await cloudLoadFleet(familyId, game.id, authUid);
+          if (fleet?.ships?.length) fleetRef.current = fleet;
+        }
+        if (!fleet?.ships?.length) {
           setErr('Could not load your fleet to resolve the shot.');
+          resolvingKeyRef.current = null;
           return;
         }
-        const shotsAgainstMe = role === 'host' ? game.guestShots : game.hostShots;
+
+        // Always read latest shot lists from ref (avoids stale closure after lag)
+        const g = gameRef.current;
+        const shotsAgainstMe = role === 'host' ? g.guestShots : g.hostShots;
+        // Skip if this cell was already resolved (duplicate effect)
+        if (shotsAgainstMe.some((s) => s.cell === pending.cell && s.result != null)) {
+          resolvingKeyRef.current = null;
+          return;
+        }
+
         const priorHits = hitCellsFromShots(shotsAgainstMe);
         const resolved = resolveShotFull(fleet, pending.cell, priorHits);
 
-        const hostShots = [...game.hostShots];
-        const guestShots = [...game.guestShots];
+        const hostShots = [...g.hostShots];
+        const guestShots = [...g.guestShots];
         const shotEntry: (typeof hostShots)[number] = {
           cell: pending.cell,
           result: resolved.result,
@@ -836,10 +871,13 @@ function BsBoard({
           lastEvent = `Sunk — ${SHIP_LABEL[resolved.sunkShip]}!`;
         }
         if (allSunk) {
-          lastEvent = `${pending.shooter === 'host' ? host?.name || 'Host' : guest?.name || 'Guest'} wins!`;
+          const name =
+            pending.shooter === 'host'
+              ? hostNameRef.current || 'Host'
+              : guestNameRef.current || 'Guest';
+          lastEvent = `${name} wins!`;
         }
 
-        if (cancelled) return;
         await cloudBattleshipResolve(familyId, game.id, {
           hostShots,
           guestShots,
@@ -849,18 +887,14 @@ function BsBoard({
           winner,
           lastEvent,
         });
-        if (allSunk && pending.shooter !== role) {
-          // we lost — no confetti
-        }
       } catch (e) {
-        if (!cancelled) setErr(e instanceof Error ? e.message : String(e));
+        setErr(e instanceof Error ? e.message : String(e));
+        // Allow retry on next snapshot
+        resolvingKeyRef.current = null;
       } finally {
-        if (!cancelled) setBusy(false);
+        setBusy(false);
       }
     })();
-    return () => {
-      cancelled = true;
-    };
   }, [
     game.pendingShot?.cell,
     game.pendingShot?.shooter,
@@ -870,6 +904,11 @@ function BsBoard({
     game.id,
     authUid,
   ]);
+
+  // Clear resolve lock when pending shot clears
+  useEffect(() => {
+    if (!game.pendingShot) resolvingKeyRef.current = null;
+  }, [game.pendingShot]);
 
   // Confetti when we win
   useEffect(() => {
