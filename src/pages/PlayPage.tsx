@@ -820,19 +820,13 @@ function BsBoard({
 
         const hostShots = [...game.hostShots];
         const guestShots = [...game.guestShots];
-        if (pending.shooter === 'host') {
-          hostShots.push({
-            cell: pending.cell,
-            result: resolved.result,
-            sunkShip: resolved.sunkShip,
-          });
-        } else {
-          guestShots.push({
-            cell: pending.cell,
-            result: resolved.result,
-            sunkShip: resolved.sunkShip,
-          });
-        }
+        const shotEntry: (typeof hostShots)[number] = {
+          cell: pending.cell,
+          result: resolved.result,
+        };
+        if (resolved.sunkShip) shotEntry.sunkShip = resolved.sunkShip;
+        if (pending.shooter === 'host') hostShots.push(shotEntry);
+        else guestShots.push(shotEntry);
 
         const shotsNowAgainstMe = role === 'host' ? guestShots : hostShots;
         const allSunk = isFleetSunk(fleet, shotsNowAgainstMe);

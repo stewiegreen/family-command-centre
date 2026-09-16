@@ -1024,6 +1024,14 @@ export async function cloudBattleshipFire(
 }
 
 /** Defender resolves pending shot against their private fleet. */
+function sanitizeShots(shots: BattleshipShot[]): BattleshipShot[] {
+  return shots.map((s) => {
+    const out: BattleshipShot = { cell: s.cell, result: s.result ?? null };
+    if (s.sunkShip) out.sunkShip = s.sunkShip;
+    return out;
+  });
+}
+
 export async function cloudBattleshipResolve(
   familyId: string,
   gameId: string,
@@ -1038,8 +1046,16 @@ export async function cloudBattleshipResolve(
   },
 ): Promise<void> {
   if (!db || !fsMod) throw new Error('Cloud not connected');
-  await fsMod.updateDoc(fsMod.doc(gamesCol(familyId), gameId), {
-    ...patch,
+  // Firestore rejects `undefined` anywhere in the payload (e.g. sunkShip?: undefined).
+  const payload: Record<string, unknown> = {
+    hostShots: sanitizeShots(patch.hostShots),
+    guestShots: sanitizeShots(patch.guestShots),
+    pendingShot: null,
+    turn: patch.turn,
+    status: patch.status,
+    winner: patch.winner ?? null,
+    lastEvent: patch.lastEvent || null,
     updatedAt: new Date().toISOString(),
-  });
+  };
+  await fsMod.updateDoc(fsMod.doc(gamesCol(familyId), gameId), payload);
 }
