@@ -39,6 +39,7 @@ import {
 import { registerFcmToken, syncFcmToken, disableFcmForMember } from '../lib/fcm';
 import { hasLocalThemeStudioUnlock } from '../lib/themeStudioUnlock';
 import { isNavViewId, reorderNavDrop } from '../lib/navOrder';
+import { todaySeed } from '../lib/wordle';
 
 const NAV: { id: ViewId; label: string; icon: typeof Home }[] = [
   { id: 'dashboard', label: 'Home', icon: Home },
@@ -485,7 +486,8 @@ export function Layout({ children }: { children: ReactNode }) {
               ) : null}
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <WordleHeaderChip />
             <WeatherHeaderChip />
             <button
               type="button"
@@ -659,6 +661,69 @@ export function Layout({ children }: { children: ReactNode }) {
       <ProfileSwitcher open={switcherOpen} onClose={() => setSwitcherOpen(false)} />
 
     </div>
+  );
+}
+
+
+/** Always-visible daily Wordle competition strip in the main header. */
+function WordleHeaderChip() {
+  const { data, getMember, setView, currentUser } = useApp();
+  const seed = todaySeed();
+  const daily = data.wordleDaily;
+  const solves =
+    daily && daily.seed === seed
+      ? [...daily.solves].sort(
+          (a, b) => a.guesses - b.guesses || a.at.localeCompare(b.at),
+        )
+      : [];
+
+  const iSolved = currentUser
+    ? solves.some((s) => s.memberId === currentUser.id)
+    : false;
+
+  let label: string;
+  if (solves.length === 0) {
+    label = 'Wordle · open';
+  } else {
+    const bits = solves.slice(0, 4).map((s) => {
+      const m = getMember(s.memberId);
+      const name = (m?.name || s.name).split(' ')[0] || 'Someone';
+      return `${name} ${s.guesses}/6`;
+    });
+    const extra = solves.length > 4 ? ` +${solves.length - 4}` : '';
+    label = `Wordle · ${bits.join(' · ')}${extra}`;
+  }
+
+  const title =
+    solves.length === 0
+      ? "Nobody has solved today's Wordle yet — tap to play"
+      : `Today's solvers: ${solves
+          .map((s) => {
+            const m = getMember(s.memberId);
+            return `${m?.name || s.name} (${s.guesses}/6)`;
+          })
+          .join(', ')}`;
+
+  return (
+    <button
+      type="button"
+      onClick={() => setView('play')}
+      title={title}
+      className={cn(
+        'flex max-w-[42vw] sm:max-w-[50vw] md:max-w-sm lg:max-w-md truncate items-center gap-1.5',
+        'text-[11px] sm:text-xs font-semibold rounded-full px-2.5 py-1 border transition-colors',
+        solves.length === 0
+          ? 'border-border text-muted hover:border-accent/40 hover:text-accent hover:bg-accent/5'
+          : iSolved
+            ? 'border-success/40 text-success bg-success/10 hover:bg-success/15'
+            : 'border-accent/40 text-accent bg-accent/10 hover:bg-accent/15',
+      )}
+    >
+      <span className="shrink-0" aria-hidden>
+        {solves.length === 0 ? '🔤' : iSolved ? '✅' : '🏆'}
+      </span>
+      <span className="truncate">{label}</span>
+    </button>
   );
 }
 
