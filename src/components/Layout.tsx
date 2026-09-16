@@ -683,21 +683,21 @@ function WordleHeaderChip() {
 
   let label: string;
   if (solves.length === 0) {
-    label = 'Wordle · open';
+    label = "Today's Wordle — nobody yet";
   } else {
-    const bits = solves.slice(0, 4).map((s) => {
+    const bits = solves.slice(0, 5).map((s) => {
       const m = getMember(s.memberId);
       const name = (m?.name || s.name).split(' ')[0] || 'Someone';
-      return `${name} ${s.guesses}/6`;
+      return `${name} (${s.guesses}/6)`;
     });
-    const extra = solves.length > 4 ? ` +${solves.length - 4}` : '';
-    label = `Wordle · ${bits.join(' · ')}${extra}`;
+    const extra = solves.length > 5 ? ` +${solves.length - 5}` : '';
+    label = `Today's solvers: ${bits.join(', ')}${extra}`;
   }
 
   const title =
     solves.length === 0
       ? "Nobody has solved today's Wordle yet — tap to play"
-      : `Today's solvers: ${solves
+      : `Today's Wordle solvers: ${solves
           .map((s) => {
             const m = getMember(s.memberId);
             return `${m?.name || s.name} (${s.guesses}/6)`;
@@ -710,7 +710,7 @@ function WordleHeaderChip() {
       onClick={() => setView('play')}
       title={title}
       className={cn(
-        'flex max-w-[42vw] sm:max-w-[50vw] md:max-w-sm lg:max-w-md truncate items-center gap-1.5',
+        'flex max-w-[55vw] sm:max-w-[60vw] md:max-w-md lg:max-w-xl truncate items-center gap-1.5',
         'text-[11px] sm:text-xs font-semibold rounded-full px-2.5 py-1 border transition-colors',
         solves.length === 0
           ? 'border-border text-muted hover:border-accent/40 hover:text-accent hover:bg-accent/5'
