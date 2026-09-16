@@ -43,6 +43,16 @@ import {
   shipCells,
 } from '../lib/battleship';
 import { fireConfetti } from '../lib/confetti';
+import {
+  WORDLE_LEN,
+  WORDLE_ROWS,
+  evaluateStatus,
+  isValidGuess,
+  newWordleGame,
+  scoreGuess,
+  type LetterState,
+  type WordleState,
+} from '../lib/wordle';
 import { cn } from '../lib/cn';
 import type {
   BattleshipGame,
@@ -74,6 +84,7 @@ export function PlayPage() {
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [solo, setSolo] = useState<'wordle' | 'wordle-random' | null>(null);
 
   useEffect(() => {
     if (!familyId || !authUid) {
@@ -259,18 +270,7 @@ export function PlayPage() {
     );
   }
 
-  if (!familyId || !authUid) {
-    return (
-      <div className="max-w-lg mx-auto p-4 space-y-3">
-        <h1 className="text-xl font-bold text-fg flex items-center gap-2">
-          <Gamepad2 className="w-6 h-6 text-accent" /> Play
-        </h1>
-        <Card className="p-4 text-sm text-muted">
-          Multiplayer needs cloud sync and each player signed in on their own device.
-        </Card>
-      </div>
-    );
-  }
+  const cloudOk = !!(familyId && authUid);
 
   return (
     <div className="max-w-xl mx-auto p-4 space-y-5 pb-16">
@@ -279,7 +279,7 @@ export function PlayPage() {
           <Gamepad2 className="w-6 h-6 text-accent" /> Play
         </h1>
         <p className="text-sm text-muted mt-1">
-          Games for two devices — start a lobby, sibling joins from their phone.
+          Solo games work on one device. Multiplayer needs each player signed in on their own phone.
         </p>
       </div>
 
@@ -295,14 +295,14 @@ export function PlayPage() {
             Classic is normal 3-in-a-row. Infinite: only 3 marks each — your 4th removes the oldest.
           </p>
           <div className="flex flex-wrap gap-2 mt-2">
-            <Button size="sm" onClick={() => void startTtt('tictactoe')} disabled={busy}>
+            <Button size="sm" onClick={() => void startTtt('tictactoe')} disabled={busy || !cloudOk}>
               Classic Tic-Tac-Toe
             </Button>
             <Button
               size="sm"
               variant="secondary"
               onClick={() => void startTtt('tictactoe_infinite')}
-              disabled={busy}
+              disabled={busy || !cloudOk}
             >
               Infinite Tic-Tac-Toe
             </Button>
@@ -314,7 +314,7 @@ export function PlayPage() {
             Drop discs in a column — first to get four in a row wins. Host is red, guest is yellow.
           </p>
           <div className="mt-2">
-            <Button size="sm" onClick={() => void startC4()} disabled={busy}>
+            <Button size="sm" onClick={() => void startC4()} disabled={busy || !cloudOk}>
               New Connect 4
             </Button>
           </div>
@@ -325,10 +325,44 @@ export function PlayPage() {
             Hide your fleet, take turns firing. Ship positions stay private — only you can see yours.
           </p>
           <div className="mt-2">
-            <Button size="sm" onClick={() => void startBs()} disabled={busy}>
+            <Button size="sm" onClick={() => void startBs()} disabled={busy || !cloudOk}>
               New Battleship
             </Button>
           </div>
+        </div>
+        {!cloudOk && (
+          <p className="text-xs text-muted border-t border-border pt-3">
+            Multiplayer is offline until cloud sync is connected. Wordle still works below.
+          </p>
+        )}
+      </Card>
+
+      <Card className="p-4 space-y-2">
+        <h2 className="text-sm font-bold text-fg">Wordle</h2>
+        <p className="text-xs text-muted">
+          Guess the 5-letter word in 6 tries. Solo — no opponent needed. Daily is the same word for
+          everyone today; Random is a new puzzle each time.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            onClick={() => {
+              setActiveId(null);
+              setSolo('wordle');
+            }}
+          >
+            Daily Wordle
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => {
+              setActiveId(null);
+              setSolo('wordle-random');
+            }}
+          >
+            Random Wordle
+          </Button>
         </div>
       </Card>
 
@@ -364,6 +398,14 @@ export function PlayPage() {
           onClose={() => setActiveId(null)}
           onCancel={() => void cancelGame(active)}
           setErr={setErr}
+        />
+      )}
+
+      {solo && (
+        <WordleBoard
+          key={solo}
+          mode={solo === 'wordle' ? 'daily' : 'random'}
+          onClose={() => setSolo(null)}
         />
       )}
 
@@ -1222,5 +1264,265 @@ function BsGrid({
         />
       ))}
     </div>
+  );
+}
+
+
+const KEY_ROWS = ['qwertyuiop', 'asdfghjkl', 'zxcvbnm'];
+
+function WordleBoard({
+  mode,
+  onClose,
+}: {
+  mode: 'daily' | 'random';
+  onClose: () => void;
+}) {
+  const [game, setGame] = useState<WordleState>(() => newWordleGame(mode));
+  const [current, setCurrent] = useState('');
+  const [msg, setMsg] = useState<string | null>(null);
+  const [shake, setShake] = useState(false);
+
+  const gameRef = useRef(game);
+  gameRef.current = game;
+  const currentRef = useRef(current);
+  currentRef.current = current;
+
+  // Physical keyboard
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (gameRef.current.status !== 'playing') return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const k = e.key;
+      if (k === 'Enter') {
+        e.preventDefault();
+        // Trigger via custom event path: reuse button logic by synthesizing
+        const cur = currentRef.current;
+        const g = gameRef.current;
+        if (cur.length !== WORDLE_LEN) {
+          setMsg('Need 5 letters');
+          setShake(true);
+          window.setTimeout(() => setShake(false), 400);
+          return;
+        }
+        if (!isValidGuess(cur)) {
+          setMsg('Not in word list');
+          setShake(true);
+          window.setTimeout(() => setShake(false), 400);
+          return;
+        }
+        const guesses = [...g.guesses, cur];
+        const status = evaluateStatus(guesses, g.answer);
+        setGame({ ...g, guesses, status });
+        setCurrent('');
+        setMsg(null);
+        if (status === 'won') {
+          fireConfetti({ count: 140, power: 14, origin: { x: 0.5, y: 0.4 } });
+        }
+        return;
+      }
+      if (k === 'Backspace') {
+        e.preventDefault();
+        setCurrent((c) => c.slice(0, -1));
+        return;
+      }
+      if (/^[a-zA-Z]$/.test(k)) {
+        setCurrent((c) => (c.length < WORDLE_LEN ? c + k.toLowerCase() : c));
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  const letterBest: Record<string, LetterState> = {};
+  for (const g of game.guesses) {
+    const states = scoreGuess(g, game.answer);
+    for (let i = 0; i < WORDLE_LEN; i++) {
+      const ch = g[i]!;
+      const st = states[i]!;
+      const prev = letterBest[ch];
+      if (st === 'correct' || (st === 'present' && prev !== 'correct') || !prev) {
+        if (prev === 'correct') continue;
+        if (prev === 'present' && st === 'absent') continue;
+        letterBest[ch] = st;
+      }
+    }
+  }
+
+  const submit = () => {
+    if (game.status !== 'playing') return;
+    if (current.length !== WORDLE_LEN) {
+      flash('Need 5 letters');
+      return;
+    }
+    if (!isValidGuess(current)) {
+      flash('Not in word list');
+      return;
+    }
+    const guesses = [...game.guesses, current];
+    const status = evaluateStatus(guesses, game.answer);
+    setGame({ ...game, guesses, status });
+    setCurrent('');
+    setMsg(null);
+    if (status === 'won') {
+      fireConfetti({ count: 140, power: 14, origin: { x: 0.5, y: 0.4 } });
+    }
+  };
+
+  const flash = (text: string) => {
+    setMsg(text);
+    setShake(true);
+    window.setTimeout(() => setShake(false), 400);
+  };
+
+  const onKeyPad = (key: string) => {
+    if (game.status !== 'playing') return;
+    if (key === 'enter') {
+      submit();
+      return;
+    }
+    if (key === 'del') {
+      setCurrent((c) => c.slice(0, -1));
+      return;
+    }
+    if (current.length < WORDLE_LEN) setCurrent((c) => c + key);
+  };
+
+  const restart = (m: 'daily' | 'random') => {
+    setGame(newWordleGame(m));
+    setCurrent('');
+    setMsg(null);
+  };
+
+  const rows: { letters: string; states: LetterState[] }[] = [];
+  for (let r = 0; r < WORDLE_ROWS; r++) {
+    if (r < game.guesses.length) {
+      const g = game.guesses[r]!;
+      rows.push({ letters: g, states: scoreGuess(g, game.answer) });
+    } else if (r === game.guesses.length && game.status === 'playing') {
+      const letters = current.padEnd(WORDLE_LEN, ' ');
+      rows.push({
+        letters,
+        states: Array.from({ length: WORDLE_LEN }, () => 'empty'),
+      });
+    } else {
+      rows.push({
+        letters: '     ',
+        states: Array.from({ length: WORDLE_LEN }, () => 'empty'),
+      });
+    }
+  }
+
+  return (
+    <Card className="p-4 space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-wide text-muted">Wordle</p>
+          <p className="text-sm font-semibold text-fg">
+            {mode === 'daily' ? `Daily · ${game.seed}` : 'Random puzzle'}
+          </p>
+        </div>
+        <button type="button" onClick={onClose} className="p-1.5 rounded-lg hover:bg-surface-2 text-muted">
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+
+      {msg && (
+        <p className="text-center text-xs font-semibold text-warn">{msg}</p>
+      )}
+      {game.status === 'won' && (
+        <p className="text-center text-sm font-bold text-success">You got it! 🎉</p>
+      )}
+      {game.status === 'lost' && (
+        <p className="text-center text-sm font-bold text-fg">
+          The word was <span className="text-accent uppercase">{game.answer}</span>
+        </p>
+      )}
+
+      <div className={cn('space-y-1.5 mx-auto w-full max-w-[280px]', shake && 'animate-pulse')}>
+        {rows.map((row, ri) => (
+          <div key={ri} className="grid grid-cols-5 gap-1.5">
+            {Array.from({ length: WORDLE_LEN }, (_, ci) => {
+              const ch = row.letters[ci] || ' ';
+              const st = row.states[ci]!;
+              return (
+                <div
+                  key={ci}
+                  className={cn(
+                    'aspect-square rounded-md border-2 flex items-center justify-center text-lg font-black uppercase',
+                    st === 'correct' && 'bg-emerald-500 border-emerald-400 text-white',
+                    st === 'present' && 'bg-amber-400 border-amber-300 text-slate-900',
+                    st === 'absent' && 'bg-slate-600 border-slate-500 text-slate-200',
+                    st === 'empty' &&
+                      (ch.trim()
+                        ? 'border-fg/40 bg-surface-2 text-fg'
+                        : 'border-border bg-surface-2/40 text-transparent'),
+                  )}
+                >
+                  {ch.trim() || '·'}
+                </div>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+
+      {/* On-screen keyboard */}
+      <div className="space-y-1.5 pt-1">
+        {KEY_ROWS.map((row, ri) => (
+          <div key={row} className="flex justify-center gap-1">
+            {ri === 2 && (
+              <button
+                type="button"
+                onClick={() => onKeyPad('enter')}
+                className="px-2 h-11 rounded-md text-[10px] font-bold uppercase bg-surface-2 border border-border text-fg"
+              >
+                Enter
+              </button>
+            )}
+            {row.split('').map((ch) => {
+              const st = letterBest[ch];
+              return (
+                <button
+                  key={ch}
+                  type="button"
+                  onClick={() => onKeyPad(ch)}
+                  className={cn(
+                    'w-8 h-11 sm:w-9 rounded-md text-sm font-bold uppercase border',
+                    st === 'correct' && 'bg-emerald-500 border-emerald-400 text-white',
+                    st === 'present' && 'bg-amber-400 border-amber-300 text-slate-900',
+                    st === 'absent' && 'bg-slate-700 border-slate-600 text-slate-400',
+                    !st && 'bg-surface-2 border-border text-fg',
+                  )}
+                >
+                  {ch}
+                </button>
+              );
+            })}
+            {ri === 2 && (
+              <button
+                type="button"
+                onClick={() => onKeyPad('del')}
+                className="px-2 h-11 rounded-md text-[10px] font-bold uppercase bg-surface-2 border border-border text-fg"
+              >
+                Del
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="flex justify-center gap-2 pt-1">
+        <Button size="sm" variant="secondary" onClick={() => restart(mode)}>
+          {mode === 'daily' ? 'Reset daily' : 'New random'}
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => restart(mode === 'daily' ? 'random' : 'daily')}
+        >
+          Switch to {mode === 'daily' ? 'random' : 'daily'}
+        </Button>
+      </div>
+    </Card>
   );
 }
