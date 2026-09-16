@@ -729,9 +729,10 @@ function gamesCol(familyId: string) {
 
 function gameDocToTtt(id: string, data: Record<string, unknown>): TicTacToeGame {
   const board = (data.board as TicCell[]) || ['', '', '', '', '', '', '', '', ''];
+  const type = data.type === 'tictactoe_infinite' ? 'tictactoe_infinite' : 'tictactoe';
   return {
     id,
-    type: 'tictactoe',
+    type,
     status: (data.status as TicTacToeGame['status']) || 'waiting',
     hostMemberId: String(data.hostMemberId || ''),
     hostUid: String(data.hostUid || ''),
@@ -740,6 +741,8 @@ function gameDocToTtt(id: string, data: Record<string, unknown>): TicTacToeGame 
     board: board.length === 9 ? board : ['', '', '', '', '', '', '', '', ''],
     turn: data.turn === 'O' ? 'O' : 'X',
     winner: (data.winner as TicTacToeGame['winner']) ?? null,
+    xMoves: Array.isArray(data.xMoves) ? (data.xMoves as number[]) : [],
+    oMoves: Array.isArray(data.oMoves) ? (data.oMoves as number[]) : [],
     createdAt: String(data.createdAt || ''),
     updatedAt: String(data.updatedAt || ''),
   };
@@ -761,7 +764,7 @@ export function subscribeGames(
     (snap) => {
       const list = snap.docs
         .map((d) => gameDocToTtt(d.id, d.data() as Record<string, unknown>))
-        .filter((g) => g.type === 'tictactoe');
+        .filter((g) => g.type === 'tictactoe' || g.type === 'tictactoe_infinite');
       onData(list);
     },
     (err) => onError(err instanceof Error ? err : new Error(String(err))),
@@ -771,13 +774,14 @@ export function subscribeGames(
 export async function cloudCreateTicTacToe(
   familyId: string,
   host: { memberId: string; uid: string },
+  mode: 'tictactoe' | 'tictactoe_infinite' = 'tictactoe',
 ): Promise<TicTacToeGame> {
   if (!db || !fsMod) throw new Error('Cloud not connected');
   const id = uid();
   const now = new Date().toISOString();
   const game: TicTacToeGame = {
     id,
-    type: 'tictactoe',
+    type: mode,
     status: 'waiting',
     hostMemberId: host.memberId,
     hostUid: host.uid,
@@ -786,6 +790,8 @@ export async function cloudCreateTicTacToe(
     board: ['', '', '', '', '', '', '', '', ''],
     turn: 'X',
     winner: null,
+    xMoves: [],
+    oMoves: [],
     createdAt: now,
     updatedAt: now,
   };
@@ -812,17 +818,18 @@ export async function cloudJoinTicTacToe(
 export async function cloudTicTacToeMove(
   familyId: string,
   gameId: string,
-  board: TicCell[],
-  turn: 'X' | 'O',
-  winner: TicTacToeGame['winner'],
-  status: TicTacToeGame['status'],
+  patch: {
+    board: TicCell[];
+    turn: 'X' | 'O';
+    winner: TicTacToeGame['winner'];
+    status: TicTacToeGame['status'];
+    xMoves: number[];
+    oMoves: number[];
+  },
 ): Promise<void> {
   if (!db || !fsMod) throw new Error('Cloud not connected');
   await fsMod.updateDoc(fsMod.doc(gamesCol(familyId), gameId), {
-    board,
-    turn,
-    winner,
-    status,
+    ...patch,
     updatedAt: new Date().toISOString(),
   });
 }

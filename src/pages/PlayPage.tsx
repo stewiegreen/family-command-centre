@@ -12,10 +12,10 @@ import {
   getFirebaseAuth,
   subscribeGames,
 } from '../lib/firebase';
-import { checkWinner, winningLine } from '../lib/ticTacToe';
+import { applyMove, gameModeLabel, isInfiniteTtt, winningLine } from '../lib/ticTacToe';
 import { fireConfetti } from '../lib/confetti';
 import { cn } from '../lib/cn';
-import type { Member, TicCell, TicTacToeGame } from '../types';
+import type { GameType, Member, TicCell, TicTacToeGame } from '../types';
 
 export function PlayPage() {
   const { data, currentUser, familyId, getMember } = useApp();
@@ -55,7 +55,7 @@ export function PlayPage() {
 
   const others = data.members.filter((m) => m.id !== me?.id && m.role !== 'media');
 
-  const startGame = async () => {
+  const startGame = async (mode: GameType = 'tictactoe') => {
     if (!familyId || !me || !authUid) {
       setErr('Sign in with your own account to play across devices.');
       return;
@@ -63,7 +63,11 @@ export function PlayPage() {
     setBusy(true);
     setErr(null);
     try {
-      const g = await cloudCreateTicTacToe(familyId, { memberId: me.id, uid: authUid });
+      const g = await cloudCreateTicTacToe(
+        familyId,
+        { memberId: me.id, uid: authUid },
+        mode,
+      );
       setActiveId(g.id);
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
@@ -102,16 +106,24 @@ export function PlayPage() {
     const myMark: TicCell = amHost ? 'X' : 'O';
     if (active.turn !== myMark) return;
 
-    const board = active.board.slice() as TicCell[];
-    board[index] = myMark;
-    const winner = checkWinner(board);
-    const status = winner ? 'finished' : 'active';
-    const turn = winner ? active.turn : myMark === 'X' ? 'O' : 'X';
+    let result;
+    try {
+      result = applyMove(active, index);
+    } catch {
+      return;
+    }
 
     setBusy(true);
     try {
-      await cloudTicTacToeMove(familyId, active.id, board, turn, winner, status);
-      if (winner && winner === myMark) {
+      await cloudTicTacToeMove(familyId, active.id, {
+        board: result.board,
+        turn: result.turn,
+        winner: result.winner,
+        status: result.status,
+        xMoves: result.xMoves,
+        oMoves: result.oMoves,
+      });
+      if (result.winner && result.winner === myMark) {
         fireConfetti({ count: 120, power: 14, origin: { x: 0.5, y: 0.4 } });
       }
     } catch (e) {
@@ -162,12 +174,18 @@ export function PlayPage() {
         <h1 className="text-xl font-bold text-fg flex items-center gap-2">
           <Gamepad2 className="w-6 h-6 text-accent" /> Play
         </h1>
-        <Button size="sm" onClick={() => void startGame()} disabled={busy}>
-          New Tic-Tac-Toe
-        </Button>
+        <div className="flex flex-col sm:flex-row gap-2 shrink-0">
+          <Button size="sm" onClick={() => void startGame('tictactoe')} disabled={busy}>
+            Classic
+          </Button>
+          <Button size="sm" variant="secondary" onClick={() => void startGame('tictactoe_infinite')} disabled={busy}>
+            Infinite
+          </Button>
+        </div>
       </div>
-      <p className="text-sm text-muted -mt-2">
-        Challenge someone in the family — each of you on your own device.
+      <p className="text-sm text-muted -mt-1">
+        Classic is normal 3-in-a-row. <strong className="text-fg font-medium">Infinite</strong>: each
+        player only keeps 3 marks — your 4th placement removes your oldest. Games rarely draw.
       </p>
 
       {err && (
@@ -223,7 +241,9 @@ export function PlayPage() {
                   <p className="font-medium text-fg truncate">
                     {getMember(g.hostMemberId)?.name || 'Someone'}&apos;s game
                   </p>
-                  <p className="text-xs text-muted">Waiting for an opponent · you&apos;ll be O</p>
+                  <p className="text-xs text-muted">
+                    {gameModeLabel(g.type)} · waiting · you&apos;ll be O
+                  </p>
                 </div>
                 <Button size="sm" onClick={() => void joinGame(g)} disabled={busy}>
                   <UserPlus className="w-4 h-4 mr-1" /> Join
@@ -266,16 +286,17 @@ function GameRow({
 }) {
   const host = getMember(game.hostMemberId);
   const guest = game.guestMemberId ? getMember(game.guestMemberId) : null;
+  const mode = gameModeLabel(game.type);
   const label =
     game.status === 'waiting'
-      ? 'Waiting…'
+      ? `${mode} · Waiting…`
       : game.status === 'finished'
         ? game.winner === 'draw'
-          ? 'Draw'
+          ? `${mode} · Draw`
           : game.winner === 'X'
-            ? `${host?.name || 'Host'} won`
-            : `${guest?.name || 'Guest'} won`
-        : 'In progress';
+            ? `${mode} · ${host?.name || 'Host'} won`
+            : `${mode} · ${guest?.name || 'Guest'} won`
+        : `${mode} · In progress`;
 
   return (
     <Card className="p-3 flex items-center gap-3">
@@ -328,14 +349,24 @@ function TttBoard({
   const myTurn = game.status === 'active' && myMark !== null && game.turn === myMark;
   const win = winningLine(game.board);
 
+  const infinite = isInfiniteTtt(game.type);
+  const myMoves = myMark === 'X' ? game.xMoves || [] : myMark === 'O' ? game.oMoves || [] : [];
+  /** Oldest mark will vanish on the next place (infinite, already 3 on board). */
+  const fadingIndex =
+    infinite && myTurn && myMoves.length >= 3 ? myMoves[0]! : null;
+
   let statusText = '';
   if (game.status === 'waiting') statusText = 'Waiting for someone to join…';
   else if (game.status === 'finished') {
     if (game.winner === 'draw') statusText = "It's a draw!";
     else if (game.winner === myMark) statusText = 'You win! 🎉';
     else statusText = `${game.winner === 'X' ? host?.name : guest?.name} wins`;
-  } else if (myTurn) statusText = 'Your turn';
-  else statusText = `${game.turn === 'X' ? host?.name : guest?.name}'s turn`;
+  } else if (myTurn) {
+    statusText =
+      infinite && myMoves.length >= 3
+        ? 'Your turn — next mark removes your oldest'
+        : 'Your turn';
+  } else statusText = `${game.turn === 'X' ? host?.name : guest?.name}'s turn`;
 
   return (
     <Card className="p-4 space-y-4">
@@ -362,6 +393,10 @@ function TttBoard({
         </button>
       </div>
 
+      <p className="text-center text-[10px] font-bold uppercase tracking-wide text-muted">
+        {gameModeLabel(game.type)} Tic-Tac-Toe
+        {infinite ? ' · max 3 marks each' : ''}
+      </p>
       <p
         className={cn(
           'text-center text-sm font-semibold',
@@ -389,12 +424,13 @@ function TttBoard({
                   : 'border-border bg-surface-2/50 text-fg',
                 canPlay && 'hover:border-accent/60 hover:bg-accent/10 cursor-pointer',
                 !canPlay && 'cursor-default',
+                fadingIndex === i && 'opacity-45 ring-2 ring-dashed ring-warn/60',
               )}
             >
               {cell === 'X' ? (
-                <span className="text-sky-400">X</span>
+                <span className={cn('text-sky-400', fadingIndex === i && 'line-through decoration-2')}>X</span>
               ) : cell === 'O' ? (
-                <span className="text-rose-400">O</span>
+                <span className={cn('text-rose-400', fadingIndex === i && 'line-through decoration-2')}>O</span>
               ) : (
                 <span className="opacity-0">·</span>
               )}

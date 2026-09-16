@@ -811,11 +811,11 @@ export interface Invite {
 
 
 /** Live multiplayer games (Firestore subcollection families/{id}/games). */
-export type GameType = 'tictactoe';
+export type GameType = 'tictactoe' | 'tictactoe_infinite';
 export type TicCell = '' | 'X' | 'O';
 export type TicTacToeGame = {
   id: string;
-  type: 'tictactoe';
+  type: GameType;
   status: 'waiting' | 'active' | 'finished';
   hostMemberId: string;
   hostUid: string;
@@ -826,6 +826,12 @@ export type TicTacToeGame = {
   turn: 'X' | 'O';
   /** X = host, O = guest. null while in progress. */
   winner: null | 'X' | 'O' | 'draw';
+  /**
+   * Infinite mode only: cell indices each player has on the board, oldest first.
+   * Max 3 — placing a 4th removes the oldest mark.
+   */
+  xMoves?: number[];
+  oMoves?: number[];
   createdAt: string;
   updatedAt: string;
 };
