@@ -681,49 +681,45 @@ function WordleHeaderChip() {
     ? solves.some((s) => s.memberId === currentUser.id)
     : false;
 
-  let label: string;
-  if (solves.length === 0) {
-    label = "Today's Wordle — nobody yet";
-  } else {
-    const bits = solves.slice(0, 5).map((s) => {
-      const m = getMember(s.memberId);
-      const name = (m?.name || s.name).split(' ')[0] || 'Someone';
-      return `${name} (${s.guesses}/6)`;
-    });
-    const extra = solves.length > 5 ? ` +${solves.length - 5}` : '';
-    label = `Today's solvers: ${bits.join(', ')}${extra}`;
-  }
-
-  const title =
+  const names =
     solves.length === 0
-      ? "Nobody has solved today's Wordle yet — tap to play"
-      : `Today's Wordle solvers: ${solves
+      ? 'nobody yet — tap to play'
+      : solves
           .map((s) => {
             const m = getMember(s.memberId);
-            return `${m?.name || s.name} (${s.guesses}/6)`;
+            const name = m?.name || s.name;
+            return `${name} (${s.guesses}/6)`;
           })
-          .join(', ')}`;
+          .join(', ');
+
+  const goPlay = () => {
+    setView('play');
+  };
 
   return (
     <button
       type="button"
-      onClick={() => setView('play')}
-      title={title}
+      onClick={() => goPlay()}
       className={cn(
-        'flex max-w-[55vw] sm:max-w-[60vw] md:max-w-md lg:max-w-xl truncate items-center gap-1.5',
-        'text-[11px] sm:text-xs font-semibold rounded-full px-2.5 py-1 border transition-colors',
+        'relative z-40 cursor-pointer select-none',
+        'flex items-center gap-1.5 max-w-[min(70vw,28rem)]',
+        'text-[11px] sm:text-xs font-semibold rounded-full px-3 py-1.5 border transition-colors',
+        'active:scale-[0.98]',
         solves.length === 0
-          ? 'border-border text-muted hover:border-accent/40 hover:text-accent hover:bg-accent/5'
+          ? 'border-border text-muted hover:border-accent/50 hover:text-accent hover:bg-accent/10'
           : iSolved
-            ? 'border-success/40 text-success bg-success/10 hover:bg-success/15'
-            : 'border-accent/40 text-accent bg-accent/10 hover:bg-accent/15',
+            ? 'border-success/50 text-success bg-success/10 hover:bg-success/20'
+            : 'border-accent/50 text-accent bg-accent/10 hover:bg-accent/20',
       )}
+      aria-label={`Today's Wordle Solvers: ${names}. Open Play.`}
     >
       <span className="shrink-0" aria-hidden>
-        {solves.length === 0 ? '🔤' : iSolved ? '✅' : '🏆'}
+        {solves.length === 0 ? '🔤' : '🏆'}
       </span>
-      <span className="truncate">{label}</span>
+      <span className="min-w-0 truncate text-left">
+        <span className="font-bold">Today&apos;s Wordle Solvers:</span>{' '}
+        <span className="font-semibold">{names}</span>
+      </span>
     </button>
   );
 }
-
