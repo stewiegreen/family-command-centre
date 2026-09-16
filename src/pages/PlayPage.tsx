@@ -41,7 +41,7 @@ function isC4(g: FamilyGame): g is Connect4Game {
 }
 
 export function PlayPage() {
-  const { data, currentUser, familyId, getMember } = useApp();
+  const { currentUser, familyId, getMember } = useApp();
   const me = currentUser;
   const authUid = getFirebaseAuth()?.currentUser?.uid || null;
 

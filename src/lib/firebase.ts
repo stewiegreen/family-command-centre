@@ -4,7 +4,7 @@
 import type { FirebaseApp } from 'firebase/app';
 import type { Auth, User } from 'firebase/auth';
 import type { Firestore } from 'firebase/firestore';
-import type { FamilyData, FirebaseConfig, Invite, JournalEntry, Member, Message, Role, TicTacToeGame, TicCell, Connect4Game, Connect4Cell, FamilyGame, GameType } from '../types';
+import type { FamilyData, FirebaseConfig, Invite, JournalEntry, Member, Message, Role, TicTacToeGame, TicCell, Connect4Game, Connect4Cell, FamilyGame } from '../types';
 import { MEMBER_COLORS, MEMBER_EMOJIS, migratePayload } from './defaults';
 import { makeFamilyCode, makeInviteCode, uid } from './uid';
 import { CURRENT_USER_KEY, FAMILY_ID_KEY } from './storage';
