@@ -59,6 +59,7 @@ import { cn } from '../lib/cn';
 import type {
   BattleshipGame,
   Connect4Game,
+  FamilyData,
   FamilyGame,
   Fleet,
   Member,
