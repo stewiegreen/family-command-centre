@@ -63,12 +63,19 @@ export function SettingsPage() {
   const needsPin = !!(data.settings.parentPin && data.settings.parentPin.length >= 4);
   const unlocked = parentPinUnlocked || !needsPin;
 
-  const calendarFeedUrl = (token: string, webcal: boolean): string => {
+  const calendarFeedUrl = (
+    token: string,
+    webcal: boolean,
+    memberId?: string,
+  ): string => {
     const origin = window.location.origin.replace(
       /^https?:/,
       webcal ? 'webcal:' : window.location.protocol,
     );
-    return `${origin}/api/calendar/${token}.ics`;
+    const path = memberId
+      ? `/api/calendar/${token}/${memberId}.ics`
+      : `/api/calendar/${token}.ics`;
+    return `${origin}${path}`;
   };
 
   const onGenerateCalendarFeed = () => {
@@ -467,9 +474,10 @@ export function SettingsPage() {
             Calendar sync
           </h2>
           <p className="text-xs text-muted mb-3">
-            Subscribe to your GreenHQ calendar from your phone&apos;s own Calendar app — no
-            Google, Apple, or Microsoft account needed. This is one-way (view-only): events show
-            up on your phone, but editing them there won&apos;t change GreenHQ.
+            Subscribe from your phone&apos;s Calendar app — no Google/Apple account required.
+            One-way only (view on phone; edits there don&apos;t change GreenHQ). Use a{' '}
+            <strong className="text-fg">separate link per person</strong> so each calendar can
+            have its own color.
           </p>
           {!data.settings.calendarFeedToken ? (
             <Button size="sm" onClick={onGenerateCalendarFeed} disabled={feedBusy}>
@@ -477,42 +485,88 @@ export function SettingsPage() {
             </Button>
           ) : (
             <div className="space-y-3">
-              <div className="rounded-lg border border-border bg-surface/60 p-3 space-y-2">
+              <p className="text-[11px] text-muted">
+                Phone calendars use <strong className="text-fg">one color per subscription</strong>.
+                Add a separate feed for each person, then set each calendar&apos;s color in your
+                phone&apos;s Calendar app.
+              </p>
+
+              {/* Per-member feeds */}
+              <div className="space-y-2">
                 <p className="text-[11px] font-semibold text-muted uppercase tracking-wide">
-                  Subscription link
+                  Per person (recommended)
                 </p>
-                <p className="text-[11px] font-mono break-all text-fg">
+                {data.members.map((m) => (
+                  <div
+                    key={m.id}
+                    className="rounded-lg border border-border bg-surface/60 p-2.5 flex flex-wrap items-center gap-2"
+                  >
+                    <span
+                      className="w-2.5 h-2.5 rounded-full shrink-0"
+                      style={{ background: m.color || 'var(--app-accent)' }}
+                      aria-hidden
+                    />
+                    <span className="text-sm font-medium text-fg min-w-[4.5rem]">{m.name}</span>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => {
+                        void navigator.clipboard.writeText(
+                          calendarFeedUrl(data.settings.calendarFeedToken!, false, m.id),
+                        );
+                        setFeedMsg(`Copied ${m.name}'s link.`);
+                      }}
+                    >
+                      Copy link
+                    </Button>
+                    <a
+                      href={calendarFeedUrl(data.settings.calendarFeedToken!, true, m.id)}
+                      className="text-[11px] text-accent underline"
+                    >
+                      Subscribe
+                    </a>
+                  </div>
+                ))}
+              </div>
+
+              {/* Whole-family feed (optional) */}
+              <div className="rounded-lg border border-border bg-surface/40 p-2.5 space-y-2">
+                <p className="text-[11px] font-semibold text-muted uppercase tracking-wide">
+                  Everyone (one mixed calendar)
+                </p>
+                <p className="text-[11px] font-mono break-all text-faint">
                   {calendarFeedUrl(data.settings.calendarFeedToken, false)}
                 </p>
                 <div className="flex flex-wrap gap-2">
                   <Button
                     size="sm"
-                    variant="secondary"
+                    variant="ghost"
                     onClick={() => {
                       void navigator.clipboard.writeText(
                         calendarFeedUrl(data.settings.calendarFeedToken!, false),
                       );
-                      setFeedMsg('Copied.');
+                      setFeedMsg('Copied family link.');
                     }}
                   >
-                    Copy link
+                    Copy family link
                   </Button>
                   <a
                     href={calendarFeedUrl(data.settings.calendarFeedToken, true)}
                     className="text-[11px] text-accent underline self-center"
                   >
-                    Tap here on this phone to subscribe now
+                    Subscribe (all)
                   </a>
                 </div>
               </div>
+
               <div className="text-[11px] text-muted space-y-1">
                 <p>
                   <strong className="text-fg">iOS:</strong> Settings → Calendar → Accounts → Add
-                  Account → Other → Add Subscribed Calendar → paste the link above.
+                  Account → Other → Add Subscribed Calendar → paste a person&apos;s link. Repeat
+                  for each kid. Then Calendar → Calendars → tap the info button → pick a color.
                 </p>
                 <p>
-                  <strong className="text-fg">Android:</strong> the stock Calendar app can&apos;t
-                  subscribe by URL directly — install{' '}
+                  <strong className="text-fg">Android:</strong> install{' '}
                   <a
                     href="https://www.davx5.com/"
                     target="_blank"
@@ -521,21 +575,20 @@ export function SettingsPage() {
                   >
                     DAVx5
                   </a>{' '}
-                  (open-source) and add it as a webcal subscription.
+                  and add each person&apos;s webcal link as its own calendar.
                 </p>
               </div>
               {feedMsg && <p className="text-[11px] text-accent">{feedMsg}</p>}
               <div className="flex gap-2">
                 <Button size="sm" variant="secondary" onClick={onGenerateCalendarFeed} disabled={feedBusy}>
-                  Regenerate link
+                  Regenerate links
                 </Button>
                 <Button size="sm" variant="ghost" onClick={onRemoveCalendarFeed} disabled={feedBusy}>
                   Turn off
                 </Button>
               </div>
               <p className="text-[11px] text-faint">
-                Regenerating invalidates the old link — anyone already subscribed will need the
-                new one.
+                Regenerating invalidates every old link — re-subscribe with the new ones.
               </p>
             </div>
           )}

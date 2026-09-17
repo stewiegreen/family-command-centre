@@ -1,7 +1,9 @@
 /**
- * GET /api/calendar/{token}.ics
- * Read-only iCalendar subscription feed (webcal).
- * Auth: the token IS the credential. Env: FIREBASE_SERVICE_ACCOUNT, GREENHQ_FAMILY_ID.
+ * GET /api/calendar/{token}.ics              → whole family
+ * GET /api/calendar/{token}/{memberId}.ics   → one person only
+ *
+ * Phone calendars assign one color per subscription. Per-member feeds let you
+ * subscribe to each kid/parent separately and color them differently.
  */
 
 import { getGoogleAccessToken, parseServiceAccount } from '../../lib/googleSa';
@@ -30,10 +32,22 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
   const raw = context.params.key;
   const segments = Array.isArray(raw) ? raw : raw ? [raw] : [];
-  const joined = segments.map((s) => decodeURIComponent(s)).join('/');
-  if (!joined.endsWith('.ics')) return notFound();
-  const token = joined.slice(0, -'.ics'.length);
+  const parts = segments.map((s) => decodeURIComponent(s)).filter(Boolean);
+  if (parts.length === 0) return notFound();
+
+  // Last segment must end with .ics
+  const last = parts[parts.length - 1]!;
+  if (!last.endsWith('.ics')) return notFound();
+  parts[parts.length - 1] = last.slice(0, -'.ics'.length);
+
+  // Shapes: [token] or [token, memberId]
+  const token = parts[0] || '';
+  const memberId = parts.length >= 2 ? parts[1] : undefined;
+
   if (!token || token.length < 16 || token.length > 128 || token.includes('/')) {
+    return notFound();
+  }
+  if (memberId !== undefined && (memberId.length < 1 || memberId.length > 128 || memberId.includes('/'))) {
     return notFound();
   }
 
@@ -48,12 +62,24 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     }
 
     const familyName = readSettingsField(doc, 'familyName') || 'GreenHQ';
-    const events = readEvents(doc);
     const members = readMembers(doc);
+    let events = readEvents(doc);
+
+    let calName = familyName;
+    if (memberId) {
+      const m = members.find((x) => x.id === memberId);
+      if (!m) return notFound();
+      // Events tagged with this member (or legacy single memberId field already folded into memberIds)
+      events = events.filter((ev) => (ev.memberIds || []).includes(memberId));
+      calName = `${m.name || 'Member'} · ${familyName}`;
+    }
 
     let icsBody: string;
     try {
-      icsBody = buildIcsFeed(events, members, familyName);
+      icsBody = buildIcsFeed(events, members, calName, {
+        // On a personal feed, names in the title are redundant
+        omitMemberNamesInTitle: !!memberId,
+      });
     } catch (buildErr) {
       console.error('[calendar feed] build failed', buildErr);
       return new Response('Feed temporarily unavailable', { status: 500 });

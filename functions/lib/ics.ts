@@ -52,14 +52,21 @@ function memberNames(memberIds: string[], members: MemberLite[]): string {
     .join(', ');
 }
 
-export function buildIcsFeed(events: FeedEvent[], members: MemberLite[], calName: string): string {
+export function buildIcsFeed(
+  events: FeedEvent[],
+  members: MemberLite[],
+  calName: string,
+  opts?: { omitMemberNamesInTitle?: boolean },
+): string {
   const attrs: EventAttributes[] = events.map((ev) => {
     const start = toDateArray(ev.start, ev.allDay);
     const end = ev.allDay
       ? allDayExclusiveEnd(ev.end || ev.start)
       : toDateArray(ev.end || ev.start, false);
 
-    const names = memberNames(ev.memberIds, members);
+    const names = opts?.omitMemberNamesInTitle
+      ? ''
+      : memberNames(ev.memberIds, members);
 
     const attr: EventAttributes = {
       start,
