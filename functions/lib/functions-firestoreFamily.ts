@@ -46,7 +46,7 @@ export function readNumberMap(doc: FsDoc, field: string): Record<string, number>
   return out;
 }
 
-export type MemberLite = { id: string; role?: string; embyUserId?: string; name?: string };
+export type MemberLite = { id: string; role?: string; embyUserId?: string; name?: string; color?: string };
 
 export function readMembers(doc: FsDoc): MemberLite[] {
   const f = doc.fields?.members;
@@ -63,6 +63,7 @@ export function readMembers(doc: FsDoc): MemberLite[] {
       role: str(fields.role),
       embyUserId: str(fields.embyUserId),
       name: str(fields.name),
+      color: str(fields.color),
     });
   }
   return out;

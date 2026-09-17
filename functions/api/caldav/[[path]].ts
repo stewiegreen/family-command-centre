@@ -263,23 +263,38 @@ ${propstat(`${root}/principals/${xmlEscape(user)}/`, `
       }
     }
 
-    // ── calendars/{user} ──
+    // ── calendars/{user} ── list of per-person calendars (different iOS colors)
     if (parts[0] === 'calendars' && parts.length === 2) {
       const user = parts[1]!;
       if (method === 'PROPFIND') {
         const depth = req.headers.get('Depth') ?? '1';
+        const { members: mems } = await load();
         let responses = propstat(`${root}/calendars/${xmlEscape(user)}/`, `
   <d:resourcetype><d:collection/></d:resourcetype>
   <d:displayname>Calendar home</d:displayname>
   ${PRIVILEGES}
 `);
         if (depth !== '0') {
-          responses += propstat(`${root}/calendars/${xmlEscape(user)}/default/`, `
+          // One calendar per family member → iOS can color each separately
+          for (const m of mems) {
+            const color = m.color && /^#[0-9A-Fa-f]{6}$/.test(m.color) ? m.color : '#34C759';
+            responses += propstat(`${root}/calendars/${xmlEscape(user)}/${xmlEscape(m.id)}/`, `
   <d:resourcetype><d:collection/><c:calendar/></d:resourcetype>
-  <d:displayname>GreenHQ</d:displayname>
+  <d:displayname>${xmlEscape(m.name || m.id)}</d:displayname>
   <c:supported-calendar-component-set><c:comp name="VEVENT"/></c:supported-calendar-component-set>
-  <cs:getctag>bootstrap</cs:getctag>
-  <a:calendar-color>#34C759</a:calendar-color>
+  <cs:getctag>m-${xmlEscape(m.id)}</cs:getctag>
+  <a:calendar-color>${xmlEscape(color)}</a:calendar-color>
+  ${REPORT_SET}
+  ${PRIVILEGES}
+`);
+          }
+          // Combined "Everyone" calendar
+          responses += propstat(`${root}/calendars/${xmlEscape(user)}/all/`, `
+  <d:resourcetype><d:collection/><c:calendar/></d:resourcetype>
+  <d:displayname>Everyone</d:displayname>
+  <c:supported-calendar-component-set><c:comp name="VEVENT"/></c:supported-calendar-component-set>
+  <cs:getctag>all</cs:getctag>
+  <a:calendar-color>#8E8E93</a:calendar-color>
   ${REPORT_SET}
   ${PRIVILEGES}
 `);
@@ -292,31 +307,54 @@ ${responses}
       }
     }
 
-    // ── calendars/{user}/default[/event] ──
-    if (parts[0] === 'calendars' && parts.length >= 3 && parts[2] === 'default') {
+    // ── calendars/{user}/{calId}[/event] ── calId = memberId | "all" | legacy "default"
+    if (parts[0] === 'calendars' && parts.length >= 3) {
       const user = parts[1]!;
-      const calHref = `${root}/calendars/${encodeURIComponent(user)}/default`;
+      const calId = parts[2]!;
       const { events: allEvents, members: mems } = await load();
 
-      let filter: string[] | null = auth.memberIdsFilter;
-      if (user !== 'family' && user !== 'all') {
-        filter = [user];
+      // Resolve filter for this calendar
+      let filter: string[] | null = null;
+      let calColor = '#8E8E93';
+      let calName = 'Everyone';
+      if (calId === 'all' || calId === 'default') {
+        filter = null; // all events
+        calName = 'Everyone';
+        calColor = '#8E8E93';
+      } else {
+        const m = mems.find((x) => x.id === calId);
+        if (!m) {
+          console.log('[caldav] unknown calendar', calId);
+          return new Response('Not found', { status: 404, headers: davHeaders() });
+        }
+        filter = [calId];
+        calName = m.name || calId;
+        calColor = m.color && /^#[0-9A-Fa-f]{6}$/.test(m.color) ? m.color : '#34C759';
       }
+
+      // If logged in as a specific member, only allow their calendar + all
+      if (auth.memberIdsFilter && filter) {
+        if (!auth.memberIdsFilter.includes(calId)) {
+          return new Response('Forbidden', { status: 403, headers: davHeaders() });
+        }
+      }
+
       const events = filterEvents(allEvents, filter);
       const ctag = collectionCtag(events);
+      const calHref = `${root}/calendars/${encodeURIComponent(user)}/${encodeURIComponent(calId)}`;
 
-      // Collection root
+      // Collection
       if (parts.length === 3) {
         if (method === 'PROPFIND') {
           const depth = req.headers.get('Depth') ?? '1';
           let responses = propstat(`${calHref}/`, `
   <d:resourcetype><d:collection/><c:calendar/></d:resourcetype>
-  <d:displayname>GreenHQ</d:displayname>
+  <d:displayname>${xmlEscape(calName)}</d:displayname>
   <d:getetag>"${xmlEscape(ctag)}"</d:getetag>
   <cs:getctag>${xmlEscape(ctag)}</cs:getctag>
   <d:sync-token>https://greenhq.io/sync/${xmlEscape(ctag)}</d:sync-token>
   <c:supported-calendar-component-set><c:comp name="VEVENT"/></c:supported-calendar-component-set>
-  <a:calendar-color>#34C759</a:calendar-color>
+  <a:calendar-color>${xmlEscape(calColor)}</a:calendar-color>
   ${REPORT_SET}
   ${PRIVILEGES}
 `);
@@ -338,7 +376,6 @@ ${responses}
         }
 
         if (method === 'REPORT') {
-          // calendar-query / calendar-multiget / sync-collection
           let responses = '';
           for (const ev of events) {
             const eh = `${calHref}/${encodeURIComponent(ev.id)}.ics`;
@@ -381,17 +418,18 @@ ${responses}
         if (method === 'PUT') {
           try {
             const text = await req.text();
-            console.log('[caldav] PUT', decodedUid, 'bytes=', text.length);
+            console.log('[caldav] PUT', decodedUid, 'cal=', calId, 'bytes=', text.length);
             const defaultMembers =
-              (filter && filter.length ? filter : null) ||
-              auth.memberIdsFilter ||
-              (mems[0]?.id ? [mems[0].id] : []);
+              filter && filter.length
+                ? filter
+                : auth.memberIdsFilter || (mems[0]?.id ? [mems[0].id] : []);
             const parsed = parseVEvent(text, defaultMembers);
             if (!parsed) {
               console.error('[caldav] PUT parse fail', text.slice(0, 500));
               return new Response('Invalid VEVENT', { status: 400, headers: davHeaders() });
             }
             if (decodedUid) parsed.id = decodedUid;
+            // Assign to this calendar's member
             if (filter?.length) {
               parsed.memberIds = filter;
               parsed.memberId = filter[0];
