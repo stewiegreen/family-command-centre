@@ -303,6 +303,27 @@ export function serializeVEvent(ev: GhEvent): string {
       lines.push(`EXDATE;VALUE=DATE:${ds.replace(/-/g, '')}`);
     }
   }
+  // Match GreenHQ NotificationWatcher: 1h + 15m before timed events
+  if (!ev.allDay) {
+    for (const trigger of ['-PT1H', '-PT15M']) {
+      lines.push(
+        'BEGIN:VALARM',
+        'ACTION:DISPLAY',
+        `DESCRIPTION:${esc(ev.title)}`,
+        `TRIGGER:${trigger}`,
+        'END:VALARM',
+      );
+    }
+  } else {
+    // All-day: morning-of style nudge (relative to stored start)
+    lines.push(
+      'BEGIN:VALARM',
+      'ACTION:DISPLAY',
+      `DESCRIPTION:${esc(ev.title)}`,
+      'TRIGGER:-PT3H',
+      'END:VALARM',
+    );
+  }
   lines.push('END:VEVENT', 'END:VCALENDAR');
   return lines.join('\r\n') + '\r\n';
 }

@@ -656,10 +656,71 @@ export function SettingsPage() {
                     </div>
                   ))}
                 </div>
+                <div className="space-y-2 pt-2 border-t border-border">
+                  <p className="text-[11px] font-semibold text-muted">Kid CalDAV passwords</p>
+                  <p className="text-[11px] text-faint">
+                    Each kid can use their own password (only their calendars + tasks). Family
+                    token still works for full access. Copy the password when you generate it —
+                    it is not shown again after reload.
+                  </p>
+                  {data.members.map((m) => {
+                    const has = !!data.settings.calendarMemberTokens?.[m.id];
+                    return (
+                      <div key={`tok-${m.id}`} className="flex flex-wrap items-center gap-2 text-[11px]">
+                        <span className="text-fg font-medium min-w-[4.5rem]">{m.name}</span>
+                        <span className="text-faint">{has ? 'password set' : 'no password yet'}</span>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => {
+                            const bytes = new Uint8Array(18);
+                            crypto.getRandomValues(bytes);
+                            const token = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+                            update((d) => ({
+                              ...d,
+                              settings: {
+                                ...d.settings,
+                                calendarMemberTokens: {
+                                  ...(d.settings.calendarMemberTokens || {}),
+                                  [m.id]: token,
+                                },
+                              },
+                            }));
+                            void navigator.clipboard.writeText(token);
+                            setFeedMsg(
+                              `Password for ${m.name} (username: ${m.id}): ${token} — copied.`,
+                            );
+                          }}
+                        >
+                          {has ? 'Regenerate' : 'Generate'}
+                        </Button>
+                        {has && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              update((d) => {
+                                const next = { ...(d.settings.calendarMemberTokens || {}) };
+                                delete next[m.id];
+                                return {
+                                  ...d,
+                                  settings: { ...d.settings, calendarMemberTokens: next },
+                                };
+                              });
+                              setFeedMsg(`Removed CalDAV password for ${m.name}.`);
+                            }}
+                          >
+                            Clear
+                          </Button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
                 <p className="text-[11px] text-faint">
-                  Password is the full feed token string (same secret as ICS links). Generate or
-                  regenerate the calendar link above to set it; it is not shown in full here after
-                  the page reloads — copy from your password manager or regenerate once.
+                  Family password is the full feed token (same as ICS). Kid passwords are under
+                  &quot;Kid CalDAV passwords&quot; above. Account URL stays{' '}
+                  <code className="text-fg">https://greenhq.io/api/caldav/</code>.
                 </p>
               </div>
             </div>

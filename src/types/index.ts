@@ -607,6 +607,11 @@ export interface Settings {
    * Anyone with the URL can read family events; regenerate to revoke.
    */
   calendarFeedToken?: string;
+  /**
+   * Per-member CalDAV passwords (memberId → token).
+   * Lets a kid connect with only their calendars/tasks without the family token.
+   */
+  calendarMemberTokens?: Record<string, string>;
 }
 
 export interface PresenceEntry {

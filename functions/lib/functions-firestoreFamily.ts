@@ -362,3 +362,106 @@ export async function patchFamilyEvents(
   });
   if (!res.ok) throw new Error(`Firestore PATCH events ${res.status}: ${await res.text()}`);
 }
+
+
+/** Todo shape for CalDAV VTODO. */
+export type FeedTodo = {
+  id: string;
+  text: string;
+  memberId: string;
+  createdById: string;
+  completed: boolean;
+  priority: number;
+  createdAt: string;
+  dueAt?: string;
+  status?: string;
+  lastCompletedAt?: string;
+};
+
+export function readTodos(doc: FsDoc): FeedTodo[] {
+  const f = doc.fields?.todos;
+  if (!f || !('arrayValue' in f)) return [];
+  const out: FeedTodo[] = [];
+  for (const v of f.arrayValue.values || []) {
+    if (!('mapValue' in v)) continue;
+    const fields = v.mapValue.fields || {};
+    const id = str(fields.id);
+    const text = str(fields.text);
+    if (!id || !text) continue;
+    const completed =
+      'booleanValue' in (fields.completed || {})
+        ? (fields.completed as { booleanValue: boolean }).booleanValue
+        : false;
+    out.push({
+      id,
+      text,
+      memberId: str(fields.memberId) || '',
+      createdById: str(fields.createdById) || '',
+      completed,
+      priority: int(fields.priority) ?? 0,
+      createdAt: str(fields.createdAt) || new Date().toISOString(),
+      dueAt: str(fields.dueAt),
+      status: str(fields.status),
+      lastCompletedAt: str(fields.lastCompletedAt),
+    });
+  }
+  return out;
+}
+
+function todoToFsValue(t: FeedTodo): FsValue {
+  const fields: Record<string, FsValue> = {
+    id: { stringValue: t.id },
+    text: { stringValue: t.text },
+    memberId: { stringValue: t.memberId },
+    createdById: { stringValue: t.createdById || t.memberId },
+    completed: { booleanValue: !!t.completed },
+    priority: { integerValue: String(t.priority || 0) },
+    createdAt: { stringValue: t.createdAt || new Date().toISOString() },
+  };
+  if (t.dueAt) fields.dueAt = { stringValue: t.dueAt };
+  if (t.status) fields.status = { stringValue: t.status };
+  if (t.lastCompletedAt) fields.lastCompletedAt = { stringValue: t.lastCompletedAt };
+  return { mapValue: { fields } };
+}
+
+export async function patchFamilyTodos(
+  projectId: string,
+  familyId: string,
+  token: string,
+  todos: FeedTodo[],
+): Promise<void> {
+  const url =
+    `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/families/${encodeURIComponent(familyId)}` +
+    `?updateMask.fieldPaths=todos&updateMask.fieldPaths=updatedAt`;
+
+  const body = {
+    fields: {
+      todos: { arrayValue: { values: todos.map(todoToFsValue) } },
+      updatedAt: { stringValue: new Date().toISOString() },
+    },
+  };
+
+  const res = await fetch(url, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`Firestore PATCH todos ${res.status}: ${await res.text()}`);
+}
+
+/** settings.calendarMemberTokens map: memberId → token */
+export function readCalendarMemberTokens(doc: FsDoc): Record<string, string> {
+  const settings = doc.fields?.settings;
+  if (!settings || !('mapValue' in settings)) return {};
+  const field = settings.mapValue.fields?.calendarMemberTokens;
+  if (!field || !('mapValue' in field)) return {};
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(field.mapValue.fields || {})) {
+    const s = str(v);
+    if (s) out[k] = s;
+  }
+  return out;
+}

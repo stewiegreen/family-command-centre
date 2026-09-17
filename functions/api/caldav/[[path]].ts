@@ -10,12 +10,16 @@ import { getGoogleAccessToken, parseServiceAccount } from '../../lib/googleSa';
 import {
   getFamilyDoc,
   patchFamilyEvents,
+  patchFamilyTodos,
+  readCalendarMemberTokens,
   readEvents,
   readMembers,
   readSettingsField,
+  readTodos,
   type FeedEvent,
 } from '../../lib/functions-firestoreFamily';
 import { eventEtag, parseVEvent, serializeVEvent, type GhEvent } from '../../lib/vevent';
+import { parseVTodo, serializeVTodo, todoEtag } from '../../lib/vtodo';
 
 type Env = {
   FIREBASE_SERVICE_ACCOUNT: string;
@@ -106,17 +110,35 @@ async function authorize(req: Request, env: Env): Promise<AuthOk | Response> {
   const sa = parseServiceAccount(env.FIREBASE_SERVICE_ACCOUNT);
   const accessToken = await getGoogleAccessToken(sa);
   const doc = await getFamilyDoc(sa.project_id, env.GREENHQ_FAMILY_ID, accessToken);
-  const token = readSettingsField(doc, 'calendarFeedToken');
-  if (!token || basic.pass !== token) return unauthorized();
-
+  const familyToken = readSettingsField(doc, 'calendarFeedToken');
+  const memberTokens = readCalendarMemberTokens(doc);
   const members = readMembers(doc);
   const user = basic.user.trim();
-  if (!user || user === 'family' || user === 'all') {
-    return { user: 'family', memberIdsFilter: null };
+  const pass = basic.pass;
+
+  // Family-wide token (full access)
+  if (familyToken && pass === familyToken) {
+    if (!user || user === 'family' || user === 'all') {
+      return { user: 'family', memberIdsFilter: null };
+    }
+    const m = members.find((x) => x.id === user || x.name === user);
+    if (!m) return unauthorized();
+    return { user: m.id, memberIdsFilter: [m.id] };
   }
-  const m = members.find((x) => x.id === user || x.name === user);
-  if (!m) return unauthorized();
-  return { user: m.id, memberIdsFilter: [m.id] };
+
+  // Per-member token: password matches that member's token; username must be their id/name
+  for (const m of members) {
+    const mt = memberTokens[m.id];
+    if (mt && pass === mt) {
+      if (user && user !== 'family' && user !== 'all' && user !== m.id && user !== m.name) {
+        // Wrong username for this token
+        continue;
+      }
+      return { user: m.id, memberIdsFilter: [m.id] };
+    }
+  }
+
+  return unauthorized();
 }
 
 function pathParts(context: { params: { path?: string | string[] } }): string[] {
@@ -219,6 +241,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     const doc = await getFamilyDoc(sa.project_id, familyId, accessToken);
     return {
       events: readEvents(doc),
+      todos: readTodos(doc),
       members: readMembers(doc),
       familyName: readSettingsField(doc, 'familyName') || 'GreenHQ',
     };
@@ -275,8 +298,11 @@ ${propstat(`${root}/principals/${xmlEscape(user)}/`, `
   ${PRIVILEGES}
 `);
         if (depth !== '0') {
-          // One calendar per family member → iOS can color each separately
-          for (const m of mems) {
+          const visible = auth.memberIdsFilter
+            ? mems.filter((m) => auth.memberIdsFilter!.includes(m.id))
+            : mems;
+          // One event calendar per family member → iOS can color each separately
+          for (const m of visible) {
             const color = m.color && /^#[0-9A-Fa-f]{6}$/.test(m.color) ? m.color : '#34C759';
             responses += propstat(`${root}/calendars/${xmlEscape(user)}/${xmlEscape(m.id)}/`, `
   <d:resourcetype><d:collection/><c:calendar/></d:resourcetype>
@@ -288,8 +314,9 @@ ${propstat(`${root}/principals/${xmlEscape(user)}/`, `
   ${PRIVILEGES}
 `);
           }
-          // Combined "Everyone" calendar
-          responses += propstat(`${root}/calendars/${xmlEscape(user)}/all/`, `
+          // Combined "Everyone" event calendar (family token only)
+          if (!auth.memberIdsFilter) {
+            responses += propstat(`${root}/calendars/${xmlEscape(user)}/all/`, `
   <d:resourcetype><d:collection/><c:calendar/></d:resourcetype>
   <d:displayname>Everyone</d:displayname>
   <c:supported-calendar-component-set><c:comp name="VEVENT"/></c:supported-calendar-component-set>
@@ -298,6 +325,20 @@ ${propstat(`${root}/principals/${xmlEscape(user)}/`, `
   ${REPORT_SET}
   ${PRIVILEGES}
 `);
+          }
+          // Task lists (VTODO) — one per visible member
+          for (const m of visible) {
+            const color = m.color && /^#[0-9A-Fa-f]{6}$/.test(m.color) ? m.color : '#007AFF';
+            responses += propstat(`${root}/calendars/${xmlEscape(user)}/tasks-${xmlEscape(m.id)}/`, `
+  <d:resourcetype><d:collection/><c:calendar/></d:resourcetype>
+  <d:displayname>${xmlEscape((m.name || m.id) + ' tasks')}</d:displayname>
+  <c:supported-calendar-component-set><c:comp name="VTODO"/></c:supported-calendar-component-set>
+  <cs:getctag>tasks-${xmlEscape(m.id)}</cs:getctag>
+  <a:calendar-color>${xmlEscape(color)}</a:calendar-color>
+  ${REPORT_SET}
+  ${PRIVILEGES}
+`);
+          }
         }
         const xml = `<?xml version="1.0" encoding="utf-8"?>
 <d:multistatus ${NS}>
@@ -307,11 +348,114 @@ ${responses}
       }
     }
 
-    // ── calendars/{user}/{calId}[/event] ── calId = memberId | "all" | legacy "default"
+    // ── calendars/{user}/{calId}[/event] ── calId = memberId | "all" | tasks-{id} | legacy "default"
     if (parts[0] === 'calendars' && parts.length >= 3) {
       const user = parts[1]!;
       const calId = parts[2]!;
-      const { events: allEvents, members: mems } = await load();
+      const { events: allEvents, todos: allTodos, members: mems } = await load();
+
+      // ── VTODO task list: tasks-{memberId} ──
+      if (calId.startsWith('tasks-')) {
+        const taskMemberId = calId.slice('tasks-'.length);
+        if (auth.memberIdsFilter && !auth.memberIdsFilter.includes(taskMemberId)) {
+          return new Response('Forbidden', { status: 403, headers: davHeaders() });
+        }
+        const m = mems.find((x) => x.id === taskMemberId);
+        if (!m) return new Response('Not found', { status: 404, headers: davHeaders() });
+        const todos = allTodos.filter((td) => td.memberId === taskMemberId);
+        const calHref = `${root}/calendars/${encodeURIComponent(user)}/${encodeURIComponent(calId)}`;
+        const color = m.color && /^#[0-9A-Fa-f]{6}$/.test(m.color) ? m.color : '#007AFF';
+        let th = todos.length;
+        for (const td of todos) th = (Math.imul(31, th) + todoEtag(td).length) | 0;
+        const ctag = `tasks-${(th >>> 0).toString(16)}-${todos.length}`;
+
+        if (parts.length === 3) {
+          if (method === 'PROPFIND') {
+            const depth = req.headers.get('Depth') ?? '1';
+            let responses = propstat(`${calHref}/`, `
+  <d:resourcetype><d:collection/><c:calendar/></d:resourcetype>
+  <d:displayname>${xmlEscape((m.name || m.id) + ' tasks')}</d:displayname>
+  <cs:getctag>${xmlEscape(ctag)}</cs:getctag>
+  <c:supported-calendar-component-set><c:comp name="VTODO"/></c:supported-calendar-component-set>
+  <a:calendar-color>${xmlEscape(color)}</a:calendar-color>
+  ${REPORT_SET}
+  ${PRIVILEGES}
+`);
+            if (depth !== '0') {
+              for (const td of todos) {
+                const eh = `${calHref}/${encodeURIComponent(td.id)}.ics`;
+                responses += propstat(eh, `
+  <d:getetag>${todoEtag(td)}</d:getetag>
+  <d:getcontenttype>text/calendar; charset=utf-8</d:getcontenttype>
+  <d:resourcetype/>
+  ${PRIVILEGES}
+`);
+              }
+            }
+            return davXml(207, `<?xml version="1.0" encoding="utf-8"?><d:multistatus ${NS}>${responses}</d:multistatus>`);
+          }
+          if (method === 'REPORT') {
+            let responses = '';
+            for (const td of todos) {
+              const eh = `${calHref}/${encodeURIComponent(td.id)}.ics`;
+              responses += propstat(eh, `
+  <d:getetag>${todoEtag(td)}</d:getetag>
+  <c:calendar-data><![CDATA[${serializeVTodo(td)}]]></c:calendar-data>
+`);
+            }
+            return davXml(207, `<?xml version="1.0" encoding="utf-8"?><d:multistatus ${NS}>${responses}</d:multistatus>`);
+          }
+        }
+
+        if (parts.length === 4) {
+          const rawName = parts[3]!;
+          const uid = rawName.endsWith('.ics') ? rawName.slice(0, -4) : rawName;
+          const decodedUid = decodeURIComponent(uid);
+
+          if (method === 'GET' || method === 'HEAD') {
+            const td = todos.find((x) => x.id === decodedUid);
+            if (!td) return new Response('Not found', { status: 404, headers: davHeaders() });
+            const body = serializeVTodo(td);
+            return new Response(method === 'HEAD' ? null : body, {
+              status: 200,
+              headers: { 'Content-Type': 'text/calendar; charset=utf-8', ETag: todoEtag(td), ...davHeaders() },
+            });
+          }
+
+          if (method === 'PUT') {
+            try {
+              const text = await req.text();
+              console.log('[caldav] PUT todo', decodedUid, 'bytes=', text.length);
+              const parsed = parseVTodo(text, taskMemberId, taskMemberId);
+              if (!parsed) return new Response('Invalid VTODO', { status: 400, headers: davHeaders() });
+              if (decodedUid) parsed.id = decodedUid;
+              parsed.memberId = taskMemberId;
+              const next = allTodos.map((x) => ({ ...x }));
+              const idx = next.findIndex((x) => x.id === parsed.id);
+              const created = idx < 0;
+              if (idx >= 0) next[idx] = { ...next[idx], ...parsed, memberId: taskMemberId };
+              else next.push(parsed);
+              await patchFamilyTodos(sa.project_id, familyId, accessToken, next);
+              const location = `${calHref}/${encodeURIComponent(parsed.id)}.ics`;
+              return new Response(null, {
+                status: created ? 201 : 204,
+                headers: { ETag: todoEtag(parsed), Location: location, ...davHeaders() },
+              });
+            } catch (e) {
+              console.error('[caldav] PUT todo failed', e);
+              return new Response('Write failed', { status: 500, headers: davHeaders() });
+            }
+          }
+
+          if (method === 'DELETE') {
+            const next = allTodos.filter((x) => x.id !== decodedUid);
+            if (next.length === allTodos.length) return new Response('Not found', { status: 404, headers: davHeaders() });
+            await patchFamilyTodos(sa.project_id, familyId, accessToken, next);
+            return new Response(null, { status: 204, headers: davHeaders() });
+          }
+        }
+        return new Response('Not found', { status: 404, headers: davHeaders() });
+      }
 
       // Resolve filter for this calendar
       let filter: string[] | null = null;
