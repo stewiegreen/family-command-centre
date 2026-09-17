@@ -245,22 +245,22 @@ export function MessagesPage() {
       return conversations.map((c) => ({ ...c, matchSnippet: undefined as string | undefined }));
     }
 
-    return conversations
-      .map((c) => {
-        const member = others.find((m) => m.id === c.memberId);
-        const nameHit = member?.name.toLowerCase().includes(q);
-        const msgs = threadMessages(data.messages, me, c.memberId);
-        const hit = msgs
-          .slice()
-          .reverse()
-          .find((m) => m.text.toLowerCase().includes(q));
-        if (!nameHit && !hit) return null;
-        return {
-          ...c,
-          matchSnippet: hit ? previewText(hit.text, 60) : undefined,
-        };
-      })
-      .filter((c): c is ConvRow => c != null);
+    const rows: ConvRow[] = [];
+    for (const c of conversations) {
+      const member = others.find((m) => m.id === c.memberId);
+      const nameHit = member?.name.toLowerCase().includes(q);
+      const msgs = threadMessages(data.messages, me, c.memberId);
+      const hit = msgs
+        .slice()
+        .reverse()
+        .find((m) => m.text.toLowerCase().includes(q));
+      if (!nameHit && !hit) continue;
+      rows.push({
+        ...c,
+        matchSnippet: hit ? previewText(hit.text, 60) : undefined,
+      });
+    }
+    return rows;
   }, [conversations, search, data.messages, me, others]);
 
   const pinnedRows = filteredConversations.filter((c) => pinnedIds.includes(c.memberId));
