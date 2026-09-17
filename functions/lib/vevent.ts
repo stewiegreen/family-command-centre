@@ -73,15 +73,19 @@ function icsDateToIso(raw: string, allDayHint?: boolean): { iso: string; allDay:
     // Store all-day as local-noon-ish UTC (matches GreenHQ form export style roughly)
     return { iso: `${y}-${m}-${d}T12:00:00.000Z`, allDay: true };
   }
-  // 20260917T050000Z or 20260917T150000
-  const m = value.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})(Z)?/);
+  // 20260917T050000Z or 20260917T150000 or with fractional seconds
+  const cleaned = value.replace(/\.\d+/, '');
+  const m = cleaned.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})(Z)?$/i);
   if (!m) {
-    // fallback try Date parse
     const d = new Date(value);
+    if (Number.isNaN(d.getTime())) {
+      return { iso: new Date().toISOString(), allDay: false };
+    }
     return { iso: d.toISOString(), allDay: false };
   }
-  const iso = `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}${m[7] ? '.000Z' : '.000Z'}`;
-  // If no Z, treat as UTC floating → still store as Z (same as Phase 1 feed direction)
+  // Store as UTC instant. TZID local times are treated as wall-clock UTC for v1
+  // (same limitation as many minimal CalDAV servers without a TZ database).
+  const iso = `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}.000Z`;
   return { iso: new Date(iso).toISOString(), allDay: false };
 }
 
@@ -104,9 +108,10 @@ export function parseVEvent(icsBody: string, defaultMemberIds: string[]): GhEven
   const block = icsBody.slice(startIdx, endIdx + 'END:VEVENT'.length);
   const props = parseProps(block);
 
-  const uid = (props['UID']?.[0] || '').trim();
+  let uid = (props['UID']?.[0] || '').trim();
   const summary = (props['SUMMARY']?.[0] || 'Event').trim();
-  if (!uid) return null;
+  // Apple sometimes puts UID only in the path; caller can override
+  if (!uid) uid = `put-${Date.now()}`;
 
   const dtstartRaw = props['DTSTART']?.[0];
   if (!dtstartRaw) return null;

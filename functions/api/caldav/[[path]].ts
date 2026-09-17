@@ -236,6 +236,13 @@ ${propstat(`${root}/calendars/${xmlEscape(user)}/default/`, `
   <d:displayname>GreenHQ</d:displayname>
   <c:supported-calendar-component-set><c:comp name="VEVENT"/></c:supported-calendar-component-set>
   <cs:getctag>greenhq</cs:getctag>
+  <d:current-user-privilege-set>
+    <d:privilege><d:read/></d:privilege>
+    <d:privilege><d:write/></d:privilege>
+    <d:privilege><d:write-content/></d:privilege>
+    <d:privilege><d:bind/></d:privilege>
+    <d:privilege><d:unbind/></d:privilege>
+  </d:current-user-privilege-set>
 `)}
 </d:multistatus>`;
         return davResponse(207, xml);
@@ -264,6 +271,14 @@ ${propstat(`${root}/calendars/${xmlEscape(user)}/default/`, `
   <d:getetag>"collection"</d:getetag>
   <cs:getctag xmlns:cs="http://calendarserver.org/ns/">${Date.now()}</cs:getctag>
   <c:supported-calendar-component-set xmlns:c="urn:ietf:params:xml:ns:caldav"><c:comp name="VEVENT"/></c:supported-calendar-component-set>
+  <d:current-user-privilege-set>
+    <d:privilege><d:read/></d:privilege>
+    <d:privilege><d:write/></d:privilege>
+    <d:privilege><d:write-properties/></d:privilege>
+    <d:privilege><d:write-content/></d:privilege>
+    <d:privilege><d:bind/></d:privilege>
+    <d:privilege><d:unbind/></d:privilege>
+  </d:current-user-privilege-set>
 `);
           if (depth !== '0') {
             for (const ev of events) {
@@ -299,9 +314,10 @@ ${responses}
         }
       }
 
-      // Event resource: default/{uid}.ics
-      if (parts.length === 4 && parts[3]!.endsWith('.ics')) {
-        const uid = parts[3]!.slice(0, -'.ics'.length);
+      // Event resource: default/{uid}.ics  (Apple may omit .ics rarely)
+      if (parts.length === 4) {
+        const rawName = parts[3]!;
+        const uid = rawName.endsWith('.ics') ? rawName.slice(0, -'.ics'.length) : rawName;
         const decodedUid = decodeURIComponent(uid);
 
         if (method === 'GET' || method === 'HEAD') {
@@ -319,37 +335,58 @@ ${responses}
         }
 
         if (method === 'PUT') {
-          const text = await req.text();
-          const defaultMembers =
-            filter && filter.length ? filter : auth.memberIdsFilter || [];
-          const parsed = parseVEvent(text, defaultMembers.length ? defaultMembers : []);
-          if (!parsed) return new Response('Invalid VEVENT', { status: 400 });
-          // Prefer URL uid for stability
-          parsed.id = decodedUid || parsed.id;
-          if (filter && filter.length) {
-            parsed.memberIds = filter;
-            parsed.memberId = filter[0];
-          } else if (!parsed.memberIds.length && auth.memberIdsFilter) {
-            parsed.memberIds = auth.memberIdsFilter;
-            parsed.memberId = auth.memberIdsFilter[0];
+          try {
+            const text = await req.text();
+            const { events: full, members: mems } = await load();
+            const defaultMembers =
+              (filter && filter.length ? filter : null) ||
+              auth.memberIdsFilter ||
+              (mems[0]?.id ? [mems[0].id] : []);
+            const parsed = parseVEvent(text, defaultMembers);
+            if (!parsed) {
+              console.error('[caldav] PUT parse failed', text.slice(0, 400));
+              return new Response('Invalid VEVENT', { status: 400 });
+            }
+            // Prefer URL uid for stability (Apple path often differs slightly)
+            if (decodedUid) parsed.id = decodedUid;
+            if (filter && filter.length) {
+              parsed.memberIds = filter;
+              parsed.memberId = filter[0];
+            } else if (!parsed.memberIds.length) {
+              parsed.memberIds = defaultMembers;
+              parsed.memberId = defaultMembers[0];
+            }
+
+            const asGh = full.map(feedToGh);
+            const idx = asGh.findIndex((e) => e.id === parsed.id);
+            const created = idx < 0;
+            if (idx >= 0) {
+              asGh[idx] = {
+                ...asGh[idx],
+                ...parsed,
+                memberIds: parsed.memberIds.length
+                  ? parsed.memberIds
+                  : asGh[idx]!.memberIds,
+              };
+            } else {
+              asGh.push(parsed);
+            }
+
+            await patchFamilyEvents(sa.project_id, familyId, accessToken, asGh);
+            const location = `${calHref}/${encodeURIComponent(parsed.id)}.ics`;
+            return new Response(null, {
+              status: created ? 201 : 204,
+              headers: {
+                ETag: eventEtag(parsed),
+                DAV: '1, 3, calendar-access',
+                Location: location,
+                'Content-Location': location,
+              },
+            });
+          } catch (putErr) {
+            console.error('[caldav] PUT failed', putErr);
+            return new Response('Write failed', { status: 500 });
           }
-
-          // Merge into full family events list
-          const { events: full } = await load();
-          const asGh = full.map(feedToGh);
-          const idx = asGh.findIndex((e) => e.id === parsed.id);
-          const created = idx < 0;
-          if (idx >= 0) asGh[idx] = { ...asGh[idx], ...parsed, memberIds: parsed.memberIds.length ? parsed.memberIds : asGh[idx]!.memberIds };
-          else asGh.push(parsed);
-
-          await patchFamilyEvents(sa.project_id, familyId, accessToken, asGh);
-          return new Response(null, {
-            status: created ? 201 : 204,
-            headers: {
-              ETag: eventEtag(parsed),
-              DAV: '1, 3, calendar-access',
-            },
-          });
         }
 
         if (method === 'DELETE') {
