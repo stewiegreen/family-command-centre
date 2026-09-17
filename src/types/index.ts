@@ -339,8 +339,10 @@ export interface StudyBlock {
   submittedById?: string;
   approvedAt?: string;
   approvedById?: string;
-  /** Linked calendar event id (auto-managed). */
+  /** @deprecated Was linked calendar event; cleaned on next upsert. */
   calendarEventId?: string;
+  /** Linked Tasks item id (auto-managed). */
+  taskId?: string;
   notes?: string;
   /**
    * When true, this block is part of the day's choice pool.

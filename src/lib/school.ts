@@ -1,5 +1,4 @@
 import type {
-  CalendarEvent,
   FamilyData,
   StudyBlock,
   StudyConfig,
@@ -8,6 +7,7 @@ import type {
   StudySubject,
   StudyTemplate,
   StudyTemplateItem,
+  Todo,
 } from '../types';
 import { ensureProgress, isoWeekId, progressTowardNextLevel } from './quest';
 import { uid } from './uid';
@@ -62,76 +62,98 @@ function parseLocalDateTime(date: string, time: string): Date {
   return new Date(y, mo - 1, d, hh || 0, mm || 0, 0, 0);
 }
 
-export function calendarEventForBlock(
-  block: StudyBlock,
-  subjectName?: string,
-): CalendarEvent {
+export function todoForBlock(block: StudyBlock, subjectName?: string): Todo {
   const title = subjectName
     ? `School — ${subjectName}: ${block.title}`
     : `School — ${block.title}`;
-  const eventId = block.calendarEventId || `study-${block.id}`;
+  const taskId = block.taskId || block.calendarEventId || `study-${block.id}`;
 
-  let start: string;
-  let end: string;
-  let allDay = false;
-
-  if (block.startTime && block.endTime) {
-    start = parseLocalDateTime(block.date, block.startTime).toISOString();
-    end = parseLocalDateTime(block.date, block.endTime).toISOString();
-  } else if (block.startTime && block.minutes) {
-    const s = parseLocalDateTime(block.date, block.startTime);
-    const e = new Date(s.getTime() + block.minutes * 60_000);
-    start = s.toISOString();
-    end = e.toISOString();
-  } else if (block.minutes) {
-    const s = parseLocalDateTime(block.date, '10:00');
-    const e = new Date(s.getTime() + block.minutes * 60_000);
-    start = s.toISOString();
-    end = e.toISOString();
+  let dueAt: string | undefined;
+  if (block.startTime) {
+    dueAt = parseLocalDateTime(block.date, block.startTime).toISOString();
+  } else if (block.endTime) {
+    dueAt = parseLocalDateTime(block.date, block.endTime).toISOString();
   } else {
-    const s = parseLocalDateTime(block.date, '12:00');
-    const e = new Date(s.getTime() + 24 * 60 * 60_000);
-    start = s.toISOString();
-    end = e.toISOString();
-    allDay = true;
+    // Default due mid-afternoon on the school day
+    dueAt = parseLocalDateTime(block.date, '15:00').toISOString();
   }
 
+  const done = block.status === 'done';
+  const pending = block.status === 'pending';
   return {
-    id: eventId,
-    title,
-    start,
-    end,
-    allDay,
+    id: taskId,
+    text: title,
     memberId: block.kidId,
-    memberIds: [block.kidId],
-    notes: block.notes,
+    createdById: block.createdById,
+    completed: done,
+    priority: 'medium',
+    createdAt: block.createdAt || new Date().toISOString(),
+    dueAt,
+    status: done ? 'done' : pending ? 'doing' : 'todo',
+    lastCompletedAt: done ? block.approvedAt || block.submittedAt : undefined,
   };
 }
 
+/** Strip legacy study calendar events + matching task ids for this block. */
+function stripBlockLinks(data: FamilyData, block: StudyBlock): FamilyData {
+  const ids = new Set<string>();
+  ids.add(`study-${block.id}`);
+  if (block.calendarEventId) ids.add(block.calendarEventId);
+  if (block.taskId) ids.add(block.taskId);
+  return {
+    ...data,
+    events: (data.events || []).filter((e) => !ids.has(e.id)),
+    todos: (data.todos || []).filter((td) => !ids.has(td.id)),
+  };
+}
+
+/**
+ * Upsert a Tasks item for this school block (and remove any legacy calendar event).
+ * Kept name upsertBlockCalendar so call sites stay stable.
+ */
 export function upsertBlockCalendar(
   data: FamilyData,
   block: StudyBlock,
   subjects: StudySubject[],
 ): FamilyData {
   const sub = subjects.find((s) => s.id === block.subjectId);
-  const ev = calendarEventForBlock(block, sub?.name);
-  const withId: StudyBlock = { ...block, calendarEventId: ev.id };
-  const events = [...(data.events || [])];
-  const idx = events.findIndex((e) => e.id === ev.id);
-  if (idx >= 0) events[idx] = ev;
-  else events.push(ev);
-  const blocks = (data.studyBlocks || []).map((b) => (b.id === withId.id ? withId : b));
+  const todo = todoForBlock(block, sub?.name);
+  const withId: StudyBlock = {
+    ...block,
+    taskId: todo.id,
+    calendarEventId: undefined,
+  };
+
+  let next = stripBlockLinks(data, block);
+  const todos = [...(next.todos || [])];
+  const idx = todos.findIndex((td) => td.id === todo.id);
+  if (idx >= 0) todos[idx] = { ...todos[idx], ...todo };
+  else todos.push(todo);
+
+  const blocks = (next.studyBlocks || []).map((b) => (b.id === withId.id ? withId : b));
   if (!blocks.some((b) => b.id === withId.id)) blocks.push(withId);
-  return { ...data, events, studyBlocks: blocks };
+  return { ...next, todos, studyBlocks: blocks };
 }
 
 export function removeBlockCalendar(data: FamilyData, block: StudyBlock): FamilyData {
-  const eid = block.calendarEventId || `study-${block.id}`;
+  const cleaned = stripBlockLinks(data, block);
   return {
-    ...data,
-    events: (data.events || []).filter((e) => e.id !== eid),
-    studyBlocks: (data.studyBlocks || []).filter((b) => b.id !== block.id),
+    ...cleaned,
+    studyBlocks: (cleaned.studyBlocks || []).filter((b) => b.id !== block.id),
   };
+}
+
+/** Keep the linked task in sync when a block is completed / reopened. */
+export function syncBlockTaskStatus(data: FamilyData, blockId: string): FamilyData {
+  const block = (data.studyBlocks || []).find((b) => b.id === blockId);
+  if (!block) return data;
+  const sub = (data.studySubjects || []).find((s) => s.id === block.subjectId);
+  const todo = todoForBlock(block, sub?.name);
+  const todos = [...(data.todos || [])];
+  const idx = todos.findIndex((td) => td.id === todo.id);
+  if (idx >= 0) todos[idx] = { ...todos[idx], ...todo };
+  else todos.push(todo);
+  return { ...data, todos };
 }
 
 function creditStudy(
@@ -236,7 +258,7 @@ export function completeStudyBlock(
   const at = new Date().toISOString();
 
   if (block.requiresApproval) {
-    return {
+    let pending: FamilyData = {
       ...data,
       studyBlocks: (data.studyBlocks || []).map((b) =>
         b.id === blockId
@@ -250,6 +272,7 @@ export function completeStudyBlock(
           : b,
       ),
     };
+    return syncBlockTaskStatus(pending, blockId);
   }
 
   let next: FamilyData = {
@@ -270,7 +293,7 @@ export function completeStudyBlock(
   };
   next = creditStudy(next, block.kidId, block.xp, block.coins, 'study', block.title, block.id, byId);
   next = maybeGrantDayBonus(next, block.kidId, block.date, byId);
-  return next;
+  return syncBlockTaskStatus(next, blockId);
 }
 
 export function approveStudyBlock(
@@ -306,12 +329,12 @@ export function approveStudyBlock(
     parentId,
   );
   next = maybeGrantDayBonus(next, block.kidId, block.date, parentId);
-  return next;
+  return syncBlockTaskStatus(next, blockId);
 }
 
 export function reopenStudyBlock(data: FamilyData, blockId: string): FamilyData {
   const at = new Date().toISOString();
-  return {
+  const next: FamilyData = {
     ...data,
     studyBlocks: (data.studyBlocks || []).map((b) =>
       b.id === blockId
@@ -327,6 +350,7 @@ export function reopenStudyBlock(data: FamilyData, blockId: string): FamilyData 
         : b,
     ),
   };
+  return syncBlockTaskStatus(next, blockId);
 }
 
 function dayBonusAlreadyGranted(data: FamilyData, kidId: string, date: string): boolean {
@@ -446,8 +470,7 @@ export function copyDayBlocks(
   // Drop calendar events for removed target blocks
   const removed = (data.studyBlocks || []).filter((b) => b.kidId === kidId && b.date === toDate);
   for (const r of removed) {
-    const eid = r.calendarEventId || `study-${r.id}`;
-    next = { ...next, events: (next.events || []).filter((e) => e.id !== eid) };
+    next = stripBlockLinks(next, r);
   }
 
   for (const s of source) {
@@ -582,8 +605,7 @@ export function applyTemplateToDay(
       ),
     };
     for (const r of removed) {
-      const eid = r.calendarEventId || `study-${r.id}`;
-      next = { ...next, events: (next.events || []).filter((e) => e.id !== eid) };
+      next = stripBlockLinks(next, r);
     }
   }
   for (let i = 0; i < tpl.items.length; i++) {
