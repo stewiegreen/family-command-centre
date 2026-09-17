@@ -55,25 +55,83 @@ function parseProps(block: string): Record<string, string[]> {
   return props;
 }
 
-/** ICS date → ISO string. All-day = YYYYMMDD → noon UTC that day for stable date. */
+/**
+ * Convert a wall-clock time in `timeZone` to a real UTC Date.
+ * Uses Intl (available on Cloudflare Workers) — no TZ database package needed.
+ */
+function zonedWallToUtc(
+  year: number,
+  month: number,
+  day: number,
+  hour: number,
+  minute: number,
+  second: number,
+  timeZone: string,
+): Date {
+  // Desired wall clock as if it were UTC
+  const desiredAsUtcMs = Date.UTC(year, month - 1, day, hour, minute, second);
+
+  const dtf = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  });
+
+  const partsOf = (ms: number) => {
+    const p = dtf.formatToParts(new Date(ms));
+    const g = (t: string) => Number(p.find((x) => x.type === t)?.value);
+    return {
+      year: g('year'),
+      month: g('month'),
+      day: g('day'),
+      hour: g('hour'),
+      minute: g('minute'),
+      second: g('second'),
+    };
+  };
+
+  // Instant `desiredAsUtcMs` displays as some wall time in `timeZone`.
+  // Diff between that wall (as UTC ms) and desiredAsUtcMs is the offset.
+  const wall = partsOf(desiredAsUtcMs);
+  const wallAsUtcMs = Date.UTC(wall.year, wall.month - 1, wall.day, wall.hour, wall.minute, wall.second);
+  const offset = wallAsUtcMs - desiredAsUtcMs;
+  // Apply once; DST edges may need a second pass
+  let utcMs = desiredAsUtcMs - offset;
+  const wall2 = partsOf(utcMs);
+  const wall2AsUtc = Date.UTC(wall2.year, wall2.month - 1, wall2.day, wall2.hour, wall2.minute, wall2.second);
+  if (wall2AsUtc !== desiredAsUtcMs) {
+    utcMs = utcMs - (wall2AsUtc - desiredAsUtcMs);
+  }
+  return new Date(utcMs);
+}
+
+/** Default zone for floating (no TZID / no Z) times — GreenHQ family is AU. */
+const DEFAULT_FLOATING_TZ = 'Australia/Brisbane';
+
+/** ICS date → ISO UTC string. */
 function icsDateToIso(raw: string, allDayHint?: boolean): { iso: string; allDay: boolean } {
-  // raw may be "VALUE=DATE::20260917" or "TZID=...::20260917T150000" or "20260917T050000Z"
+  // raw may be "VALUE=DATE::20260917" or "TZID=Australia/Brisbane::20260917T080000" or "20260917T050000Z"
   let params = '';
   let value = raw;
   if (raw.includes('::')) {
-    const [p, v] = raw.split('::');
-    params = (p || '').toUpperCase();
-    value = v || '';
+    const idx = raw.indexOf('::');
+    params = raw.slice(0, idx);
+    value = raw.slice(idx + 2);
   }
-  const allDay = allDayHint ?? (params.includes('VALUE=DATE') || /^\d{8}$/.test(value));
+  const paramsUpper = params.toUpperCase();
+  const allDay = allDayHint ?? (paramsUpper.includes('VALUE=DATE') || /^\d{8}$/.test(value));
   if (allDay) {
     const y = value.slice(0, 4);
-    const m = value.slice(4, 6);
+    const mo = value.slice(4, 6);
     const d = value.slice(6, 8);
-    // Store all-day as local-noon-ish UTC (matches GreenHQ form export style roughly)
-    return { iso: `${y}-${m}-${d}T12:00:00.000Z`, allDay: true };
+    return { iso: `${y}-${mo}-${d}T12:00:00.000Z`, allDay: true };
   }
-  // 20260917T050000Z or 20260917T150000 or with fractional seconds
+
   const cleaned = value.replace(/\.\d+/, '');
   const m = cleaned.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})(Z)?$/i);
   if (!m) {
@@ -83,10 +141,37 @@ function icsDateToIso(raw: string, allDayHint?: boolean): { iso: string; allDay:
     }
     return { iso: d.toISOString(), allDay: false };
   }
-  // Store as UTC instant. TZID local times are treated as wall-clock UTC for v1
-  // (same limitation as many minimal CalDAV servers without a TZ database).
-  const iso = `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}.000Z`;
-  return { iso: new Date(iso).toISOString(), allDay: false };
+
+  const year = Number(m[1]);
+  const month = Number(m[2]);
+  const day = Number(m[3]);
+  const hour = Number(m[4]);
+  const minute = Number(m[5]);
+  const second = Number(m[6]);
+  const isZulu = !!m[7];
+
+  // Explicit UTC
+  if (isZulu) {
+    const iso = `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}.000Z`;
+    return { iso: new Date(iso).toISOString(), allDay: false };
+  }
+
+  // TZID=Area/City (iOS always sends this for timed events)
+  let tz = DEFAULT_FLOATING_TZ;
+  const tzidMatch = params.match(/TZID=([^;]+)/i);
+  if (tzidMatch?.[1]) {
+    // Strip quotes Apple sometimes adds
+    tz = tzidMatch[1].replace(/^"|"$/g, '');
+  }
+
+  try {
+    const utc = zonedWallToUtc(year, month, day, hour, minute, second, tz);
+    return { iso: utc.toISOString(), allDay: false };
+  } catch {
+    // Fallback: treat as floating Brisbane
+    const utc = zonedWallToUtc(year, month, day, hour, minute, second, DEFAULT_FLOATING_TZ);
+    return { iso: utc.toISOString(), allDay: false };
+  }
 }
 
 function allDayEndExclusive(startIso: string, endIso: string): string {
