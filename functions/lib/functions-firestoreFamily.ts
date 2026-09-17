@@ -244,6 +244,7 @@ export type FeedEvent = {
   exceptionDates?: string[];
   location?: string;
   notes?: string;
+  category?: string;
 };
 
 export function readEvents(doc: FsDoc): FeedEvent[] {
@@ -276,6 +277,7 @@ export function readEvents(doc: FsDoc): FeedEvent[] {
       exceptionDates: exceptionDates.length ? exceptionDates : undefined,
       location: str(fields.location),
       notes: str(fields.notes),
+      category: str(fields.category),
     });
   }
   return out;
@@ -295,6 +297,7 @@ function eventToFsValue(ev: {
   exceptionDates?: string[];
   location?: string;
   notes?: string;
+  category?: string;
 }): FsValue {
   const fields: Record<string, FsValue> = {
     id: { stringValue: ev.id },
@@ -318,6 +321,7 @@ function eventToFsValue(ev: {
   }
   if (ev.location) fields.location = { stringValue: ev.location };
   if (ev.notes) fields.notes = { stringValue: ev.notes };
+  if (ev.category) fields.category = { stringValue: ev.category };
   return { mapValue: { fields } };
 }
 
@@ -339,6 +343,7 @@ export async function patchFamilyEvents(
     exceptionDates?: string[];
     location?: string;
     notes?: string;
+    category?: string;
   }[],
 ): Promise<void> {
   const url =

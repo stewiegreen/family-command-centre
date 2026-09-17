@@ -78,6 +78,19 @@ export function buildIcsFeed(
       startInputType: 'utc',
       endInputType: 'utc',
     };
+    if (ev.category && ev.category !== 'general') {
+      const labels: Record<string, string> = {
+        school: 'School',
+        sport: 'Sport',
+        medical: 'Medical',
+        family: 'Family',
+        travel: 'Travel',
+        birthday: 'Birthday',
+        chore: 'Chore',
+        other: 'Other',
+      };
+      attr.categories = [labels[ev.category] || ev.category];
+    }
 
     if (ev.notes) attr.description = ev.notes;
     if (ev.location) attr.location = ev.location;

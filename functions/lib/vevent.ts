@@ -16,6 +16,7 @@ export type GhEvent = {
   exceptionDates?: string[];
   location?: string;
   notes?: string;
+  category?: string;
 };
 
 /** Unfold ICS content lines (RFC 5545). */
@@ -239,6 +240,23 @@ export function parseVEvent(icsBody: string, defaultMemberIds: string[]): GhEven
 
   const location = props['LOCATION']?.[0]?.trim();
   const notes = props['DESCRIPTION']?.[0]?.trim();
+  const catRaw = props['CATEGORIES']?.[0]?.trim();
+  let category: string | undefined;
+  if (catRaw) {
+    const first = catRaw.split(',')[0]!.trim().toLowerCase();
+    const map: Record<string, string> = {
+      school: 'school',
+      sport: 'sport',
+      medical: 'medical',
+      family: 'family',
+      travel: 'travel',
+      birthday: 'birthday',
+      chore: 'chore',
+      other: 'other',
+      general: 'general',
+    };
+    category = map[first] || (['school','sport','medical','family','travel','birthday','chore','other','general'].includes(first) ? first : 'other');
+  }
 
   return {
     id: uid,
@@ -255,6 +273,7 @@ export function parseVEvent(icsBody: string, defaultMemberIds: string[]): GhEven
     notes: notes
       ? notes.replace(/\\n/g, '\n').replace(/\\,/g, ',').replace(/\\\\/g, '\\')
       : undefined,
+    category,
   };
 }
 
@@ -290,6 +309,20 @@ export function serializeVEvent(ev: GhEvent): string {
   }
   if (ev.location) lines.push(`LOCATION:${esc(ev.location)}`);
   if (ev.notes) lines.push(`DESCRIPTION:${esc(ev.notes)}`);
+  if (ev.category && ev.category !== 'general') {
+    // Human label works better in Apple Calendar than raw id
+    const labels: Record<string, string> = {
+      school: 'School',
+      sport: 'Sport',
+      medical: 'Medical',
+      family: 'Family',
+      travel: 'Travel',
+      birthday: 'Birthday',
+      chore: 'Chore',
+      other: 'Other',
+    };
+    lines.push(`CATEGORIES:${esc(labels[ev.category] || ev.category)}`);
+  }
   if (ev.recurrence && ev.recurrence !== 'none') {
     let rule = `FREQ=${ev.recurrence.toUpperCase()}`;
     if (ev.recurrenceUntil) {
@@ -330,7 +363,7 @@ export function serializeVEvent(ev: GhEvent): string {
 
 export function eventEtag(ev: GhEvent): string {
   // Weak etag from stable fields
-  const raw = `${ev.id}|${ev.title}|${ev.start}|${ev.end}|${ev.allDay}|${ev.notes || ''}|${ev.location || ''}|${ev.recurrence || ''}`;
+  const raw = `${ev.id}|${ev.title}|${ev.start}|${ev.end}|${ev.allDay}|${ev.notes || ''}|${ev.location || ''}|${ev.recurrence || ''}|${ev.category || ''}`;
   let h = 0;
   for (let i = 0; i < raw.length; i++) h = (Math.imul(31, h) + raw.charCodeAt(i)) | 0;
   return `"${(h >>> 0).toString(16)}"`;

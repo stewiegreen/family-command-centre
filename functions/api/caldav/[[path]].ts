@@ -161,6 +161,7 @@ function feedToGh(ev: FeedEvent): GhEvent {
     exceptionDates: ev.exceptionDates,
     location: ev.location,
     notes: ev.notes,
+    category: ev.category,
   };
 }
 

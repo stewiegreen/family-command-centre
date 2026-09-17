@@ -95,6 +95,11 @@ export interface CalendarEvent {
   exceptionDates?: string[];
   location?: string;
   notes?: string;
+  /**
+   * Event type for filtering + CalDAV CATEGORIES.
+   * general | school | sport | medical | family | travel | birthday | chore | other
+   */
+  category?: string;
   /** Optional link to a Notes entry (packing list, prep checklist, etc.). */
   linkedNoteId?: string;
 }

@@ -27,6 +27,12 @@ import { uid } from '../lib/uid';
 import { eventOverlapsDay, expandEvents, packOverlapping } from '../lib/recurrence';
 import { downloadIcs, exportEventsToIcs, importEventsFromIcs, type ImportResult } from '../lib/ical';
 import type { CalendarEvent, ExpandedEvent, Todo } from '../types';
+import {
+  EVENT_CATEGORY_IDS,
+  EVENT_CATEGORY_META,
+  eventCategoryOf,
+  type EventCategory,
+} from '../lib/eventCategories';
 import { applyTodoStatus } from '../lib/todoQuest';
 import { cn } from '../lib/cn';
 
@@ -156,6 +162,7 @@ type FormState = {
   location: string;
   notes: string;
   linkedNoteId: string;
+  category: EventCategory;
 };
 
 function emptyForm(memberId: string, day?: Date): FormState {
@@ -173,9 +180,17 @@ function emptyForm(memberId: string, day?: Date): FormState {
     location: '',
     notes: '',
     linkedNoteId: '',
+    category: 'general',
   };
 }
 
+
+function eventTitleLabel(ev: { title: string; category?: string; linkedNoteId?: string }): string {
+  const cat = eventCategoryOf(ev.category);
+  const prefix = cat !== 'general' ? `${EVENT_CATEGORY_META[cat].emoji} ` : '';
+  const suffix = ev.linkedNoteId ? ' 📎' : '';
+  return `${prefix}${ev.title}${suffix}`;
+}
 
 function MemberFaces({
   ids,
@@ -501,6 +516,7 @@ export function CalendarPage() {
       linkedNoteId: master.linkedNoteId || '',
       location: master.location || '',
       notes: master.notes || '',
+      category: eventCategoryOf(master.category),
     });
   };
 
@@ -536,6 +552,7 @@ export function CalendarPage() {
           : undefined,
       location: form.location.trim() || undefined,
       notes: form.notes.trim() || undefined,
+      category: form.category && form.category !== 'general' ? form.category : undefined,
       linkedNoteId: form.linkedNoteId.trim() || undefined,
     };
 
@@ -918,6 +935,30 @@ export function CalendarPage() {
             onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
             placeholder="Event title"
           />
+          <div>
+            <label className="text-xs text-muted mb-1.5 block">Type</label>
+            <div className="flex flex-wrap gap-1.5">
+              {EVENT_CATEGORY_IDS.map((id) => {
+                const meta = EVENT_CATEGORY_META[id];
+                const on = form.category === id;
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setForm((f) => ({ ...f, category: id }))}
+                    className={
+                      on
+                        ? 'px-2.5 py-1 rounded-full text-xs font-medium border border-transparent text-white'
+                        : 'px-2.5 py-1 rounded-full text-xs font-medium border border-border text-muted hover:text-fg hover:border-border-strong'
+                    }
+                    style={on ? { backgroundColor: meta.accent } : undefined}
+                  >
+                    {meta.emoji} {meta.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
           <label className="flex items-center gap-2 text-sm text-muted">
             <input
               type="checkbox"
@@ -1426,8 +1467,7 @@ function MonthWeekRow({
                       <MemberFaces ids={ids} getMember={getMember} />
                       <span className="truncate">
                         {formatEventTimeLabel(ev)}
-                        {ev.title}
-                        {ev.linkedNoteId ? ' 📎' : ''}
+                        {eventTitleLabel(ev)}
                         {ev.recurrence && ev.recurrence !== 'none' ? ' ↻' : ''}
                       </span>
                     </div>
@@ -1491,7 +1531,7 @@ function MonthWeekRow({
             <span className="inline-flex items-center gap-1">
               <MemberFaces ids={ids} getMember={getMember} />
               <span className="truncate">
-                {ev.title}
+                {eventTitleLabel(ev)}
                 {ev.recurrence && ev.recurrence !== 'none' ? ' ↻' : ''}
               </span>
             </span>
@@ -1835,7 +1875,7 @@ function TimeGridView({
                     >
                       <span className="inline-flex items-center gap-1 max-w-full">
                         <MemberFaces ids={ids} getMember={getMember} />
-                        <span className="truncate">{ev.title}</span>
+                        <span className="truncate">{eventTitleLabel(ev)}</span>
                       </span>
                     </button>
                   );
@@ -1970,8 +2010,7 @@ function TimeGridView({
                           <div className="font-semibold truncate leading-snug text-sm flex items-center gap-1">
                             <MemberFaces ids={ids} getMember={getMember} />
                             <span className="truncate">
-                              {ev.title}
-                              {ev.linkedNoteId ? ' 📎' : ''}
+                              {eventTitleLabel(ev)}
                             </span>
                           </div>
                           {height > 30 && (
