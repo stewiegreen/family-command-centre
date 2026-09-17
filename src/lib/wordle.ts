@@ -1516,6 +1516,11 @@ export type WordleSolve = {
 export type WordleDaily = {
   seed: string;
   solves: WordleSolve[];
+  /**
+   * Member ids who already finished one Daily game today (win or lose).
+   * Only the first finish can earn a header spot — resets do not count.
+   */
+  finishedMemberIds?: string[];
 };
 
 export function evaluateStatus(guesses: string[], answer: string): WordleStatus {
@@ -1538,24 +1543,60 @@ export function newWordleGame(mode: 'daily' | 'random'): WordleState {
   };
 }
 
-/** Merge a new solve into today's record (idempotent per member). */
+/**
+ * Record the end of a Daily Wordle attempt.
+ * Only the member's **first** finish of the day counts for the header:
+ * - Win on first try → listed with that score
+ * - Lose on first try → marked finished, no header credit
+ * - Any later reset / replay → ignored for the board
+ */
+export function recordDailyWordleFinish(
+  existing: WordleDaily | null | undefined,
+  seed: string,
+  memberId: string,
+  name: string,
+  outcome: { won: boolean; guesses: number },
+): WordleDaily {
+  const base: WordleDaily =
+    existing && existing.seed === seed
+      ? {
+          seed,
+          solves: [...(existing.solves || [])],
+          finishedMemberIds: [...(existing.finishedMemberIds || [])],
+        }
+      : { seed, solves: [], finishedMemberIds: [] };
+
+  const finished = new Set(base.finishedMemberIds || []);
+  if (finished.has(memberId)) {
+    // Already used today's attempt — do not change board or score
+    return base;
+  }
+
+  finished.add(memberId);
+  base.finishedMemberIds = [...finished];
+
+  if (outcome.won) {
+    base.solves = base.solves.filter((s) => s.memberId !== memberId);
+    base.solves.push({
+      memberId,
+      name,
+      guesses: outcome.guesses,
+      at: new Date().toISOString(),
+    });
+    base.solves.sort((a, b) => a.guesses - b.guesses || a.at.localeCompare(b.at));
+  }
+
+  return base;
+}
+
+/** @deprecated use recordDailyWordleFinish — kept so old imports don't break mid-deploy */
 export function upsertWordleSolve(
   existing: WordleDaily | null | undefined,
   seed: string,
   solve: WordleSolve,
 ): WordleDaily {
-  const base: WordleDaily =
-    existing && existing.seed === seed
-      ? { seed, solves: [...(existing.solves || [])] }
-      : { seed, solves: [] };
-  const idx = base.solves.findIndex((s) => s.memberId === solve.memberId);
-  if (idx >= 0) {
-    // Keep the better (fewer guesses) or earlier record
-    const prev = base.solves[idx]!;
-    if (solve.guesses < prev.guesses) base.solves[idx] = solve;
-  } else {
-    base.solves.push(solve);
-  }
-  base.solves.sort((a, b) => a.guesses - b.guesses || a.at.localeCompare(b.at));
-  return base;
+  return recordDailyWordleFinish(existing, seed, solve.memberId, solve.name, {
+    won: true,
+    guesses: solve.guesses,
+  });
 }

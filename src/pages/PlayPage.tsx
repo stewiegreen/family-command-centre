@@ -51,7 +51,7 @@ import {
   newWordleGame,
   scoreGuess,
   todaySeed,
-  upsertWordleSolve,
+  recordDailyWordleFinish,
   type LetterState,
   type WordleState,
 } from '../lib/wordle';
@@ -411,18 +411,19 @@ export function PlayPage() {
           mode={solo === 'wordle' ? 'daily' : 'random'}
           me={me}
           onClose={() => setSolo(null)}
-          onDailyWin={
+          onDailyFinish={
             me
-              ? (guesses) => {
+              ? (result) => {
                   const seed = todaySeed();
                   update((prev) => ({
                     ...prev,
-                    wordleDaily: upsertWordleSolve(prev.wordleDaily, seed, {
-                      memberId: me.id,
-                      name: me.name,
-                      guesses,
-                      at: new Date().toISOString(),
-                    }),
+                    wordleDaily: recordDailyWordleFinish(
+                      prev.wordleDaily,
+                      seed,
+                      me.id,
+                      me.name,
+                      result,
+                    ),
                   }));
                 }
               : undefined
@@ -1332,12 +1333,12 @@ function WordleBoard({
   mode,
   me,
   onClose,
-  onDailyWin,
+  onDailyFinish,
 }: {
   mode: 'daily' | 'random';
   me: Member | null | undefined;
   onClose: () => void;
-  onDailyWin?: (guesses: number) => void;
+  onDailyFinish?: (result: { won: boolean; guesses: number }) => void;
 }) {
   const [game, setGame] = useState<WordleState>(() => newWordleGame(mode));
   const [current, setCurrent] = useState('');
@@ -1348,8 +1349,9 @@ function WordleBoard({
   gameRef.current = game;
   const currentRef = useRef(current);
   currentRef.current = current;
-  const onDailyWinRef = useRef(onDailyWin);
-  onDailyWinRef.current = onDailyWin;
+  const onDailyFinishRef = useRef(onDailyFinish);
+  onDailyFinishRef.current = onDailyFinish;
+  const dailyReportedRef = useRef(false);
 
   // Physical keyboard
   useEffect(() => {
@@ -1379,9 +1381,17 @@ function WordleBoard({
         setGame({ ...g, guesses, status });
         setCurrent('');
         setMsg(null);
-        if (status === 'won') {
-          fireConfetti({ count: 140, power: 14, origin: { x: 0.5, y: 0.4 } });
-          if (g.mode === 'daily') onDailyWinRef.current?.(guesses.length);
+        if (status === 'won' || status === 'lost') {
+          if (status === 'won') {
+            fireConfetti({ count: 140, power: 14, origin: { x: 0.5, y: 0.4 } });
+          }
+          if (g.mode === 'daily' && !dailyReportedRef.current) {
+            dailyReportedRef.current = true;
+            onDailyFinishRef.current?.({
+              won: status === 'won',
+              guesses: guesses.length,
+            });
+          }
         }
         return;
       }
@@ -1428,9 +1438,14 @@ function WordleBoard({
     setGame({ ...game, guesses, status });
     setCurrent('');
     setMsg(null);
-    if (status === 'won') {
-      fireConfetti({ count: 140, power: 14, origin: { x: 0.5, y: 0.4 } });
-      if (game.mode === 'daily') onDailyWin?.(guesses.length);
+    if (status === 'won' || status === 'lost') {
+      if (status === 'won') {
+        fireConfetti({ count: 140, power: 14, origin: { x: 0.5, y: 0.4 } });
+      }
+      if (game.mode === 'daily' && !dailyReportedRef.current) {
+        dailyReportedRef.current = true;
+        onDailyFinish?.({ won: status === 'won', guesses: guesses.length });
+      }
     }
   };
 
@@ -1457,6 +1472,9 @@ function WordleBoard({
     setGame(newWordleGame(m));
     setCurrent('');
     setMsg(null);
+    // Local flag resets so the UI can play again, but the server record
+    // still refuses a second board credit for the same day.
+    dailyReportedRef.current = false;
   };
 
   const rows: { letters: string; states: LetterState[] }[] = [];

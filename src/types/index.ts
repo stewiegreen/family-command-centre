@@ -790,6 +790,8 @@ export interface FamilyData {
   wordleDaily?: {
     seed: string;
     solves: { memberId: string; name: string; guesses: number; at: string }[];
+    /** Member ids who finished one Daily attempt today (only first counts). */
+    finishedMemberIds?: string[];
   };
 }
 
