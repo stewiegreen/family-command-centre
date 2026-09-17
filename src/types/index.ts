@@ -763,6 +763,8 @@ export interface FamilyData {
        * Both missing or both 1 → equal halves. Solo rows ignore this.
        */
       homescreenSpans?: Record<string, 1 | 2>;
+      /** Message partner memberIds pinned to top of conversation list (this user only). */
+      pinnedConversations?: string[];
       /** Sidebar page order for this member only (ViewIds; settings stays pinned). */
       navOrder?: string[];
     }
