@@ -1,17 +1,9 @@
 /**
- * Minimal CalDAV (two-way) for GreenHQ family calendars.
+ * Minimal CalDAV for GreenHQ — tuned for iOS Calendar + DAVx5.
  *
- * Base:  /api/caldav/
- * Auth:  HTTP Basic — username = member id (or "family"), password = calendarFeedToken
- *
- * Paths:
- *   /api/caldav/                               principal-ish root
- *   /api/caldav/principals/{user}/             current-user-principal
- *   /api/caldav/calendars/{user}/              calendar-home
- *   /api/caldav/calendars/{user}/default/      calendar collection
- *   /api/caldav/calendars/{user}/default/{uid}.ics  event resource
- *
- * Works with DAVx5; iOS "CalDAV account" advanced setup can use the same base URL.
+ * Account URL: https://greenhq.io/api/caldav/
+ * Username:    member id | family
+ * Password:    settings.calendarFeedToken
  */
 
 import { getGoogleAccessToken, parseServiceAccount } from '../../lib/googleSa';
@@ -40,14 +32,43 @@ function xmlEscape(s: string): string {
     .replace(/"/g, '&quot;');
 }
 
-function davResponse(status: number, body: string, extra: Record<string, string> = {}): Response {
+const NS =
+  'xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav" xmlns:cs="http://calendarserver.org/ns/" xmlns:a="http://apple.com/ns/ical/"';
+
+const PRIVILEGES = `
+  <d:current-user-privilege-set>
+    <d:privilege><d:read/></d:privilege>
+    <d:privilege><d:read-acl/></d:privilege>
+    <d:privilege><d:read-current-user-privilege-set/></d:privilege>
+    <d:privilege><d:write/></d:privilege>
+    <d:privilege><d:write-properties/></d:privilege>
+    <d:privilege><d:write-content/></d:privilege>
+    <d:privilege><d:bind/></d:privilege>
+    <d:privilege><d:unbind/></d:privilege>
+  </d:current-user-privilege-set>`;
+
+const REPORT_SET = `
+  <d:supported-report-set>
+    <d:supported-report><d:report><c:calendar-query/></d:report></d:supported-report>
+    <d:supported-report><d:report><c:calendar-multiget/></d:report></d:supported-report>
+    <d:supported-report><d:report><d:sync-collection/></d:report></d:supported-report>
+  </d:supported-report-set>`;
+
+function davHeaders(extra: Record<string, string> = {}): Record<string, string> {
+  return {
+    DAV: '1, 3, calendar-access, calendar-schedule, calendar-auto-schedule, addressbook',
+    Allow: 'OPTIONS, GET, HEAD, PUT, DELETE, PROPFIND, REPORT, MKCALENDAR',
+    'MS-Author-Via': 'DAV',
+    ...extra,
+  };
+}
+
+function davXml(status: number, body: string, extra: Record<string, string> = {}): Response {
   return new Response(body, {
     status,
     headers: {
       'Content-Type': 'application/xml; charset=utf-8',
-      DAV: '1, 3, calendar-access',
-      Allow: 'OPTIONS, GET, HEAD, PUT, DELETE, PROPFIND, REPORT',
-      ...extra,
+      ...davHeaders(extra),
     },
   });
 }
@@ -57,7 +78,7 @@ function unauthorized(): Response {
     status: 401,
     headers: {
       'WWW-Authenticate': 'Basic realm="GreenHQ CalDAV"',
-      DAV: '1, 3, calendar-access',
+      ...davHeaders(),
     },
   });
 }
@@ -90,7 +111,7 @@ async function authorize(req: Request, env: Env): Promise<AuthOk | Response> {
 
   const members = readMembers(doc);
   const user = basic.user.trim();
-  if (user === 'family' || user === 'all' || user === '') {
+  if (!user || user === 'family' || user === 'all') {
     return { user: 'family', memberIdsFilter: null };
   }
   const m = members.find((x) => x.id === user || x.name === user);
@@ -127,50 +148,68 @@ function filterEvents(events: FeedEvent[], filter: string[] | null): GhEvent[] {
   return list.filter((e) => (e.memberIds || []).some((id) => filter.includes(id)));
 }
 
-
-/** PROPFIND multistatus helpers */
 function propstat(hrefPath: string, propsXml: string, status = 'HTTP/1.1 200 OK'): string {
   return `<d:response>
   <d:href>${xmlEscape(hrefPath)}</d:href>
   <d:propstat>
-    <d:prop>${propsXml}</d:prop>
+    <d:prop>
+${propsXml}
+    </d:prop>
     <d:status>${status}</d:status>
   </d:propstat>
 </d:response>`;
+}
+
+function collectionCtag(events: GhEvent[]): string {
+  let h = events.length;
+  for (const e of events) {
+    h = (Math.imul(31, h) + eventEtag(e).length + e.id.length) | 0;
+  }
+  return `greenhq-${(h >>> 0).toString(16)}-${events.length}`;
 }
 
 export const onRequest: PagesFunction<Env> = async (context) => {
   const req = context.request;
   const method = req.method.toUpperCase();
   const env = context.env;
+  const parts = pathParts(context);
+  const url = new URL(req.url);
+  const origin = `${url.protocol}//${url.host}`;
+  const root = `${origin}/api/caldav`;
 
-  // CORS preflight for some clients
+  console.log('[caldav]', method, url.pathname, 'parts=', parts.join('/'));
+
   if (method === 'OPTIONS') {
     return new Response(null, {
       status: 204,
       headers: {
-        DAV: '1, 3, calendar-access',
-        Allow: 'OPTIONS, GET, HEAD, PUT, DELETE, PROPFIND, REPORT',
-        'Access-Control-Allow-Methods': 'OPTIONS, GET, HEAD, PUT, DELETE, PROPFIND, REPORT',
-        'Access-Control-Allow-Headers': 'Authorization, Content-Type, Depth, Prefer, If-Match, If-None-Match',
+        ...davHeaders(),
+        'Access-Control-Allow-Methods': 'OPTIONS, GET, HEAD, PUT, DELETE, PROPFIND, REPORT, MKCALENDAR',
+        'Access-Control-Allow-Headers':
+          'Authorization, Content-Type, Depth, Prefer, If-Match, If-None-Match, Brief',
       },
     });
+  }
+
+  // MKCALENDAR — calendar already exists; accept so iOS is happy
+  if (method === 'MKCALENDAR') {
+    const authEarly = await authorize(req, env);
+    if (authEarly instanceof Response) return authEarly;
+    return new Response(null, { status: 201, headers: davHeaders() });
   }
 
   let auth: AuthOk;
   try {
     const a = await authorize(req, env);
-    if (a instanceof Response) return a;
+    if (a instanceof Response) {
+      console.log('[caldav] auth failed');
+      return a;
+    }
     auth = a;
   } catch (e) {
-    console.error('[caldav] auth', e);
+    console.error('[caldav] auth error', e);
     return new Response('Server error', { status: 500 });
   }
-
-  const parts = pathParts(context);
-  const url = new URL(req.url);
-  const origin = `${url.protocol}//${url.host}`;
-  const root = `${origin}/api/caldav`;
 
   const sa = parseServiceAccount(env.FIREBASE_SERVICE_ACCOUNT);
   const accessToken = await getGoogleAccessToken(sa);
@@ -179,7 +218,6 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   const load = async () => {
     const doc = await getFamilyDoc(sa.project_id, familyId, accessToken);
     return {
-      doc,
       events: readEvents(doc),
       members: readMembers(doc),
       familyName: readSettingsField(doc, 'familyName') || 'GreenHQ',
@@ -187,37 +225,41 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   };
 
   try {
-    // ── Root / ──
+    // ── /api/caldav/ ──
     if (parts.length === 0) {
       if (method === 'PROPFIND') {
         const xml = `<?xml version="1.0" encoding="utf-8"?>
-<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav" xmlns:cs="http://calendarserver.org/ns/">
+<d:multistatus ${NS}>
 ${propstat(`${root}/`, `
   <d:resourcetype><d:collection/></d:resourcetype>
   <d:displayname>GreenHQ CalDAV</d:displayname>
   <d:current-user-principal><d:href>${root}/principals/${xmlEscape(auth.user)}/</d:href></d:current-user-principal>
   <c:calendar-home-set><d:href>${root}/calendars/${xmlEscape(auth.user)}/</d:href></c:calendar-home-set>
+  <d:principal-URL><d:href>${root}/principals/${xmlEscape(auth.user)}/</d:href></d:principal-URL>
+  ${PRIVILEGES}
 `)}
 </d:multistatus>`;
-        return davResponse(207, xml);
+        return davXml(207, xml);
       }
-      return davResponse(200, `<?xml version="1.0"?><d:multistatus xmlns:d="DAV:"/>`);
+      return davXml(200, `<?xml version="1.0"?><d:multistatus ${NS}/>`);
     }
 
     // ── principals/{user} ──
-    if (parts[0] === 'principals' && parts.length >= 2) {
-      const user = parts[1]!;
+    if (parts[0] === 'principals') {
+      const user = parts[1] || auth.user;
       if (method === 'PROPFIND') {
         const xml = `<?xml version="1.0" encoding="utf-8"?>
-<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
+<d:multistatus ${NS}>
 ${propstat(`${root}/principals/${xmlEscape(user)}/`, `
   <d:resourcetype><d:principal/><d:collection/></d:resourcetype>
   <d:displayname>${xmlEscape(user)}</d:displayname>
   <c:calendar-home-set><d:href>${root}/calendars/${xmlEscape(user)}/</d:href></c:calendar-home-set>
   <d:current-user-principal><d:href>${root}/principals/${xmlEscape(user)}/</d:href></d:current-user-principal>
+  <d:principal-URL><d:href>${root}/principals/${xmlEscape(user)}/</d:href></d:principal-URL>
+  ${PRIVILEGES}
 `)}
 </d:multistatus>`;
-        return davResponse(207, xml);
+        return davXml(207, xml);
       }
     }
 
@@ -225,60 +267,58 @@ ${propstat(`${root}/principals/${xmlEscape(user)}/`, `
     if (parts[0] === 'calendars' && parts.length === 2) {
       const user = parts[1]!;
       if (method === 'PROPFIND') {
-        const xml = `<?xml version="1.0" encoding="utf-8"?>
-<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav" xmlns:cs="http://calendarserver.org/ns/">
-${propstat(`${root}/calendars/${xmlEscape(user)}/`, `
+        const depth = req.headers.get('Depth') ?? '1';
+        let responses = propstat(`${root}/calendars/${xmlEscape(user)}/`, `
   <d:resourcetype><d:collection/></d:resourcetype>
   <d:displayname>Calendar home</d:displayname>
-`)}
-${propstat(`${root}/calendars/${xmlEscape(user)}/default/`, `
+  ${PRIVILEGES}
+`);
+        if (depth !== '0') {
+          responses += propstat(`${root}/calendars/${xmlEscape(user)}/default/`, `
   <d:resourcetype><d:collection/><c:calendar/></d:resourcetype>
   <d:displayname>GreenHQ</d:displayname>
   <c:supported-calendar-component-set><c:comp name="VEVENT"/></c:supported-calendar-component-set>
-  <cs:getctag>greenhq</cs:getctag>
-  <d:current-user-privilege-set>
-    <d:privilege><d:read/></d:privilege>
-    <d:privilege><d:write/></d:privilege>
-    <d:privilege><d:write-content/></d:privilege>
-    <d:privilege><d:bind/></d:privilege>
-    <d:privilege><d:unbind/></d:privilege>
-  </d:current-user-privilege-set>
-`)}
+  <cs:getctag>bootstrap</cs:getctag>
+  <a:calendar-color>#34C759</a:calendar-color>
+  ${REPORT_SET}
+  ${PRIVILEGES}
+`);
+        }
+        const xml = `<?xml version="1.0" encoding="utf-8"?>
+<d:multistatus ${NS}>
+${responses}
 </d:multistatus>`;
-        return davResponse(207, xml);
+        return davXml(207, xml);
       }
     }
 
-    // ── calendars/{user}/default  or  default/{uid}.ics ──
+    // ── calendars/{user}/default[/event] ──
     if (parts[0] === 'calendars' && parts.length >= 3 && parts[2] === 'default') {
       const user = parts[1]!;
-      const calHref = `${root}/calendars/${user}/default`;
-      const { events: allEvents } = await load();
-      // Scope: path user if member, else auth filter
+      const calHref = `${root}/calendars/${encodeURIComponent(user)}/default`;
+      const { events: allEvents, members: mems } = await load();
+
       let filter: string[] | null = auth.memberIdsFilter;
       if (user !== 'family' && user !== 'all') {
         filter = [user];
       }
       const events = filterEvents(allEvents, filter);
+      const ctag = collectionCtag(events);
 
-      // Collection
+      // Collection root
       if (parts.length === 3) {
         if (method === 'PROPFIND') {
-          const depth = req.headers.get('Depth') || '1';
+          const depth = req.headers.get('Depth') ?? '1';
           let responses = propstat(`${calHref}/`, `
-  <d:resourcetype><d:collection/><c:calendar xmlns:c="urn:ietf:params:xml:ns:caldav"/></d:resourcetype>
+  <d:resourcetype><d:collection/><c:calendar/></d:resourcetype>
   <d:displayname>GreenHQ</d:displayname>
-  <d:getetag>"collection"</d:getetag>
-  <cs:getctag xmlns:cs="http://calendarserver.org/ns/">${Date.now()}</cs:getctag>
-  <c:supported-calendar-component-set xmlns:c="urn:ietf:params:xml:ns:caldav"><c:comp name="VEVENT"/></c:supported-calendar-component-set>
-  <d:current-user-privilege-set>
-    <d:privilege><d:read/></d:privilege>
-    <d:privilege><d:write/></d:privilege>
-    <d:privilege><d:write-properties/></d:privilege>
-    <d:privilege><d:write-content/></d:privilege>
-    <d:privilege><d:bind/></d:privilege>
-    <d:privilege><d:unbind/></d:privilege>
-  </d:current-user-privilege-set>
+  <d:getetag>"${xmlEscape(ctag)}"</d:getetag>
+  <cs:getctag>${xmlEscape(ctag)}</cs:getctag>
+  <d:sync-token>https://greenhq.io/sync/${xmlEscape(ctag)}</d:sync-token>
+  <c:supported-calendar-component-set><c:comp name="VEVENT"/></c:supported-calendar-component-set>
+  <a:calendar-color>#34C759</a:calendar-color>
+  ${REPORT_SET}
+  ${PRIVILEGES}
 `);
           if (depth !== '0') {
             for (const ev of events) {
@@ -287,49 +327,53 @@ ${propstat(`${root}/calendars/${xmlEscape(user)}/default/`, `
   <d:getetag>${eventEtag(ev)}</d:getetag>
   <d:getcontenttype>text/calendar; charset=utf-8</d:getcontenttype>
   <d:resourcetype/>
+  ${PRIVILEGES}
 `);
             }
           }
-          const xml = `<?xml version="1.0" encoding="utf-8"?>
-<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav" xmlns:cs="http://calendarserver.org/ns/">
-${responses}
-</d:multistatus>`;
-          return davResponse(207, xml);
+          return davXml(
+            207,
+            `<?xml version="1.0" encoding="utf-8"?><d:multistatus ${NS}>${responses}</d:multistatus>`,
+          );
         }
 
         if (method === 'REPORT') {
-          // calendar-query / calendar-multiget — return all matching events as calendar-data
+          // calendar-query / calendar-multiget / sync-collection
           let responses = '';
           for (const ev of events) {
             const eh = `${calHref}/${encodeURIComponent(ev.id)}.ics`;
             const data = serializeVEvent(ev);
             responses += propstat(eh, `
   <d:getetag>${eventEtag(ev)}</d:getetag>
-  <c:calendar-data xmlns:c="urn:ietf:params:xml:ns:caldav">${xmlEscape(data)}</c:calendar-data>
+  <c:calendar-data><![CDATA[${data}]]></c:calendar-data>
 `);
           }
-          const xml = `<?xml version="1.0" encoding="utf-8"?>
-<d:multistatus xmlns:d="DAV:">${responses}</d:multistatus>`;
-          return davResponse(207, xml);
+          return davXml(
+            207,
+            `<?xml version="1.0" encoding="utf-8"?><d:multistatus ${NS}>${responses}</d:multistatus>`,
+          );
         }
       }
 
-      // Event resource: default/{uid}.ics  (Apple may omit .ics rarely)
+      // Event object
       if (parts.length === 4) {
         const rawName = parts[3]!;
-        const uid = rawName.endsWith('.ics') ? rawName.slice(0, -'.ics'.length) : rawName;
+        const uid = rawName.endsWith('.ics') ? rawName.slice(0, -4) : rawName;
         const decodedUid = decodeURIComponent(uid);
 
         if (method === 'GET' || method === 'HEAD') {
           const ev = events.find((e) => e.id === decodedUid);
-          if (!ev) return new Response('Not found', { status: 404 });
+          if (!ev) {
+            console.log('[caldav] GET miss', decodedUid);
+            return new Response('Not found', { status: 404, headers: davHeaders() });
+          }
           const body = serializeVEvent(ev);
           return new Response(method === 'HEAD' ? null : body, {
             status: 200,
             headers: {
               'Content-Type': 'text/calendar; charset=utf-8',
               ETag: eventEtag(ev),
-              DAV: '1, 3, calendar-access',
+              ...davHeaders(),
             },
           });
         }
@@ -337,19 +381,18 @@ ${responses}
         if (method === 'PUT') {
           try {
             const text = await req.text();
-            const { events: full, members: mems } = await load();
+            console.log('[caldav] PUT', decodedUid, 'bytes=', text.length);
             const defaultMembers =
               (filter && filter.length ? filter : null) ||
               auth.memberIdsFilter ||
               (mems[0]?.id ? [mems[0].id] : []);
             const parsed = parseVEvent(text, defaultMembers);
             if (!parsed) {
-              console.error('[caldav] PUT parse failed', text.slice(0, 400));
-              return new Response('Invalid VEVENT', { status: 400 });
+              console.error('[caldav] PUT parse fail', text.slice(0, 500));
+              return new Response('Invalid VEVENT', { status: 400, headers: davHeaders() });
             }
-            // Prefer URL uid for stability (Apple path often differs slightly)
             if (decodedUid) parsed.id = decodedUid;
-            if (filter && filter.length) {
+            if (filter?.length) {
               parsed.memberIds = filter;
               parsed.memberId = filter[0];
             } else if (!parsed.memberIds.length) {
@@ -357,16 +400,14 @@ ${responses}
               parsed.memberId = defaultMembers[0];
             }
 
-            const asGh = full.map(feedToGh);
+            const asGh = allEvents.map(feedToGh);
             const idx = asGh.findIndex((e) => e.id === parsed.id);
             const created = idx < 0;
             if (idx >= 0) {
               asGh[idx] = {
                 ...asGh[idx],
                 ...parsed,
-                memberIds: parsed.memberIds.length
-                  ? parsed.memberIds
-                  : asGh[idx]!.memberIds,
+                memberIds: parsed.memberIds.length ? parsed.memberIds : asGh[idx]!.memberIds,
               };
             } else {
               asGh.push(parsed);
@@ -374,45 +415,49 @@ ${responses}
 
             await patchFamilyEvents(sa.project_id, familyId, accessToken, asGh);
             const location = `${calHref}/${encodeURIComponent(parsed.id)}.ics`;
+            console.log('[caldav] PUT ok', created ? 'created' : 'updated', parsed.id);
             return new Response(null, {
               status: created ? 201 : 204,
               headers: {
                 ETag: eventEtag(parsed),
-                DAV: '1, 3, calendar-access',
                 Location: location,
                 'Content-Location': location,
+                ...davHeaders(),
               },
             });
           } catch (putErr) {
-            console.error('[caldav] PUT failed', putErr);
-            return new Response('Write failed', { status: 500 });
+            console.error('[caldav] PUT error', putErr);
+            return new Response('Write failed', { status: 500, headers: davHeaders() });
           }
         }
 
         if (method === 'DELETE') {
-          const { events: full } = await load();
-          const asGh = full.map(feedToGh).filter((e) => e.id !== decodedUid);
-          if (asGh.length === full.length) return new Response('Not found', { status: 404 });
+          const asGh = allEvents.map(feedToGh).filter((e) => e.id !== decodedUid);
+          if (asGh.length === allEvents.length) {
+            return new Response('Not found', { status: 404, headers: davHeaders() });
+          }
           await patchFamilyEvents(sa.project_id, familyId, accessToken, asGh);
-          return new Response(null, { status: 204, headers: { DAV: '1, 3, calendar-access' } });
+          console.log('[caldav] DELETE', decodedUid);
+          return new Response(null, { status: 204, headers: davHeaders() });
         }
 
         if (method === 'PROPFIND') {
           const ev = events.find((e) => e.id === decodedUid);
-          if (!ev) return new Response('Not found', { status: 404 });
+          if (!ev) return new Response('Not found', { status: 404, headers: davHeaders() });
           const eh = `${calHref}/${encodeURIComponent(ev.id)}.ics`;
           const xml = `<?xml version="1.0" encoding="utf-8"?>
-<d:multistatus xmlns:d="DAV:">
-${propstat(eh, `<d:getetag>${eventEtag(ev)}</d:getetag><d:getcontenttype>text/calendar; charset=utf-8</d:getcontenttype>`)}
+<d:multistatus ${NS}>
+${propstat(eh, `<d:getetag>${eventEtag(ev)}</d:getetag><d:getcontenttype>text/calendar; charset=utf-8</d:getcontenttype>${PRIVILEGES}`)}
 </d:multistatus>`;
-          return davResponse(207, xml);
+          return davXml(207, xml);
         }
       }
     }
 
-    return new Response('Not found', { status: 404 });
+    console.log('[caldav] 404 unhandled', method, parts);
+    return new Response('Not found', { status: 404, headers: davHeaders() });
   } catch (e) {
-    console.error('[caldav]', e);
+    console.error('[caldav] error', e);
     return new Response('Server error', { status: 500 });
   }
 };

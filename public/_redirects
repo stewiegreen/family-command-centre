@@ -2,3 +2,4 @@
 # "/* /index.html 200" is ignored by Cloudflare (infinite-loop warning).
 # "[assets] not_found_handling" is invalid in Pages wrangler.toml.
 # GreenHQ navigates via in-app view state, so deep path rewrites are unnecessary.
+/.well-known/caldav /api/caldav/ 302
