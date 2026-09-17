@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
   ImagePlus,
@@ -189,7 +189,10 @@ export function MessagesPage() {
 
   const fileRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const threadScrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const prevThreadLen = useRef(0);
+  const prevChatId = useRef(chatId);
 
   const pinnedIds = data.appearance?.[me]?.pinnedConversations || [];
 
@@ -311,8 +314,34 @@ export function MessagesPage() {
     if (chatId) void markThreadRead(chatId);
   }, [chatId, markThreadRead, thread.length]);
 
+  const scrollThreadToBottom = (behavior: ScrollBehavior = 'auto') => {
+    const el = threadScrollRef.current;
+    if (!el) return;
+    // Prefer container scroll — more reliable than scrollIntoView inside nested layouts
+    el.scrollTo({ top: el.scrollHeight, behavior });
+    bottomRef.current?.scrollIntoView({ block: 'end', behavior });
+  };
+
+  // Open / switch conversation: jump instantly to latest (no smooth animation)
+  useLayoutEffect(() => {
+    scrollThreadToBottom('auto');
+    // Second frame catches late layout (avatars, wrapped text)
+    const id = requestAnimationFrame(() => scrollThreadToBottom('auto'));
+    return () => cancelAnimationFrame(id);
+  }, [chatId, threadItems.length]);
+
+  // New message while already on this chat: smooth scroll
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const chatChanged = prevChatId.current !== chatId;
+    prevChatId.current = chatId;
+    if (chatChanged) {
+      prevThreadLen.current = thread.length;
+      return;
+    }
+    if (thread.length > prevThreadLen.current) {
+      scrollThreadToBottom('smooth');
+    }
+    prevThreadLen.current = thread.length;
   }, [thread.length, chatId]);
 
   const selectConversation = (id: string) => {
@@ -543,7 +572,7 @@ export function MessagesPage() {
               </button>
             </header>
 
-            <div className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-6 py-4 space-y-1">
+            <div ref={threadScrollRef} className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-6 py-4 space-y-1">
               {thread.length === 0 ? (
                 <p className="text-center text-sm text-muted py-12">
                   No messages yet. Say hello to {chatPartner.name}!
