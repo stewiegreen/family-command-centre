@@ -1,8 +1,14 @@
-import { useEffect, useRef, useState } from 'react';
-import { MessageCircle, Send, ImagePlus } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ArrowLeft,
+  ImagePlus,
+  MessageCircle,
+  MoreVertical,
+  Search,
+  Send,
+} from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Avatar } from '../components/ui/Avatar';
-import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
 import { EmptyState } from '../components/ui/EmptyState';
 import { EmojiPicker } from '../components/EmojiPicker';
@@ -32,12 +38,12 @@ const IMAGE_URL_RE = new RegExp(
 );
 
 function cleanImageUrl(raw: string): string {
-  // Strip trailing punctuation often included when pasting
   return raw.replace(/[),.;:!?>\]]+$/g, '');
 }
 
 function ChatImage({ url }: { url: string }) {
   const [failed, setFailed] = useState(false);
+
   if (failed) {
     return (
       <a
@@ -51,6 +57,7 @@ function ChatImage({ url }: { url: string }) {
       </a>
     );
   }
+
   return (
     <a
       href={url}
@@ -77,12 +84,14 @@ function MessageBody({ text }: { text: string }) {
   const re = new RegExp(IMAGE_URL_RE.source, 'gi');
   let last = 0;
   let m: RegExpExecArray | null;
+
   while ((m = re.exec(text)) !== null) {
     const url = cleanImageUrl(m[0]);
     if (m.index > last) parts.push({ type: 'text', value: text.slice(last, m.index) });
     parts.push({ type: 'image', value: url });
     last = m.index + m[0].length;
   }
+
   if (last < text.length) parts.push({ type: 'text', value: text.slice(last) });
   if (parts.length === 0) parts.push({ type: 'text', value: text });
 
@@ -103,37 +112,131 @@ function MessageBody({ text }: { text: string }) {
   );
 }
 
+function formatListTime(timestamp?: string): string {
+  if (!timestamp) return '';
+  const date = new Date(timestamp);
+  const now = new Date();
+
+  if (date.toDateString() === now.toDateString()) {
+    return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  }
+
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
+
+  return date.toLocaleDateString([], { day: 'numeric', month: 'short' });
+}
+
+function formatMessageTime(timestamp: string): string {
+  return new Date(timestamp).toLocaleTimeString([], {
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
 export function MessagesPage() {
-  const { data, currentUser, getMember, sendMessage, markThreadRead, familyId } = useApp();
+  const {
+    data,
+    currentUser,
+    getMember,
+    sendMessage,
+    markThreadRead,
+    familyId,
+  } = useApp();
+
   const me = currentUser?.id || data.settings.currentUserId;
-  const others = data.members
-    .filter((m) => m.id !== me && m.role !== 'media')
-    .map((m) => getMember(m.id) || m);
+
+  const others = useMemo(
+    () =>
+      data.members
+        .filter((m) => m.id !== me && m.role !== 'media')
+        .map((m) => getMember(m.id) || m),
+    [data.members, getMember, me],
+  );
+
   const [chatId, setChatId] = useState(others[0]?.id || '');
+  const [search, setSearch] = useState('');
+  const [mobileListOpen, setMobileListOpen] = useState(false);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
+
   const fileRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const thread = data.messages
-    .filter((m) => (m.fromId === me && m.toId === chatId) || (m.fromId === chatId && m.toId === me))
-    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
-    .slice(-MAX_MESSAGES_PER_THREAD);
-
   useEffect(() => {
-    if (!chatId && others[0]) setChatId(others[0].id);
-  }, [others, chatId]);
+    if (!chatId || !others.some((m) => m.id === chatId)) {
+      if (others[0]) setChatId(others[0].id);
+      else setChatId('');
+    }
+  }, [chatId, others]);
+
+  const conversations = useMemo(() => {
+    return others
+      .map((member) => {
+        const messages = data.messages
+          .filter(
+            (m) =>
+              (m.fromId === me && m.toId === member.id) ||
+              (m.fromId === member.id && m.toId === me),
+          )
+          .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+        const latest = messages[messages.length - 1];
+        const unread = messages.filter((m) => m.fromId === member.id && m.toId === me && !m.read).length;
+
+        return { member, latest, unread };
+      })
+      .sort((a, b) => {
+        const aTime = a.latest ? new Date(a.latest.timestamp).getTime() : 0;
+        const bTime = b.latest ? new Date(b.latest.timestamp).getTime() : 0;
+        return bTime - aTime;
+      });
+  }, [data.messages, me, others]);
+
+  const filteredConversations = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return conversations;
+
+    return conversations.filter(({ member, latest }) => {
+      return (
+        member.name.toLowerCase().includes(q) ||
+        latest?.text.toLowerCase().includes(q)
+      );
+    });
+  }, [conversations, search]);
+
+  const thread = useMemo(
+    () =>
+      data.messages
+        .filter(
+          (m) =>
+            (m.fromId === me && m.toId === chatId) ||
+            (m.fromId === chatId && m.toId === me),
+        )
+        .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+        .slice(-MAX_MESSAGES_PER_THREAD),
+    [data.messages, me, chatId],
+  );
+
+  const meLook = getMember(me) || currentUser;
+  const chatPartner = getMember(chatId);
 
   useEffect(() => {
     if (chatId) void markThreadRead(chatId);
-  }, [chatId, me, markThreadRead]);
+  }, [chatId, markThreadRead]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [thread.length]);
+
+  const selectConversation = (id: string) => {
+    setChatId(id);
+    setMobileListOpen(false);
+  };
 
   const insertEmoji = (emoji: string) => {
     const el = inputRef.current;
@@ -155,31 +258,38 @@ export function MessagesPage() {
   const uploadPhoto = async (file: File) => {
     setUploadError('');
     setUploading(true);
+
     try {
       const auth = getFirebaseAuth();
       const user = auth?.currentUser;
+
       if (!user) {
         setUploadError('Sign in required to upload photos.');
         return;
       }
+
       const idToken = await user.getIdToken();
       const form = new FormData();
       form.append('photo', file);
       if (familyId) form.append('familyId', familyId);
+
       const res = await fetch('/api/messages-upload', {
         method: 'POST',
         headers: { Authorization: `Bearer ${idToken}` },
         body: form,
       });
-      const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
-      if (!res.ok || !data.url) {
-        setUploadError(data.error || `Upload failed (${res.status})`);
+
+      const result = (await res.json().catch(() => ({}))) as {
+        url?: string;
+        error?: string;
+      };
+
+      if (!res.ok || !result.url) {
+        setUploadError(result.error || `Upload failed (${res.status})`);
         return;
       }
-      setText((prev) => {
-        const next = prev.trim() ? `${prev.trim()}\n${data.url}` : data.url!;
-        return next;
-      });
+
+      setText((prev) => (prev.trim() ? `${prev.trim()}\n${result.url}` : result.url!));
     } catch (e) {
       setUploadError(e instanceof Error ? e.message : 'Upload failed');
     } finally {
@@ -190,6 +300,7 @@ export function MessagesPage() {
 
   const send = async () => {
     if (!text.trim() || !chatId || sending) return;
+
     setSending(true);
     try {
       await sendMessage(chatId, text);
@@ -202,141 +313,293 @@ export function MessagesPage() {
 
   if (others.length === 0) {
     return (
-      <div className="p-4">
-        <EmptyState icon={MessageCircle} title="No one to message" description="Add family members first." />
+      <div className="h-full p-4">
+        <EmptyState
+          icon={MessageCircle}
+          title="No one to message"
+          description="Add family members first."
+        />
       </div>
     );
   }
 
-  const meLook = getMember(me) || currentUser;
-  const chatPartner = getMember(chatId);
-
   return (
-    <div className="p-4 lg:p-6 max-w-3xl mx-auto h-[calc(100dvh-8rem)] lg:h-[calc(100dvh-4rem)] flex flex-col gap-3">
-      <h1 className="text-xl font-bold flex items-center gap-2">
-        <MessageCircle className="w-6 h-6 text-accent" />
-        Messages
-      </h1>
-      <p className="text-xs text-muted -mt-1">
-        Private between you and each person — others cannot read these. Latest {MAX_MESSAGES_PER_THREAD} per chat are kept.
-      </p>
-      <div className="flex gap-2 overflow-x-auto pb-1">
-        {others.map((m) => {
-          const unread = data.messages.filter((msg) => msg.fromId === m.id && msg.toId === me && !msg.read).length;
-          return (
-            <button
-              key={m.id}
-              type="button"
-              onClick={() => setChatId(m.id)}
-              className={cn(
-                'flex items-center gap-2 px-3 py-1.5 rounded-full text-sm shrink-0 border relative',
-                chatId === m.id ? 'border-accent bg-accent/15' : 'border-border-strong',
-              )}
-            >
-              <Avatar {...m} size="sm" />
-              {m.name}
-              {unread > 0 && (
-                <span className="bg-accent text-accent-ink text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
-                  {unread}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
-
-      <Card className="flex-1 flex flex-col !p-0 overflow-hidden min-h-0">
-        <div className="flex-1 overflow-y-auto p-4 space-y-2.5">
-          {thread.length === 0 && (
-            <p className="text-base text-muted text-center py-8">No messages yet. Say hello!</p>
-          )}
-          {thread.map((m) => {
-            const mine = m.fromId === me;
-            const sender = mine ? meLook : chatPartner || getMember(m.fromId);
-            const bg = sender?.color || (mine ? '#6366f1' : '#374151');
-            const fg = contrastText(bg);
-            const ts = softTimestampColor(bg);
-            return (
-              <div key={m.id} className={cn('flex items-end gap-2', mine ? 'justify-end' : 'justify-start')}>
-                {!mine && (
-                  <Avatar
-                    {...(sender || {})}
-                    size="sm"
-                    className="mb-0.5"
-                  />
-                )}
-                <div
-                  className={cn(
-                    'max-w-[80%] px-3.5 py-2 rounded-2xl text-base break-words leading-snug',
-                    mine ? 'rounded-br-md' : 'rounded-bl-md',
-                  )}
-                  style={{ backgroundColor: bg, color: fg }}
-                >
-                  <MessageBody text={m.text} />
-                  <div className="text-xs mt-1" style={{ color: ts }}>
-                    {new Date(m.timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
-                  </div>
-                </div>
-                {mine && (
-                  <Avatar
-                    {...(sender || {})}
-                    size="sm"
-                    className="mb-0.5"
-                  />
-                )}
-              </div>
-            );
-          })}
-          <div ref={bottomRef} />
-        </div>
-        <div className="p-3 border-t border-border space-y-1.5">
-          {(uploading || uploadError) && (
-            <p className={`text-xs px-1 ${uploadError ? 'text-warn' : 'text-muted'}`}>
-              {uploading ? 'Uploading photo…' : uploadError}
-            </p>
-          )}
-          <div className="flex items-end gap-2">
-            <EmojiPicker onPick={insertEmoji} />
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) void uploadPhoto(f);
-              }}
-            />
-            <button
-              type="button"
-              title="Add photo"
-              disabled={uploading}
-              onClick={() => fileRef.current?.click()}
-              className="p-2.5 rounded-xl border border-border text-muted hover:text-fg hover:bg-nav-hover disabled:opacity-50"
-            >
-              <ImagePlus className="w-5 h-5" />
-            </button>
-            <Input
-              ref={inputRef}
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              placeholder="Message…"
-              onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && void send()}
-              className="flex-1 text-base"
-              disabled={uploading}
-            />
-            <button
-              type="button"
-              onClick={() => void send()}
-              disabled={sending || uploading}
-              className="p-2.5 rounded-xl bg-accent text-accent-ink hover:bg-accent disabled:opacity-50"
-            >
-              <Send className="w-5 h-5" />
-            </button>
+    <div className="h-full min-h-0 w-full flex overflow-hidden bg-elevated">
+      {/* Conversation list */}
+      <aside
+        className={cn(
+          'w-full sm:w-[19rem] lg:w-[21rem] shrink-0 border-r border-border bg-surface flex flex-col',
+          mobileListOpen ? 'flex' : 'hidden sm:flex',
+        )}
+      >
+        <div className="px-4 pt-5 pb-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight">Messages</h1>
+              <p className="text-xs text-muted mt-0.5">
+                Private family conversations
+              </p>
+            </div>
+            <MessageCircle className="w-5 h-5 text-accent shrink-0" />
           </div>
+
+          <label className="relative block mt-4">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted pointer-events-none" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search messages"
+              className="pl-9 h-10"
+              aria-label="Search messages"
+            />
+          </label>
         </div>
-      </Card>
+
+        <div className="px-4 pb-2 text-[11px] font-semibold uppercase tracking-wider text-faint">
+          Conversations
+        </div>
+
+        <div className="flex-1 min-h-0 overflow-y-auto px-2 pb-3">
+          {filteredConversations.length === 0 ? (
+            <div className="px-3 py-8 text-sm text-muted text-center">
+              No conversations match your search.
+            </div>
+          ) : (
+            <div className="space-y-0.5">
+              {filteredConversations.map(({ member, latest, unread }) => {
+                const selected = member.id === chatId;
+
+                return (
+                  <button
+                    key={member.id}
+                    type="button"
+                    onClick={() => selectConversation(member.id)}
+                    className={cn(
+                      'w-full flex items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors',
+                      selected
+                        ? 'bg-accent/12 text-fg'
+                        : 'hover:bg-nav-hover text-fg',
+                    )}
+                  >
+                    <div className="relative shrink-0">
+                      <Avatar {...member} size="md" />
+                      {unread > 0 && (
+                        <span className="absolute -right-1 -top-1 min-w-5 h-5 px-1 rounded-full bg-accent text-accent-ink text-[10px] font-bold flex items-center justify-center border-2 border-surface">
+                          {unread > 9 ? '9+' : unread}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className={cn('font-semibold truncate text-sm', unread > 0 && 'text-accent')}>
+                          {member.name}
+                        </span>
+                        {latest && (
+                          <span className="ml-auto shrink-0 text-[11px] text-faint">
+                            {formatListTime(latest.timestamp)}
+                          </span>
+                        )}
+                      </div>
+                      <p className={cn(
+                        'text-xs truncate mt-0.5',
+                        unread > 0 ? 'text-fg-secondary font-medium' : 'text-muted',
+                      )}>
+                        {latest?.text || 'No messages yet — say hello!'}
+                      </p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </aside>
+
+      {/* Active conversation */}
+      <section
+        className={cn(
+          'min-w-0 flex-1 flex flex-col bg-page',
+          mobileListOpen ? 'hidden sm:flex' : 'flex',
+        )}
+      >
+        {chatPartner ? (
+          <>
+            <header className="shrink-0 h-[4.5rem] px-4 sm:px-6 border-b border-border bg-elevated flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setMobileListOpen(true)}
+                className="sm:hidden p-2 -ml-2 rounded-lg text-muted hover:text-fg hover:bg-nav-hover"
+                aria-label="Back to conversations"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+
+              <Avatar {...chatPartner} size="sm" />
+
+              <div className="min-w-0 flex-1">
+                <h2 className="font-semibold truncate">{chatPartner.name}</h2>
+                <p className="text-xs text-muted truncate">
+                  Private conversation
+                </p>
+              </div>
+
+              <button
+                type="button"
+                className="p-2 rounded-lg text-muted hover:text-fg hover:bg-nav-hover"
+                aria-label="Conversation options"
+                title="Conversation options"
+              >
+                <MoreVertical className="w-5 h-5" />
+              </button>
+            </header>
+
+            <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-5">
+              <div className="max-w-4xl mx-auto space-y-3">
+                {thread.length === 0 && (
+                  <div className="flex flex-col items-center justify-center text-center py-20">
+                    <Avatar {...chatPartner} size="lg" />
+                    <p className="font-semibold mt-4">{chatPartner.name}</p>
+                    <p className="text-sm text-muted mt-1">
+                      No messages yet. Say hello!
+                    </p>
+                  </div>
+                )}
+
+                {thread.map((m, index) => {
+                  const mine = m.fromId === me;
+                  const sender = mine ? meLook : chatPartner || getMember(m.fromId);
+                  const bg = sender?.color || (mine ? '#6366f1' : '#374151');
+                  const fg = contrastText(bg);
+                  const ts = softTimestampColor(bg);
+
+                  const previous = thread[index - 1];
+                  const dayChanged =
+                    !previous ||
+                    new Date(previous.timestamp).toDateString() !==
+                      new Date(m.timestamp).toDateString();
+
+                  return (
+                    <div key={m.id}>
+                      {dayChanged && (
+                        <div className="flex items-center gap-3 py-3">
+                          <div className="h-px flex-1 bg-border" />
+                          <span className="text-[11px] font-medium text-faint">
+                            {new Date(m.timestamp).toLocaleDateString([], {
+                              weekday: 'short',
+                              day: 'numeric',
+                              month: 'short',
+                            })}
+                          </span>
+                          <div className="h-px flex-1 bg-border" />
+                        </div>
+                      )}
+
+                      <div
+                        className={cn(
+                          'flex items-end gap-2',
+                          mine ? 'justify-end' : 'justify-start',
+                        )}
+                      >
+                        {!mine && (
+                          <Avatar {...(sender || {})} size="sm" className="mb-0.5" />
+                        )}
+
+                        <div
+                          className={cn(
+                            'max-w-[min(80%,42rem)] px-3.5 py-2 rounded-2xl text-sm sm:text-base break-words leading-snug shadow-sm',
+                            mine ? 'rounded-br-md' : 'rounded-bl-md',
+                          )}
+                          style={{ backgroundColor: bg, color: fg }}
+                        >
+                          <MessageBody text={m.text} />
+                          <div className="text-[11px] mt-1" style={{ color: ts }}>
+                            {formatMessageTime(m.timestamp)}
+                          </div>
+                        </div>
+
+                        {mine && (
+                          <Avatar {...(sender || {})} size="sm" className="mb-0.5" />
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                <div ref={bottomRef} />
+              </div>
+            </div>
+
+            <div className="shrink-0 border-t border-border bg-elevated px-3 sm:px-5 py-3">
+              <div className="max-w-4xl mx-auto">
+                {(uploading || uploadError) && (
+                  <p className={cn(
+                    'text-xs px-1 pb-1.5',
+                    uploadError ? 'text-warn' : 'text-muted',
+                  )}>
+                    {uploading ? 'Uploading photo…' : uploadError}
+                  </p>
+                )}
+
+                <div className="flex items-end gap-2">
+                  <EmojiPicker onPick={insertEmoji} />
+
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) void uploadPhoto(file);
+                    }}
+                  />
+
+                  <button
+                    type="button"
+                    title="Add photo"
+                    disabled={uploading}
+                    onClick={() => fileRef.current?.click()}
+                    className="p-2.5 rounded-xl border border-border text-muted hover:text-fg hover:bg-nav-hover disabled:opacity-50"
+                  >
+                    <ImagePlus className="w-5 h-5" />
+                  </button>
+
+                  <Input
+                    ref={inputRef}
+                    value={text}
+                    onChange={(e) => setText(e.target.value)}
+                    placeholder={`Message ${chatPartner.name}…`}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        void send();
+                      }
+                    }}
+                    className="flex-1 text-base min-h-11"
+                    disabled={uploading}
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() => void send()}
+                    disabled={sending || uploading || !text.trim()}
+                    className="p-2.5 rounded-xl bg-accent text-accent-ink hover:bg-accent disabled:opacity-50 shrink-0"
+                    title="Send message"
+                  >
+                    <Send className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="flex-1 flex items-center justify-center text-muted">
+            Select a conversation
+          </div>
+        )}
+      </section>
     </div>
   );
 }
