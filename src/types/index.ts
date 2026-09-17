@@ -602,6 +602,11 @@ export interface Settings {
     /** Display name, e.g. "Brisbane". */
     label: string;
   };
+  /**
+   * Secret token for the read-only calendar .ics subscription feed.
+   * Anyone with the URL can read family events; regenerate to revoke.
+   */
+  calendarFeedToken?: string;
 }
 
 export interface PresenceEntry {

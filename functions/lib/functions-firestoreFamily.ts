@@ -212,3 +212,70 @@ export async function patchFamilyScreen(
   });
   if (!res.ok) throw new Error(`Firestore PATCH ${res.status}: ${await res.text()}`);
 }
+
+function strArray(v: FsValue | undefined): string[] {
+  if (!v || !('arrayValue' in v)) return [];
+  const out: string[] = [];
+  for (const item of v.arrayValue.values || []) {
+    const s = str(item);
+    if (s != null) out.push(s);
+  }
+  return out;
+}
+
+/** Read a top-level string field nested inside the `settings` map. */
+export function readSettingsField(doc: FsDoc, key: string): string | undefined {
+  const settings = doc.fields?.settings;
+  if (!settings || !('mapValue' in settings)) return undefined;
+  return str(settings.mapValue.fields?.[key]);
+}
+
+/** Lightweight shape read from Firestore for the read-only .ics feed. */
+export type FeedEvent = {
+  id: string;
+  title: string;
+  start: string;
+  end: string;
+  allDay: boolean;
+  memberIds: string[];
+  recurrence?: string;
+  recurrenceUntil?: string;
+  exceptionDates?: string[];
+  location?: string;
+  notes?: string;
+};
+
+export function readEvents(doc: FsDoc): FeedEvent[] {
+  const f = doc.fields?.events;
+  if (!f || !('arrayValue' in f)) return [];
+  const out: FeedEvent[] = [];
+  for (const v of f.arrayValue.values || []) {
+    if (!('mapValue' in v)) continue;
+    const fields = v.mapValue.fields || {};
+    const id = str(fields.id);
+    const title = str(fields.title);
+    const start = str(fields.start);
+    const end = str(fields.end);
+    if (!id || !title || !start || !end) continue;
+    const memberIds = strArray(fields.memberIds);
+    const memberId = str(fields.memberId);
+    const exceptionDates = strArray(fields.exceptionDates);
+    out.push({
+      id,
+      title,
+      start,
+      end,
+      allDay:
+        'booleanValue' in (fields.allDay || {})
+          ? (fields.allDay as { booleanValue: boolean }).booleanValue
+          : false,
+      memberIds: memberIds.length ? memberIds : memberId ? [memberId] : [],
+      recurrence: str(fields.recurrence),
+      recurrenceUntil: str(fields.recurrenceUntil),
+      exceptionDates: exceptionDates.length ? exceptionDates : undefined,
+      location: str(fields.location),
+      notes: str(fields.notes),
+    });
+  }
+  return out;
+}

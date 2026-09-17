@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Bell, Lock, Trash2 } from 'lucide-react';
+import { Bell, CalendarClock, Lock, Trash2 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { geocodeCity, saveStoredLocation } from '../lib/weather';
 import { Avatar } from '../components/ui/Avatar';
@@ -50,6 +50,8 @@ export function SettingsPage() {
   const [inviteLabel, setInviteLabel] = useState('');
   const [inviteBusy, setInviteBusy] = useState(false);
   const [lastInvite, setLastInvite] = useState('');
+  const [feedBusy, setFeedBusy] = useState(false);
+  const [feedMsg, setFeedMsg] = useState('');
   const [pinInput, setPinInput] = useState('');
   const [pinErr, setPinErr] = useState('');
   const [newParentPin, setNewParentPin] = useState('');
@@ -60,6 +62,39 @@ export function SettingsPage() {
 
   const needsPin = !!(data.settings.parentPin && data.settings.parentPin.length >= 4);
   const unlocked = parentPinUnlocked || !needsPin;
+
+  const calendarFeedUrl = (token: string, webcal: boolean): string => {
+    const origin = window.location.origin.replace(
+      /^https?:/,
+      webcal ? 'webcal:' : window.location.protocol,
+    );
+    return `${origin}/api/calendar/${token}.ics`;
+  };
+
+  const onGenerateCalendarFeed = () => {
+    if (!isParent) return;
+    setFeedBusy(true);
+    setFeedMsg('');
+    try {
+      const token = crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '');
+      update((d) => ({ ...d, settings: { ...d.settings, calendarFeedToken: token } }));
+      setFeedMsg('Link generated below.');
+    } finally {
+      setFeedBusy(false);
+    }
+  };
+
+  const onRemoveCalendarFeed = () => {
+    if (!isParent) return;
+    if (!confirm('Turn off the phone calendar link? Existing subscriptions will stop updating.')) return;
+    setFeedBusy(true);
+    try {
+      update((d) => ({ ...d, settings: { ...d.settings, calendarFeedToken: undefined } }));
+      setFeedMsg('');
+    } finally {
+      setFeedBusy(false);
+    }
+  };
 
   const refreshInvites = async () => {
     try {
@@ -419,6 +454,89 @@ export function SettingsPage() {
                   )}
                 </div>
               ))}
+            </div>
+          )}
+        </Card>
+      )}
+
+
+      {familyId && cloudReady && isParent && (
+        <Card>
+          <h2 className="font-semibold mb-1 flex items-center gap-2">
+            <CalendarClock className="w-4 h-4" />
+            Calendar sync
+          </h2>
+          <p className="text-xs text-muted mb-3">
+            Subscribe to your GreenHQ calendar from your phone&apos;s own Calendar app — no
+            Google, Apple, or Microsoft account needed. This is one-way (view-only): events show
+            up on your phone, but editing them there won&apos;t change GreenHQ.
+          </p>
+          {!data.settings.calendarFeedToken ? (
+            <Button size="sm" onClick={onGenerateCalendarFeed} disabled={feedBusy}>
+              {feedBusy ? '…' : 'Generate calendar link'}
+            </Button>
+          ) : (
+            <div className="space-y-3">
+              <div className="rounded-lg border border-border bg-surface/60 p-3 space-y-2">
+                <p className="text-[11px] font-semibold text-muted uppercase tracking-wide">
+                  Subscription link
+                </p>
+                <p className="text-[11px] font-mono break-all text-fg">
+                  {calendarFeedUrl(data.settings.calendarFeedToken, false)}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => {
+                      void navigator.clipboard.writeText(
+                        calendarFeedUrl(data.settings.calendarFeedToken!, false),
+                      );
+                      setFeedMsg('Copied.');
+                    }}
+                  >
+                    Copy link
+                  </Button>
+                  <a
+                    href={calendarFeedUrl(data.settings.calendarFeedToken, true)}
+                    className="text-[11px] text-accent underline self-center"
+                  >
+                    Tap here on this phone to subscribe now
+                  </a>
+                </div>
+              </div>
+              <div className="text-[11px] text-muted space-y-1">
+                <p>
+                  <strong className="text-fg">iOS:</strong> Settings → Calendar → Accounts → Add
+                  Account → Other → Add Subscribed Calendar → paste the link above.
+                </p>
+                <p>
+                  <strong className="text-fg">Android:</strong> the stock Calendar app can&apos;t
+                  subscribe by URL directly — install{' '}
+                  <a
+                    href="https://www.davx5.com/"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-accent underline"
+                  >
+                    DAVx5
+                  </a>{' '}
+                  (open-source) and add it as a webcal subscription.
+                </p>
+              </div>
+              {feedMsg && <p className="text-[11px] text-accent">{feedMsg}</p>}
+              <div className="flex gap-2">
+                <Button size="sm" variant="secondary" onClick={onGenerateCalendarFeed} disabled={feedBusy}>
+                  Regenerate link
+                </Button>
+                <Button size="sm" variant="ghost" onClick={onRemoveCalendarFeed} disabled={feedBusy}>
+                  Turn off
+                </Button>
+              </div>
+              <p className="text-[11px] text-faint">
+                Regenerating invalidates the old link — anyone already subscribed will need the
+                new one.
+              </p>
             </div>
           )}
         </Card>
