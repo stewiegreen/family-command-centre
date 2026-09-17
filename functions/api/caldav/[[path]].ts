@@ -127,9 +127,6 @@ function filterEvents(events: FeedEvent[], filter: string[] | null): GhEvent[] {
   return list.filter((e) => (e.memberIds || []).some((id) => filter.includes(id)));
 }
 
-function href(base: string, ...bits: string[]): string {
-  return [base.replace(/\/$/, ''), ...bits].join('/');
-}
 
 /** PROPFIND multistatus helpers */
 function propstat(hrefPath: string, propsXml: string, status = 'HTTP/1.1 200 OK'): string {
