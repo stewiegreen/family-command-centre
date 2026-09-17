@@ -279,3 +279,85 @@ export function readEvents(doc: FsDoc): FeedEvent[] {
   }
   return out;
 }
+
+
+function eventToFsValue(ev: {
+  id: string;
+  title: string;
+  start: string;
+  end: string;
+  allDay: boolean;
+  memberId?: string;
+  memberIds: string[];
+  recurrence?: string;
+  recurrenceUntil?: string;
+  exceptionDates?: string[];
+  location?: string;
+  notes?: string;
+}): FsValue {
+  const fields: Record<string, FsValue> = {
+    id: { stringValue: ev.id },
+    title: { stringValue: ev.title },
+    start: { stringValue: ev.start },
+    end: { stringValue: ev.end },
+    allDay: { booleanValue: !!ev.allDay },
+    memberIds: {
+      arrayValue: {
+        values: (ev.memberIds || []).map((id) => ({ stringValue: id })),
+      },
+    },
+  };
+  if (ev.memberId) fields.memberId = { stringValue: ev.memberId };
+  if (ev.recurrence) fields.recurrence = { stringValue: ev.recurrence };
+  if (ev.recurrenceUntil) fields.recurrenceUntil = { stringValue: ev.recurrenceUntil };
+  if (ev.exceptionDates?.length) {
+    fields.exceptionDates = {
+      arrayValue: { values: ev.exceptionDates.map((d) => ({ stringValue: d })) },
+    };
+  }
+  if (ev.location) fields.location = { stringValue: ev.location };
+  if (ev.notes) fields.notes = { stringValue: ev.notes };
+  return { mapValue: { fields } };
+}
+
+/** Replace the entire events array on the family doc (service account). */
+export async function patchFamilyEvents(
+  projectId: string,
+  familyId: string,
+  token: string,
+  events: {
+    id: string;
+    title: string;
+    start: string;
+    end: string;
+    allDay: boolean;
+    memberId?: string;
+    memberIds: string[];
+    recurrence?: string;
+    recurrenceUntil?: string;
+    exceptionDates?: string[];
+    location?: string;
+    notes?: string;
+  }[],
+): Promise<void> {
+  const url =
+    `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/families/${encodeURIComponent(familyId)}` +
+    `?updateMask.fieldPaths=events&updateMask.fieldPaths=updatedAt`;
+
+  const body = {
+    fields: {
+      events: { arrayValue: { values: events.map(eventToFsValue) } },
+      updatedAt: { stringValue: new Date().toISOString() },
+    },
+  };
+
+  const res = await fetch(url, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`Firestore PATCH events ${res.status}: ${await res.text()}`);
+}

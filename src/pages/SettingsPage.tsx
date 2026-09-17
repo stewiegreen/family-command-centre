@@ -85,7 +85,12 @@ export function SettingsPage() {
     try {
       const token = crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '');
       update((d) => ({ ...d, settings: { ...d.settings, calendarFeedToken: token } }));
-      setFeedMsg('Link generated below.');
+      setFeedMsg(`Link generated. CalDAV password (copy now): ${token}`);
+      try {
+        void navigator.clipboard.writeText(token);
+      } catch {
+        /* ignore */
+      }
     } finally {
       setFeedBusy(false);
     }
@@ -588,8 +593,75 @@ export function SettingsPage() {
                 </Button>
               </div>
               <p className="text-[11px] text-faint">
-                Regenerating invalidates every old link — re-subscribe with the new ones.
+                Regenerating invalidates every old link and CalDAV password — re-subscribe with
+                the new ones.
               </p>
+
+              <div className="rounded-lg border border-accent/30 bg-accent/5 p-3 space-y-2 mt-2">
+                <p className="text-[11px] font-semibold text-fg uppercase tracking-wide">
+                  Two-way sync (CalDAV)
+                </p>
+                <p className="text-[11px] text-muted">
+                  Edit events on your phone and they write back to GreenHQ. Use the same token as
+                  the password; username is a member id (copy below) or <code className="text-fg">family</code> for everyone.
+                </p>
+                <p className="text-[11px] font-mono break-all text-fg">
+                  {typeof window !== 'undefined' ? window.location.origin : ''}/api/caldav/
+                </p>
+                <ul className="text-[11px] text-muted space-y-1 list-disc pl-4">
+                  <li>
+                    <strong className="text-fg">Server URL:</strong> the link above
+                  </li>
+                  <li>
+                    <strong className="text-fg">Username:</strong>{' '}
+                    {data.members[0] ? (
+                      <code className="text-fg">{data.members[0].id}</code>
+                    ) : (
+                      'member id'
+                    )}{' '}
+                    (or <code className="text-fg">family</code>)
+                  </li>
+                  <li>
+                    <strong className="text-fg">Password:</strong> the calendar feed token
+                    (regenerate above if you need to reveal a fresh one — it is stored only in
+                    Settings after generate; copy a person&apos;s ICS link path if needed)
+                  </li>
+                </ul>
+                <p className="text-[11px] text-muted">
+                  <strong className="text-fg">Android:</strong> DAVx5 → Login with URL → paste
+                  server URL, username, password → grant calendar access.
+                </p>
+                <p className="text-[11px] text-muted">
+                  <strong className="text-fg">iOS:</strong> Settings → Calendar → Accounts → Add
+                  Account → Other → Add CalDAV Account → Server{' '}
+                  <code className="text-fg">greenhq.io</code>, path optional advanced if asked{' '}
+                  <code className="text-fg">/api/caldav/</code>.
+                </p>
+                <div className="space-y-1">
+                  <p className="text-[11px] font-semibold text-muted">Member usernames</p>
+                  {data.members.map((m) => (
+                    <div key={m.id} className="flex flex-wrap items-center gap-2 text-[11px]">
+                      <span className="text-fg font-medium min-w-[4.5rem]">{m.name}</span>
+                      <code className="text-faint break-all">{m.id}</code>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          void navigator.clipboard.writeText(m.id);
+                          setFeedMsg(`Copied username for ${m.name}.`);
+                        }}
+                      >
+                        Copy id
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-[11px] text-faint">
+                  Password is the full feed token string (same secret as ICS links). Generate or
+                  regenerate the calendar link above to set it; it is not shown in full here after
+                  the page reloads — copy from your password manager or regenerate once.
+                </p>
+              </div>
             </div>
           )}
         </Card>
