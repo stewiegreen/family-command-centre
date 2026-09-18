@@ -89,11 +89,11 @@ export function GameChatPanel({
   const nearLimit = text.length >= 220;
 
   return (
-    <Card className="p-0 overflow-hidden lg:sticky lg:top-4">
+    <Card className="p-0 overflow-hidden h-full min-h-[280px] lg:min-h-0 flex flex-col">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-surface-2/60 transition-colors"
+        className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-surface-2/60 transition-colors shrink-0"
         aria-expanded={open}
       >
         <span className="w-9 h-9 rounded-xl bg-accent/10 text-accent flex items-center justify-center shrink-0">
@@ -116,14 +116,14 @@ export function GameChatPanel({
       </button>
 
       {/* Keep DOM mounted when collapsed so the subscription (parent) stays; only hide UI */}
-      <div className={cn(!open && 'hidden')}>
-        <div className="border-t border-border">
+      <div className={cn('flex flex-col flex-1 min-h-0', !open && 'hidden')}>
+        <div className="border-t border-border flex flex-col flex-1 min-h-0">
           <div
             ref={listRef}
-            className="h-[340px] overflow-y-auto px-3 py-3 space-y-2"
+            className="flex-1 min-h-[160px] overflow-y-auto px-3 py-3 space-y-2"
           >
             {messages.length === 0 && !err && (
-              <div className="h-full flex flex-col items-center justify-center text-center px-5">
+              <div className="min-h-[140px] h-full flex flex-col items-center justify-center text-center px-5">
                 <MessageCircle className="w-8 h-8 text-muted/50 mb-2" />
                 <p className="text-sm font-semibold text-fg">Let the trash talk begin.</p>
                 <p className="text-xs text-muted mt-1">
@@ -165,7 +165,7 @@ export function GameChatPanel({
             })}
           </div>
           {err && <p className="px-3 pb-2 text-[11px] text-warn">{err}</p>}
-          <form onSubmit={(e) => void send(e)} className="border-t border-border p-2 flex gap-2 items-end">
+          <form onSubmit={(e) => void send(e)} className="border-t border-border p-2 flex gap-2 items-end shrink-0">
             <div className="min-w-0 flex-1 relative">
               <input
                 value={text}

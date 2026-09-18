@@ -375,7 +375,7 @@ export function PlayPage() {
       </div>
 
       {active && (
-        <div className="max-w-6xl mx-auto w-full flex flex-col lg:flex-row gap-6 items-start">
+        <div className="max-w-6xl mx-auto w-full flex flex-col lg:flex-row gap-6 items-stretch">
           <div className="flex-1 min-w-0 w-full">
             {isTtt(active) && (
               <TttBoard
@@ -413,7 +413,7 @@ export function PlayPage() {
             )}
           </div>
           {active.guestUid && familyId && authUid && (
-            <div className="w-full lg:w-[360px] shrink-0">
+            <div className="w-full lg:w-[360px] shrink-0 flex flex-col">
               <GameChatPanel
                 familyId={familyId}
                 gameId={active.id}
@@ -620,7 +620,7 @@ function TttBoard({
   } else statusText = `${game.turn === 'X' ? host?.name : guest?.name}'s turn`;
 
   return (
-    <Card className="p-4 space-y-3">
+    <Card className="p-4 space-y-3 h-full flex flex-col">
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-3 min-w-0">
           <div className="text-center">
@@ -731,7 +731,7 @@ function C4Board({
   else statusText = `${game.turn === 'R' ? host?.name : guest?.name}'s turn`;
 
   return (
-    <Card className="p-4 space-y-3">
+    <Card className="p-4 space-y-3 h-full flex flex-col">
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-3 min-w-0">
           <div className="text-center">
@@ -1122,7 +1122,7 @@ function BsBoard({
   }
 
   return (
-    <Card className="p-4 space-y-3">
+    <Card className="p-4 space-y-3 h-full flex flex-col">
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-3 min-w-0">
           <Avatar {...(host || { name: '?' })} size="md" />
