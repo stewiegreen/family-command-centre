@@ -74,6 +74,20 @@ export type KomgaPageInfo = {
 
 type PageResult<T> = { content?: T[]; totalElements?: number; totalPages?: number };
 
+/** Komga search_regex: "regex,FIELD" for TITLE or TITLE_SORT — server-side letter buckets. */
+export function letterSearchRegex(letter: string): string {
+  const L = letter.trim().toUpperCase();
+  if (L === '#') {
+    // Titles that do not start with A–Z / a–z
+    return '^[^A-Za-z].*,TITLE_SORT';
+  }
+  if (/^[A-Z]$/.test(L)) {
+    const lower = L.toLowerCase();
+    return `^[${L}${lower}].*,TITLE_SORT`;
+  }
+  return '';
+}
+
 function memberQuery(memberId?: string | null): string {
   if (!memberId) return '';
   return `memberId=${encodeURIComponent(memberId)}`;
@@ -170,6 +184,8 @@ export async function komgaSeries(
     size?: number;
     page?: number;
     search?: string;
+    /** Komga "regex,TITLE_SORT" — e.g. letterSearchRegex('Z'). */
+    searchRegex?: string;
     libraryId?: string;
     memberId?: string;
     /** Default alphabetical by title. */
@@ -180,6 +196,7 @@ export async function komgaSeries(
     size: opts.size ?? 24,
     page: opts.page ?? 0,
     search: opts.search,
+    search_regex: opts.searchRegex || undefined,
     library_id: opts.libraryId,
     sort: opts.sort ?? 'metadata.titleSort,asc',
     memberId: opts.memberId,

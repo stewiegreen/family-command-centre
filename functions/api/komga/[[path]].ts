@@ -27,6 +27,7 @@ const ALLOWED_QUERY = new Set([
   'read_status',
   'library_id',
   'search',
+  'search_regex',
   'unpaged',
   'author',
   'publisher',
