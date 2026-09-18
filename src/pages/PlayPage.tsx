@@ -53,6 +53,10 @@ import {
   scoreGuess,
   todaySeed,
   recordDailyWordleFinish,
+  initialWordleState,
+  persistWordleProgress,
+  clearWordleLocal,
+  wordleStorageKey,
   type LetterState,
   type WordleState,
 } from '../lib/wordle';
@@ -436,7 +440,33 @@ export function PlayPage() {
           key={solo}
           mode={solo === 'wordle' ? 'daily' : 'random'}
           me={me}
+          daily={data.wordleDaily}
           onClose={() => setSolo(null)}
+          onProgress={
+            me
+              ? (state) => {
+                  if (state.mode !== 'daily' || state.status !== 'playing') return;
+                  const seed = state.seed || todaySeed();
+                  update((prev) => {
+                    const base =
+                      prev.wordleDaily && prev.wordleDaily.seed === seed
+                        ? prev.wordleDaily
+                        : { seed, solves: [], finishedMemberIds: [], inProgress: {} };
+                    return {
+                      ...prev,
+                      wordleDaily: {
+                        ...base,
+                        seed,
+                        inProgress: {
+                          ...(base.inProgress || {}),
+                          [me.id]: { guesses: state.guesses },
+                        },
+                      },
+                    };
+                  });
+                }
+              : undefined
+          }
           onDailyFinish={
             me
               ? (result) => {
@@ -1359,15 +1389,28 @@ function WordleDailyBanner({
 function WordleBoard({
   mode,
   me,
+  daily,
   onClose,
   onDailyFinish,
+  onProgress,
 }: {
   mode: 'daily' | 'random';
   me: Member | null | undefined;
+  daily?: FamilyData['wordleDaily'];
   onClose: () => void;
   onDailyFinish?: (result: { won: boolean; guesses: number }) => void;
+  onProgress?: (state: WordleState) => void;
 }) {
-  const [game, setGame] = useState<WordleState>(() => newWordleGame(mode));
+  const seed = todaySeed();
+  const alreadyFinished =
+    mode === 'daily' &&
+    !!me &&
+    daily?.seed === seed &&
+    (daily.finishedMemberIds || []).includes(me.id);
+
+  const [game, setGame] = useState<WordleState>(() =>
+    initialWordleState(mode, { memberId: me?.id, daily }),
+  );
   const [current, setCurrent] = useState('');
   const [msg, setMsg] = useState<string | null>(null);
   const [shake, setShake] = useState(false);
@@ -1378,12 +1421,14 @@ function WordleBoard({
   currentRef.current = current;
   const onDailyFinishRef = useRef(onDailyFinish);
   onDailyFinishRef.current = onDailyFinish;
-  const dailyReportedRef = useRef(false);
+  const onProgressRef = useRef(onProgress);
+  onProgressRef.current = onProgress;
+  const dailyReportedRef = useRef(alreadyFinished);
 
   // Physical keyboard
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (gameRef.current.status !== 'playing') return;
+      if (alreadyFinished || gameRef.current.status !== 'playing') return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       const k = e.key;
       if (k === 'Enter') {
@@ -1405,13 +1450,19 @@ function WordleBoard({
         }
         const guesses = [...g.guesses, cur];
         const status = evaluateStatus(guesses, g.answer);
-        setGame({ ...g, guesses, status });
+        const next = { ...g, guesses, status };
+        setGame(next);
         setCurrent('');
         setMsg(null);
+        persistWordleProgress(next, me?.id);
+        if (status === 'playing') {
+          onProgressRef.current?.(next);
+        }
         if (status === 'won' || status === 'lost') {
           if (status === 'won') {
             fireConfetti({ count: 140, power: 14, origin: { x: 0.5, y: 0.4 } });
           }
+          clearWordleLocal(wordleStorageKey(g.mode, me?.id, g.seed));
           if (g.mode === 'daily' && !dailyReportedRef.current) {
             dailyReportedRef.current = true;
             onDailyFinishRef.current?.({
@@ -1462,13 +1513,19 @@ function WordleBoard({
     }
     const guesses = [...game.guesses, current];
     const status = evaluateStatus(guesses, game.answer);
-    setGame({ ...game, guesses, status });
+    const next = { ...game, guesses, status };
+    setGame(next);
     setCurrent('');
     setMsg(null);
+    persistWordleProgress(next, me?.id);
+    if (status === 'playing') {
+      onProgress?.(next);
+    }
     if (status === 'won' || status === 'lost') {
       if (status === 'won') {
         fireConfetti({ count: 140, power: 14, origin: { x: 0.5, y: 0.4 } });
       }
+      clearWordleLocal(wordleStorageKey(game.mode, me?.id, game.seed));
       if (game.mode === 'daily' && !dailyReportedRef.current) {
         dailyReportedRef.current = true;
         onDailyFinish?.({ won: status === 'won', guesses: guesses.length });
@@ -1496,12 +1553,31 @@ function WordleBoard({
   };
 
   const restart = (m: 'daily' | 'random') => {
-    setGame(newWordleGame(m));
+    // Daily cannot be wiped mid-game — that was the loophole.
+    if (m === 'daily' && game.mode === 'daily' && game.status === 'playing' && game.guesses.length > 0) {
+      setMsg("Finish today's game — progress is saved");
+      return;
+    }
+    if (m === 'daily' && alreadyFinished) {
+      setMsg('You already finished today\'s Wordle');
+      return;
+    }
+    // Clear only when starting a truly new random, or a fresh daily with no progress
+    if (game.mode === 'random' || (game.mode === 'daily' && game.guesses.length === 0)) {
+      clearWordleLocal(wordleStorageKey(game.mode, me?.id, game.seed));
+    }
+    const next = m === 'daily'
+      ? initialWordleState('daily', { memberId: me?.id, daily })
+      : newWordleGame('random');
+    setGame(next);
     setCurrent('');
     setMsg(null);
-    // Local flag resets so the UI can play again, but the server record
-    // still refuses a second board credit for the same day.
-    dailyReportedRef.current = false;
+    dailyReportedRef.current =
+      m === 'daily' &&
+      !!me &&
+      !!daily &&
+      daily.seed === todaySeed() &&
+      (daily.finishedMemberIds || []).includes(me.id);
   };
 
   const rows: { letters: string; states: LetterState[] }[] = [];
@@ -1546,9 +1622,19 @@ function WordleBoard({
       {game.status === 'won' && (
         <p className="text-center text-sm font-bold text-success">You got it! 🎉</p>
       )}
-      {game.status === 'lost' && (
+      {game.status === 'lost' && game.guesses.length > 0 && (
         <p className="text-center text-sm font-bold text-fg">
           The word was <span className="text-accent uppercase">{game.answer}</span>
+        </p>
+      )}
+      {alreadyFinished && game.guesses.length === 0 && (
+        <p className="text-center text-sm font-semibold text-muted">
+          You already finished today&apos;s Wordle. Header credit is locked — try Random for practice.
+        </p>
+      )}
+      {mode === 'daily' && game.status === 'playing' && game.guesses.length > 0 && (
+        <p className="text-center text-[11px] text-muted">
+          Progress saved — closing the page won&apos;t reset this game.
         </p>
       )}
 
@@ -1626,9 +1712,21 @@ function WordleBoard({
       </div>
 
       <div className="flex justify-center gap-2 pt-1">
-        <Button size="sm" variant="secondary" onClick={() => restart(mode)}>
-          {mode === 'daily' ? 'Reset daily' : 'New random'}
-        </Button>
+        {mode === 'random' && (
+          <Button size="sm" variant="secondary" onClick={() => restart('random')}>
+            New random
+          </Button>
+        )}
+        {mode === 'daily' && game.status !== 'playing' && !alreadyFinished && (
+          <Button size="sm" variant="secondary" onClick={() => restart('random')}>
+            Practice random
+          </Button>
+        )}
+        {alreadyFinished && (
+          <Button size="sm" variant="secondary" onClick={() => restart('random')}>
+            Practice random
+          </Button>
+        )}
         <Button
           size="sm"
           variant="ghost"

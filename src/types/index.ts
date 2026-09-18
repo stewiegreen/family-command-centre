@@ -862,6 +862,8 @@ export interface FamilyData {
     solves: { memberId: string; name: string; guesses: number; at: string }[];
     /** Member ids who finished one Daily attempt today (only first counts). */
     finishedMemberIds?: string[];
+    /** memberId → in-progress guesses for today's seed. */
+    inProgress?: Record<string, { guesses: string[] }>;
   };
 }
 

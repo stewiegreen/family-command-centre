@@ -1521,6 +1521,11 @@ export type WordleDaily = {
    * Only the first finish can earn a header spot — resets do not count.
    */
   finishedMemberIds?: string[];
+  /**
+   * In-progress daily games by memberId (guesses only — answer is derived from seed).
+   * Closing the tab no longer wipes the board.
+   */
+  inProgress?: Record<string, { guesses: string[] }>;
 };
 
 export function evaluateStatus(guesses: string[], answer: string): WordleStatus {
@@ -1563,17 +1568,27 @@ export function recordDailyWordleFinish(
           seed,
           solves: [...(existing.solves || [])],
           finishedMemberIds: [...(existing.finishedMemberIds || [])],
+          inProgress: { ...(existing.inProgress || {}) },
         }
-      : { seed, solves: [], finishedMemberIds: [] };
+      : { seed, solves: [], finishedMemberIds: [], inProgress: {} };
 
   const finished = new Set(base.finishedMemberIds || []);
   if (finished.has(memberId)) {
-    // Already used today's attempt — do not change board or score
+    // Already used today's attempt — do not change board or score; drop stale progress
+    if (base.inProgress && base.inProgress[memberId]) {
+      const { [memberId]: _, ...rest } = base.inProgress;
+      base.inProgress = rest;
+    }
     return base;
   }
 
   finished.add(memberId);
   base.finishedMemberIds = [...finished];
+  // Clear any saved mid-game board for this member
+  if (base.inProgress && base.inProgress[memberId]) {
+    const { [memberId]: _, ...rest } = base.inProgress;
+    base.inProgress = rest;
+  }
 
   if (outcome.won) {
     base.solves = base.solves.filter((s) => s.memberId !== memberId);
@@ -1599,4 +1614,131 @@ export function upsertWordleSolve(
     won: true,
     guesses: solve.guesses,
   });
+}
+
+/** localStorage key for a member's in-progress board (daily or random). */
+export function wordleStorageKey(
+  mode: 'daily' | 'random',
+  memberId: string | undefined,
+  seed?: string,
+): string {
+  if (mode === 'daily') {
+    return `greenhq-wordle-daily:${memberId || 'anon'}:${seed || todaySeed()}`;
+  }
+  return `greenhq-wordle-random:${memberId || 'anon'}`;
+}
+
+export function saveWordleLocal(key: string, state: WordleState): void {
+  try {
+    const payload = {
+      answer: state.answer,
+      guesses: state.guesses,
+      status: state.status,
+      mode: state.mode,
+      seed: state.seed,
+    };
+    localStorage.setItem(key, JSON.stringify(payload));
+  } catch {
+    /* private mode */
+  }
+}
+
+export function loadWordleLocal(key: string): WordleState | null {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as WordleState;
+    if (!parsed || !Array.isArray(parsed.guesses) || typeof parsed.answer !== 'string') return null;
+    const status = evaluateStatus(parsed.guesses, parsed.answer);
+    return { ...parsed, status };
+  } catch {
+    return null;
+  }
+}
+
+export function clearWordleLocal(key: string): void {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Restore a daily game from saved guesses + today's seed (answer never stored in Firestore). */
+export function restoreDailyFromGuesses(guesses: string[], seed = todaySeed()): WordleState {
+  const answer = pickAnswer(seed);
+  const clean = (guesses || [])
+    .map((g) => String(g).toLowerCase())
+    .filter((g) => g.length === WORDLE_LEN);
+  return {
+    answer,
+    guesses: clean,
+    status: evaluateStatus(clean, answer),
+    mode: 'daily',
+    seed,
+  };
+}
+
+/**
+ * Pick initial board: resume in-progress if any, otherwise new.
+ * Daily games that already finished today stay finished (no silent reset).
+ */
+export function initialWordleState(
+  mode: 'daily' | 'random',
+  opts: {
+    memberId?: string;
+    daily?: WordleDaily | null;
+  } = {},
+): WordleState {
+  const seed = todaySeed();
+  const key = wordleStorageKey(mode, opts.memberId, seed);
+
+  if (mode === 'daily') {
+    const finished = new Set(opts.daily?.finishedMemberIds || []);
+    if (opts.memberId && opts.daily?.seed === seed && finished.has(opts.memberId)) {
+      // Show a completed empty board state — they already used today's attempt
+      const answer = pickAnswer(seed);
+      return {
+        answer,
+        guesses: [],
+        status: 'lost', // locked; UI treats finished separately
+        mode: 'daily',
+        seed,
+      };
+    }
+    // Prefer cloud in-progress (survives device switches / cleared cache less often than hope)
+    const cloudGuesses =
+      opts.memberId && opts.daily?.seed === seed
+        ? opts.daily.inProgress?.[opts.memberId]?.guesses
+        : undefined;
+    if (cloudGuesses && cloudGuesses.length > 0) {
+      const restored = restoreDailyFromGuesses(cloudGuesses, seed);
+      if (restored.status === 'playing') {
+        saveWordleLocal(key, restored);
+        return restored;
+      }
+    }
+    const local = loadWordleLocal(key);
+    if (local && local.mode === 'daily' && local.seed === seed && local.status === 'playing') {
+      return local;
+    }
+    return newWordleGame('daily');
+  }
+
+  const local = loadWordleLocal(key);
+  if (local && local.mode === 'random' && local.status === 'playing') {
+    return local;
+  }
+  return newWordleGame('random');
+}
+
+export function persistWordleProgress(
+  state: WordleState,
+  memberId: string | undefined,
+): void {
+  if (state.status !== 'playing') {
+    clearWordleLocal(wordleStorageKey(state.mode, memberId, state.seed));
+    return;
+  }
+  saveWordleLocal(wordleStorageKey(state.mode, memberId, state.seed), state);
 }
