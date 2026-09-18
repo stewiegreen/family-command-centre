@@ -40,7 +40,6 @@ import {
   komgaReadlists,
   komgaRecentlyRead,
   komgaSeries,
-  komgaSeriesBooks,
   komgaSeriesBooksPage,
   letterSearchRegex,
   komgaSeriesDetail,
