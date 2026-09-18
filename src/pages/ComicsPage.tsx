@@ -92,6 +92,48 @@ function StatusPill({ book }: { book: KomgaBook }) {
   return <span className="text-[11px] text-muted">Unread</span>;
 }
 
+/** Shared cover chrome — book, series, recommendation, collection. */
+function CoverFrame({
+  src,
+  alt,
+  badge,
+  footer,
+  className,
+}: {
+  src?: string;
+  alt?: string;
+  badge?: ReactNode;
+  footer?: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        'relative aspect-[2/3] rounded-2xl overflow-hidden bg-surface-2 border border-border shadow-md',
+        className,
+      )}
+    >
+      {src ? (
+        <img
+          src={src}
+          alt={alt || ''}
+          className="w-full h-full object-cover group-hover:scale-[1.04] transition-transform duration-300"
+          loading="lazy"
+          onError={(e) => {
+            (e.target as HTMLImageElement).style.display = 'none';
+          }}
+        />
+      ) : (
+        <div className="w-full h-full flex items-center justify-center text-muted">
+          <BookOpen className="w-8 h-8 opacity-40" />
+        </div>
+      )}
+      {footer}
+      {badge}
+    </div>
+  );
+}
+
 function BookCard({
   book,
   memberId,
@@ -109,26 +151,26 @@ function BookCard({
       type="button"
       onClick={onOpen}
       className={cn('shrink-0 text-left group', hero ? COVER_SERIES : COVER_BOOK)}
+      aria-label={bookTitle(book)}
     >
-      <div className="relative aspect-[2/3] rounded-2xl overflow-hidden bg-surface-2 border border-border shadow-md">
-        <img
-          src={komgaBookThumbUrl(book.id, memberId)}
-          alt=""
-          className="w-full h-full object-cover group-hover:scale-[1.04] transition-transform duration-300"
-          loading="lazy"
-          onError={(e) => {
-            (e.target as HTMLImageElement).style.display = 'none';
-          }}
-        />
-        <div className="absolute inset-x-0 bottom-0 p-2 bg-gradient-to-t from-black/75 to-transparent">
-          <ProgressBar pct={pct} className="h-1.5" />
-        </div>
-        {pct >= 100 && (
-          <div className="absolute top-2 right-2 rounded-full bg-emerald-500 text-white p-1 shadow">
-            <Check className="w-3.5 h-3.5" />
-          </div>
-        )}
-      </div>
+      <CoverFrame
+        src={komgaBookThumbUrl(book.id, memberId)}
+        alt=""
+        footer={
+          pct > 0 && pct < 100 ? (
+            <div className="absolute inset-x-0 bottom-0 p-2 bg-gradient-to-t from-black/75 to-transparent">
+              <ProgressBar pct={pct} className="h-1.5" />
+            </div>
+          ) : undefined
+        }
+        badge={
+          pct >= 100 ? (
+            <div className="absolute top-2 right-2 rounded-full bg-emerald-500 text-white p-1 shadow">
+              <Check className="w-3.5 h-3.5" />
+            </div>
+          ) : undefined
+        }
+      />
       <p className="mt-2 text-sm font-semibold text-fg line-clamp-2 leading-snug">{bookTitle(book)}</p>
       <div className="mt-0.5 flex items-center justify-between gap-1">
         <StatusPill book={book} />
@@ -150,23 +192,23 @@ function SeriesCard({
   onOpen: () => void;
 }) {
   return (
-    <button type="button" onClick={onOpen} className={cn('shrink-0 text-left group', COVER_SERIES)}>
-      <div className="relative aspect-[2/3] rounded-2xl overflow-hidden bg-surface-2 border border-border shadow-md">
-        <img
-          src={komgaSeriesThumbUrl(series.id, memberId)}
-          alt=""
-          className="w-full h-full object-cover group-hover:scale-[1.04] transition-transform duration-300"
-          loading="lazy"
-          onError={(e) => {
-            (e.target as HTMLImageElement).style.display = 'none';
-          }}
-        />
-        {typeof series.booksUnreadCount === 'number' && series.booksUnreadCount > 0 && (
-          <span className="absolute top-2 right-2 rounded-full bg-black/80 text-white text-[11px] font-medium px-2 py-0.5">
-            {series.booksUnreadCount} unread
-          </span>
-        )}
-      </div>
+    <button
+      type="button"
+      onClick={onOpen}
+      className={cn('shrink-0 text-left group', COVER_SERIES)}
+      aria-label={seriesTitle(series)}
+    >
+      <CoverFrame
+        src={komgaSeriesThumbUrl(series.id, memberId)}
+        alt=""
+        badge={
+          typeof series.booksUnreadCount === 'number' && series.booksUnreadCount > 0 ? (
+            <span className="absolute top-2 right-2 rounded-full bg-black/80 text-white text-[11px] font-medium px-2 py-0.5">
+              {series.booksUnreadCount} unread
+            </span>
+          ) : undefined
+        }
+      />
       <p className="mt-2 text-sm font-semibold text-fg line-clamp-2">{seriesTitle(series)}</p>
       <p className="text-[11px] text-muted mt-0.5">
         {typeof series.booksCount === 'number'
@@ -266,7 +308,12 @@ export function ComicsPage() {
   const others = members.filter((m) => m.id && m.id !== memberId);
 
   const [tab, setTab] = useState<Tab>('home');
-  const [browse, setBrowse] = useState<Browse>({ kind: 'root' });
+  const [browseStack, setBrowseStack] = useState<Browse[]>([{ kind: 'root' }]);
+  const browse = browseStack[browseStack.length - 1] || { kind: 'root' as const };
+  const pushBrowse = (b: Browse) => setBrowseStack((s) => [...s, b]);
+  const replaceTopBrowse = (b: Browse) =>
+    setBrowseStack((s) => (s.length <= 1 ? [b] : [...s.slice(0, -1), b]));
+  const goBack = () => setBrowseStack((s) => (s.length > 1 ? s.slice(0, -1) : s));
   const [onDeck, setOnDeck] = useState<KomgaBook[]>([]);
   const [inProgress, setInProgress] = useState<KomgaBook[]>([]);
   const [latest, setLatest] = useState<KomgaBook[]>([]);
@@ -308,13 +355,38 @@ export function ComicsPage() {
     setLoading(true);
     setError(null);
     try {
-      const [deck, progress, recent, read, s, libs, cols, lists] = await Promise.all([
+      // Libraries first — if this fails, Komga is likely unreachable / misconfigured
+      let libs: KomgaLibrary[] = [];
+      let libsFailed: string | null = null;
+      try {
+        libs = await komgaLibraries(memberId);
+        if (!Array.isArray(libs)) libs = [];
+      } catch (e) {
+        libsFailed = e instanceof Error ? e.message : String(e);
+      }
+      if (libsFailed) {
+        setLibraries([]);
+        setOnDeck([]);
+        setInProgress([]);
+        setLatest([]);
+        setRecentlyRead([]);
+        setSeries([]);
+        setCollections([]);
+        setReadlists([]);
+        setError(
+          libsFailed.includes('503') || /not configured|proxy/i.test(libsFailed)
+            ? 'Comics service is not available right now. Check the Komga connection and try Refresh.'
+            : `Could not reach your comic library. (${libsFailed})`,
+        );
+        return;
+      }
+      setLibraries(libs);
+      const [deck, progress, recent, read, s, cols, lists] = await Promise.all([
         komgaOnDeck(16, memberId).catch(() => [] as KomgaBook[]),
         komgaInProgress(16, memberId).catch(() => [] as KomgaBook[]),
         komgaLatestBooks(16, memberId).catch(() => [] as KomgaBook[]),
         komgaRecentlyRead(12, memberId).catch(() => [] as KomgaBook[]),
         komgaSeries({ size: 30, memberId }).catch(() => ({ content: [] as KomgaSeries[] })),
-        komgaLibraries(memberId).catch(() => [] as KomgaLibrary[]),
         komgaCollections(memberId).catch(() => [] as KomgaCollection[]),
         komgaReadlists(memberId).catch(() => [] as KomgaReadList[]),
       ]);
@@ -323,13 +395,29 @@ export function ComicsPage() {
       setLatest(Array.isArray(recent) ? recent : []);
       setRecentlyRead(Array.isArray(read) ? read : []);
       setSeries(s?.content || []);
-      setLibraries(Array.isArray(libs) ? libs : []);
       setCollections(Array.isArray(cols) ? cols : []);
       setReadlists(Array.isArray(lists) ? lists : []);
+      setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
+    }
+  }, [memberId]);
+
+  /** After reading — only refresh continue / on-deck / recently read (not full home). */
+  const refreshReadingRows = useCallback(async () => {
+    try {
+      const [deck, progress, read] = await Promise.all([
+        komgaOnDeck(16, memberId).catch(() => [] as KomgaBook[]),
+        komgaInProgress(16, memberId).catch(() => [] as KomgaBook[]),
+        komgaRecentlyRead(12, memberId).catch(() => [] as KomgaBook[]),
+      ]);
+      setOnDeck(Array.isArray(deck) ? deck : []);
+      setInProgress(Array.isArray(progress) ? progress : []);
+      setRecentlyRead(Array.isArray(read) ? read : []);
+    } catch {
+      /* non-fatal */
     }
   }, [memberId]);
 
@@ -449,7 +537,7 @@ export function ComicsPage() {
   };
 
   const openSeries = async (s: KomgaSeries) => {
-    setBrowse({ kind: 'series', series: s });
+    pushBrowse({ kind: 'series', series: s });
     setDetailLoading(true);
     setDetailBooks([]);
     setDetailPage(0);
@@ -462,7 +550,7 @@ export function ComicsPage() {
         komgaSeriesBooksPage(s.id, { memberId, size: 40, page: 0 }),
       ]);
       const books = page.content || [];
-      setBrowse({ kind: 'series', series: detail });
+      replaceTopBrowse({ kind: 'series', series: detail });
       setDetailBooks(books);
       const totalPages = page.totalPages ?? 1;
       setDetailPage(0);
@@ -481,7 +569,7 @@ export function ComicsPage() {
   };
 
   const openCollection = async (c: KomgaCollection) => {
-    setBrowse({ kind: 'collection', collection: c });
+    pushBrowse({ kind: 'collection', collection: c });
     setDetailLoading(true);
     setDetailSeries([]);
     try {
@@ -494,7 +582,7 @@ export function ComicsPage() {
   };
 
   const openReadlist = async (r: KomgaReadList) => {
-    setBrowse({ kind: 'readlist', readlist: r });
+    pushBrowse({ kind: 'readlist', readlist: r });
     setDetailLoading(true);
     setDetailBooks([]);
     try {
@@ -531,7 +619,7 @@ export function ComicsPage() {
   };
 
   const openLibrary = async (lib: KomgaLibrary) => {
-    setBrowse({ kind: 'library', library: lib });
+    pushBrowse({ kind: 'library', library: lib });
     setDetailLoading(true);
     setDetailSeries([]);
     setDetailPage(0);
@@ -633,7 +721,7 @@ export function ComicsPage() {
     setSearching(true);
     setError(null);
     setTab('search');
-    setBrowse({ kind: 'root' });
+    setBrowseStack([{ kind: 'root' }]);
     try {
       const [booksPage, seriesPage] = await Promise.all([
         komgaBooks({ size: 36, search: q, memberId }),
@@ -673,7 +761,7 @@ export function ComicsPage() {
   };
 
   const goRoot = () => {
-    setBrowse({ kind: 'root' });
+    setBrowseStack([{ kind: 'root' }]);
   };
 
   const tabs: { id: Tab; label: string }[] = [
@@ -759,7 +847,7 @@ export function ComicsPage() {
       {browse.kind !== 'root' && (
         <button
           type="button"
-          onClick={goRoot}
+          onClick={() => (browseStack.length > 1 ? goBack() : goRoot())}
           className="inline-flex items-center gap-1.5 text-sm font-semibold text-accent hover:underline"
         >
           <ArrowLeft className="w-4 h-4" />
@@ -1027,26 +1115,19 @@ export function ComicsPage() {
                             type="button"
                             onClick={() => void openRecommendation(rec)}
                             className="w-full text-left group"
+                            aria-label={rec.title}
                           >
-                            <div className="relative aspect-[2/3] rounded-xl overflow-hidden bg-surface-2 border border-border">
-                              {thumb ? (
-                                <img
-                                  src={thumb}
-                                  alt=""
-                                  className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform"
-                                  loading="lazy"
-                                />
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center text-muted">
-                                  <BookOpen className="w-8 h-8 opacity-40" />
-                                </div>
-                              )}
-                              {rec.status === 'unread' && (
-                                <span className="absolute top-2 left-2 rounded-full bg-accent text-accent-ink text-[10px] font-bold px-1.5 py-0.5">
-                                  New
-                                </span>
-                              )}
-                            </div>
+                            <CoverFrame
+                              src={thumb || undefined}
+                              alt=""
+                              badge={
+                                rec.status === 'unread' ? (
+                                  <span className="absolute top-2 left-2 rounded-full bg-accent text-accent-ink text-[10px] font-bold px-1.5 py-0.5">
+                                    New
+                                  </span>
+                                ) : undefined
+                              }
+                            />
                             <p className="mt-2 text-sm font-semibold text-fg line-clamp-2">
                               {rec.title}
                             </p>
@@ -1161,13 +1242,22 @@ export function ComicsPage() {
                 ))}
               </Section>
 
-              {!continueBooks.length && !onDeckBooks.length && !latest.length && !series.length && !error && (
-                <Card className="p-10 text-center space-y-2">
+              {!continueBooks.length &&
+                !onDeckBooks.length &&
+                !latest.length &&
+                !series.length &&
+                !myRecs.length &&
+                !error && (
+                <Card className="p-10 text-center space-y-3">
                   <BookOpen className="w-10 h-10 text-muted mx-auto opacity-50" />
-                  <p className="text-sm text-muted">
-                    No comics visible for this account. Check Komga library access and the
-                    per-member API key for this profile.
-                  </p>
+                  <div className="space-y-1">
+                    <p className="text-sm font-semibold text-fg">No comics here yet</p>
+                    <p className="text-sm text-muted max-w-md mx-auto">
+                      This profile&apos;s Komga account can&apos;t see any series. Ask a parent to check library
+                      sharing and the per-member API key, or open <span className="font-medium">My Library</span> after
+                      comics are added.
+                    </p>
+                  </div>
                 </Card>
               )}
             </div>
@@ -1486,7 +1576,7 @@ export function ComicsPage() {
           memberId={memberId}
           onClose={() => {
             setReading(null);
-            void loadHome();
+            void refreshReadingRows();
           }}
           onOpenBook={(b) => setReading(b)}
         />

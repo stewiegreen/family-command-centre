@@ -632,12 +632,12 @@ export function MessagesPage() {
         )}
       >
         <div className="px-4 pt-5 pb-3">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h1 className="text-2xl font-semibold tracking-tight">Messages</h1>
-              <p className="text-xs text-muted mt-0.5">Private family conversations</p>
-            </div>
-            <MessageCircle className="w-5 h-5 text-accent shrink-0" />
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
+              <MessageCircle className="w-6 h-6 text-accent shrink-0" />
+              Messages
+            </h1>
+            <p className="text-xs text-muted mt-0.5">Private family conversations</p>
           </div>
           <label className="relative block mt-4">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted pointer-events-none" />

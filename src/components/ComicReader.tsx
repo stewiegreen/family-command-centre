@@ -348,6 +348,16 @@ export function ComicReader({ book, memberId, onClose, onOpenBook }: Props) {
     void flushProgress(pageIndexRef.current, pagesRef.current).finally(() => onClose());
   };
 
+  // Flush progress on unmount (e.g. parent tears down reader without handleClose)
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      // fire-and-forget — component is leaving
+      void flushProgress(pageIndexRef.current, pagesRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only on unmount
+  }, []);
+
   const onTouchStart = (e: ReactTouchEvent) => {
     touchStartX.current = e.changedTouches[0]?.clientX ?? null;
     touchStartY.current = e.changedTouches[0]?.clientY ?? null;
@@ -432,6 +442,7 @@ export function ComicReader({ book, memberId, onClose, onOpenBook }: Props) {
           onClick={handleClose}
           className="p-2 rounded-xl hover:bg-white/10"
           title="Back"
+          aria-label="Back to library"
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
@@ -454,6 +465,7 @@ export function ComicReader({ book, memberId, onClose, onOpenBook }: Props) {
           }}
           className="p-2 rounded-xl hover:bg-white/10"
           title="Book info"
+          aria-label="Book info"
         >
           <Info className="w-5 h-5" />
         </button>
@@ -466,6 +478,7 @@ export function ComicReader({ book, memberId, onClose, onOpenBook }: Props) {
           }}
           className="p-2 rounded-xl hover:bg-white/10"
           title="Reader settings"
+          aria-label="Reader settings"
         >
           <Settings2 className="w-5 h-5" />
         </button>
@@ -474,10 +487,17 @@ export function ComicReader({ book, memberId, onClose, onOpenBook }: Props) {
           onClick={() => void toggleFullscreen()}
           className="p-2 rounded-xl hover:bg-white/10 hidden sm:inline-flex"
           title="Fullscreen (F)"
+          aria-label={isFs ? 'Exit fullscreen' : 'Enter fullscreen'}
         >
           {isFs ? <Minimize className="w-5 h-5" /> : <Maximize className="w-5 h-5" />}
         </button>
-        <button type="button" onClick={handleClose} className="p-2 rounded-xl hover:bg-white/10" title="Close">
+        <button
+          type="button"
+          onClick={handleClose}
+          className="p-2 rounded-xl hover:bg-white/10"
+          title="Close"
+          aria-label="Close reader"
+        >
           <X className="w-5 h-5" />
         </button>
       </div>
@@ -715,6 +735,7 @@ export function ComicReader({ book, memberId, onClose, onOpenBook }: Props) {
           }}
           disabled={pageIndex <= 0}
           className="p-2 rounded-xl hover:bg-white/10 disabled:opacity-30"
+          aria-label="Previous page"
         >
           <ChevronLeft className="w-6 h-6" />
         </button>
@@ -729,6 +750,7 @@ export function ComicReader({ book, memberId, onClose, onOpenBook }: Props) {
           }}
           disabled={pageIndex >= total - 1}
           className="p-2 rounded-xl hover:bg-white/10 disabled:opacity-30"
+          aria-label="Next page"
         >
           <ChevronRight className="w-6 h-6" />
         </button>
