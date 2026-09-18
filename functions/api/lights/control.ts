@@ -69,6 +69,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     await verifyParent(context.request, env, familyId);
 
     const action = (body.action || '').toLowerCase();
+    console.log('[lights/control]', action, 'familyId=', familyId.slice(0, 8));
 
     if (action === 'on' || action === 'off') {
       const result = await setLivingRoomLights(env, action);
@@ -84,9 +85,12 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     }
     return json({ error: 'action must be "on", "off", or "dim"' }, 400);
   } catch (err) {
-    if (err instanceof AuthError) return toErrorResponse(err);
     const message = err instanceof Error ? err.message : String(err);
-    console.error('Lights control failed:', message);
+    const status = err instanceof AuthError ? err.status : 502;
+    console.error('[lights/control] failed', status, message);
+    if (err instanceof AuthError) {
+      return json({ error: message }, status);
+    }
     return json({ error: message }, 502);
   }
 };

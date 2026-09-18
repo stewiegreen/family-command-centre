@@ -27,9 +27,21 @@ async function postLights(
     },
     body: JSON.stringify({ familyId, ...body }),
   });
-  const data = (await res.json().catch(() => ({}))) as { error?: string };
+  const raw = await res.text();
+  let data: { error?: string; ok?: boolean } = {};
+  try {
+    data = raw ? (JSON.parse(raw) as { error?: string; ok?: boolean }) : {};
+  } catch {
+    /* non-JSON body */
+  }
   if (!res.ok) {
-    throw new Error(data.error || `Lights request failed (${res.status})`);
+    const detail =
+      (data.error && String(data.error)) ||
+      (raw && raw.slice(0, 240)) ||
+      res.statusText ||
+      `HTTP ${res.status}`;
+    console.error('[lights]', res.status, detail, raw?.slice(0, 500));
+    throw new Error(detail);
   }
 }
 
