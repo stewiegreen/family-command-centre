@@ -6,6 +6,7 @@ import {
   Sword,
   StickyNote,
   BookOpen,
+  Library,
   Gamepad2,
   GraduationCap,
   ChefHat,
@@ -54,6 +55,7 @@ const NAV: { id: ViewId; label: string; icon: typeof Home }[] = [
   { id: 'journal', label: 'Journal', icon: BookOpen },
   { id: 'messages', label: 'Messages', icon: MessageCircle },
   { id: 'media', label: 'Media', icon: Film },
+  { id: 'comics', label: 'Comics', icon: Library },
   { id: 'themestudio', label: 'Theme Studio', icon: Palette },
   { id: 'play', label: 'Play', icon: Gamepad2 },
 ];
@@ -165,7 +167,7 @@ export function Layout({ children }: { children: ReactNode }) {
     (typeof NAV)[number]
   >;
   const orderedIds = isMediaOnly
-    ? (['media'] as ViewId[])
+    ? (['media', 'comics'] as ViewId[])
     : myNavOrder.filter((id) => id !== 'themestudio' || themeStudioUnlocked);
   const navItems = orderedIds
     .map((id) => navById[id])

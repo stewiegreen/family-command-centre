@@ -28,6 +28,10 @@ const ALLOWED_QUERY = new Set([
   'library_id',
   'search',
   'unpaged',
+  'author',
+  'publisher',
+  'tag',
+  'status',
   // client-only; stripped before upstream
   'memberId',
 ]);
@@ -38,14 +42,24 @@ function pathAllowed(joined: string, method: string): boolean {
   if (joined === 'v1/books/ondeck') return m === 'GET';
   if (joined === 'v1/books/latest') return m === 'GET';
   if (joined === 'v1/series/latest') return m === 'GET';
+  if (joined === 'v1/series/new') return m === 'GET';
   if (joined === 'v1/series') return m === 'GET';
   if (/^v1\/series\/[^/]+$/.test(joined)) return m === 'GET';
   if (/^v1\/series\/[^/]+\/books$/.test(joined)) return m === 'GET';
-  if (joined === 'v1/books') return m === 'GET';
-  if (/^v1\/books\/[^/]+\/thumbnail$/.test(joined)) return m === 'GET';
   if (/^v1\/series\/[^/]+\/thumbnail$/.test(joined)) return m === 'GET';
+  if (joined === 'v1/books') return m === 'GET';
   if (/^v1\/books\/[^/]+$/.test(joined)) return m === 'GET';
-  // Reader
+  if (/^v1\/books\/[^/]+\/thumbnail$/.test(joined)) return m === 'GET';
+  // Collections & readlists (Phase 1 library)
+  if (joined === 'v1/collections') return m === 'GET';
+  if (/^v1\/collections\/[^/]+$/.test(joined)) return m === 'GET';
+  if (/^v1\/collections\/[^/]+\/series$/.test(joined)) return m === 'GET';
+  if (/^v1\/collections\/[^/]+\/thumbnail$/.test(joined)) return m === 'GET';
+  if (joined === 'v1/readlists') return m === 'GET';
+  if (/^v1\/readlists\/[^/]+$/.test(joined)) return m === 'GET';
+  if (/^v1\/readlists\/[^/]+\/books$/.test(joined)) return m === 'GET';
+  if (/^v1\/readlists\/[^/]+\/thumbnail$/.test(joined)) return m === 'GET';
+  // Reader (existing — used by Read button; Phase 2 will expand UX later)
   if (/^v1\/books\/[^/]+\/pages$/.test(joined)) return m === 'GET';
   if (/^v1\/books\/[^/]+\/pages\/[^/]+$/.test(joined)) return m === 'GET';
   if (/^v1\/books\/[^/]+\/next$/.test(joined)) return m === 'GET';

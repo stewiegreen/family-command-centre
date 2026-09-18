@@ -13,6 +13,7 @@ export const DEFAULT_NAV_ORDER: ViewId[] = [
   'journal',
   'messages',
   'media',
+  'comics',
   'themestudio',
   'play',
 ];

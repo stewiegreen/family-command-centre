@@ -14,6 +14,7 @@ import { NotesPage } from './pages/NotesPage';
 import { JournalPage } from './pages/JournalPage';
 import { MessagesPage } from './pages/MessagesPage';
 import { MediaPage } from './pages/MediaPage';
+import { ComicsPage } from './pages/ComicsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { ChangeEmailPage } from './pages/ChangeEmailPage';
 import { ThemeStudioPage } from './pages/ThemeStudioPage';
@@ -44,7 +45,7 @@ function AppShell() {
   }, []);
 
   useEffect(() => {
-    if (isMediaOnly && view !== 'media') setView('media');
+    if (isMediaOnly && view !== 'media' && view !== 'comics') setView('media');
     else if (view === 'settings' && !isParent) setView(isMediaOnly ? 'media' : 'dashboard');
   }, [view, isParent, isMediaOnly, setView]);
 
@@ -99,6 +100,7 @@ function AppShell() {
             {view === 'journal' && <JournalPage />}
             {view === 'messages' && <MessagesPage />}
             {view === 'media' && <MediaPage />}
+            {view === 'comics' && <ComicsPage />}
             {view === 'themestudio' && <ThemeStudioPage />}
             {view === 'play' && <PlayPage />}
             {view === 'settings' && isParent && <SettingsPage />}

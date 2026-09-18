@@ -16,10 +16,9 @@ import {
   type EmbyItem,
   type EmbyView,
 } from '../lib/emby';
-import { KomgaLibrary } from '../components/KomgaLibrary';
 
 export function MediaPage() {
-  const { data, update, currentUser, isParent } = useApp();
+  const { data, update, currentUser, isParent, setView } = useApp();
   const settings = data.settings;
   const webUrl = resolveEmbyWebUrl(settings);
   const me = currentUser || data.members.find((m) => m.id === settings.currentUserId);
@@ -224,7 +223,17 @@ export function MediaPage() {
         )}
       </Card>
 
-      <KomgaLibrary />
+      <Card className="p-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-bold text-fg">Comics</h2>
+          <p className="text-xs text-muted mt-0.5">
+            Browse your Komga library in the dedicated Comics page.
+          </p>
+        </div>
+        <Button size="sm" onClick={() => setView('comics')}>
+          Open Comics
+        </Button>
+      </Card>
     </div>
   );
 }

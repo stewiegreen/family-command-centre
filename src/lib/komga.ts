@@ -50,6 +50,20 @@ export type KomgaSeries = {
 
 export type KomgaLibrary = { id: string; name: string };
 
+export type KomgaCollection = {
+  id: string;
+  name: string;
+  ordered?: boolean;
+  seriesIds?: string[];
+};
+
+export type KomgaReadList = {
+  id: string;
+  name: string;
+  bookIds?: string[];
+  ordered?: boolean;
+};
+
 export type KomgaPageInfo = {
   number: number;
   mediaType?: string;
@@ -126,14 +140,23 @@ export async function komgaLatestBooks(size = 12, memberId?: string): Promise<Ko
 }
 
 export async function komgaBooks(
-  opts: { size?: number; page?: number; search?: string; libraryId?: string; memberId?: string } = {},
+  opts: {
+    size?: number;
+    page?: number;
+    search?: string;
+    libraryId?: string;
+    readStatus?: string;
+    sort?: string;
+    memberId?: string;
+  } = {},
 ): Promise<PageResult<KomgaBook>> {
   return proxyGet<PageResult<KomgaBook>>('v1/books', {
     size: opts.size ?? 24,
     page: opts.page ?? 0,
     search: opts.search,
     library_id: opts.libraryId,
-    sort: 'metadata.title,asc',
+    read_status: opts.readStatus,
+    sort: opts.sort ?? 'metadata.title,asc',
     memberId: opts.memberId,
   });
 }
@@ -179,6 +202,74 @@ export function komgaBookThumbUrl(bookId: string, memberId?: string): string {
 export function komgaSeriesThumbUrl(seriesId: string, memberId?: string): string {
   const q = memberQuery(memberId);
   return `${PROXY}/v1/series/${encodeURIComponent(seriesId)}/thumbnail${q ? `?${q}` : ''}`;
+}
+
+
+export async function komgaSeriesNew(size = 24, memberId?: string): Promise<KomgaSeries[]> {
+  const data = await proxyGet<PageResult<KomgaSeries> | KomgaSeries[]>('v1/series/new', {
+    size,
+    memberId,
+  });
+  return Array.isArray(data) ? data : data?.content || [];
+}
+
+/** Recently finished / fully read books (Komga read_status=READ). */
+export async function komgaRecentlyRead(size = 12, memberId?: string): Promise<KomgaBook[]> {
+  const data = await komgaBooks({
+    size,
+    memberId,
+    readStatus: 'READ',
+    sort: 'readProgress.readDate,desc',
+  });
+  return data?.content || [];
+}
+
+export async function komgaCollections(memberId?: string): Promise<KomgaCollection[]> {
+  const data = await proxyGet<KomgaCollection[] | PageResult<KomgaCollection>>('v1/collections', {
+    memberId,
+    size: 50,
+  });
+  return Array.isArray(data) ? data : data?.content || [];
+}
+
+export async function komgaCollectionSeries(
+  collectionId: string,
+  memberId?: string,
+): Promise<KomgaSeries[]> {
+  const data = await proxyGet<PageResult<KomgaSeries> | KomgaSeries[]>(
+    `v1/collections/${encodeURIComponent(collectionId)}/series`,
+    { memberId, size: 100 },
+  );
+  return Array.isArray(data) ? data : data?.content || [];
+}
+
+export function komgaCollectionThumbUrl(collectionId: string, memberId?: string): string {
+  const q = memberQuery(memberId);
+  return `${PROXY}/v1/collections/${encodeURIComponent(collectionId)}/thumbnail${q ? `?${q}` : ''}`;
+}
+
+export async function komgaReadlists(memberId?: string): Promise<KomgaReadList[]> {
+  const data = await proxyGet<KomgaReadList[] | PageResult<KomgaReadList>>('v1/readlists', {
+    memberId,
+    size: 50,
+  });
+  return Array.isArray(data) ? data : data?.content || [];
+}
+
+export async function komgaReadlistBooks(
+  readlistId: string,
+  memberId?: string,
+): Promise<KomgaBook[]> {
+  const data = await proxyGet<PageResult<KomgaBook> | KomgaBook[]>(
+    `v1/readlists/${encodeURIComponent(readlistId)}/books`,
+    { memberId, size: 100 },
+  );
+  return Array.isArray(data) ? data : data?.content || [];
+}
+
+export function komgaReadlistThumbUrl(readlistId: string, memberId?: string): string {
+  const q = memberQuery(memberId);
+  return `${PROXY}/v1/readlists/${encodeURIComponent(readlistId)}/thumbnail${q ? `?${q}` : ''}`;
 }
 
 export function resolveKomgaWebUrl(settings: Settings): string {
