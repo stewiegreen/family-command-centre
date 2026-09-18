@@ -2,7 +2,7 @@
  * Phase 3 — GreenHQ Comic Library Experience
  * Cover-first browsing · Komga source of truth · Phase 2 reader unchanged
  */
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   ArrowLeft,
   BookOpen,
@@ -41,6 +41,7 @@ import {
   komgaRecentlyRead,
   komgaSeries,
   komgaSeriesBooks,
+  komgaSeriesBooksPage,
   komgaSeriesDetail,
   komgaSeriesThumbUrl,
   seriesTitle,
@@ -276,6 +277,12 @@ export function ComicsPage() {
   const [readlists, setReadlists] = useState<KomgaReadList[]>([]);
   const [detailBooks, setDetailBooks] = useState<KomgaBook[]>([]);
   const [detailSeries, setDetailSeries] = useState<KomgaSeries[]>([]);
+  const [detailPage, setDetailPage] = useState(0);
+  const [detailHasMore, setDetailHasMore] = useState(false);
+  const [detailLoadingMore, setDetailLoadingMore] = useState(false);
+  const [libraryLetter, setLibraryLetter] = useState<string | null>(null);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
+  const detailLoadingMoreRef = useRef(false);
   const [selectedBook, setSelectedBook] = useState<KomgaBook | null>(null);
   const [reading, setReading] = useState<KomgaBook | null>(null);
   const [recommendTarget, setRecommendTarget] = useState<
@@ -445,18 +452,25 @@ export function ComicsPage() {
     setBrowse({ kind: 'series', series: s });
     setDetailLoading(true);
     setDetailBooks([]);
+    setDetailPage(0);
+    setDetailHasMore(false);
     setSeriesContinue(null);
+    setLibraryLetter(null);
     try {
-      const [detail, books] = await Promise.all([
+      const [detail, page] = await Promise.all([
         komgaSeriesDetail(s.id, memberId).catch(() => s),
-        komgaSeriesBooks(s.id, memberId),
+        komgaSeriesBooksPage(s.id, { memberId, size: 40, page: 0 }),
       ]);
+      const books = page.content || [];
       setBrowse({ kind: 'series', series: detail });
       setDetailBooks(books);
+      const totalPages = page.totalPages ?? 1;
+      setDetailPage(0);
+      setDetailHasMore(totalPages > 1);
       const cont =
         books.find((b) => {
-          const p = bookProgressPercent(b);
-          return p > 0 && p < 100;
+          const pct = bookProgressPercent(b);
+          return pct > 0 && pct < 100;
         }) || books.find((b) => bookProgressPercent(b) < 100) || books[0] || null;
       setSeriesContinue(cont);
     } catch (e) {
@@ -496,15 +510,104 @@ export function ComicsPage() {
     setBrowse({ kind: 'library', library: lib });
     setDetailLoading(true);
     setDetailSeries([]);
+    setDetailPage(0);
+    setDetailHasMore(false);
+    setLibraryLetter(null);
     try {
-      const page = await komgaSeries({ size: 60, memberId, libraryId: lib.id });
+      const page = await komgaSeries({
+        size: 40,
+        page: 0,
+        memberId,
+        libraryId: lib.id,
+        sort: 'metadata.titleSort,asc',
+      });
       setDetailSeries(page?.content || []);
+      setDetailPage(0);
+      setDetailHasMore((page?.totalPages ?? 1) > 1);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setDetailLoading(false);
     }
   };
+
+  const loadMoreDetail = useCallback(async () => {
+    if (detailLoadingMoreRef.current || !detailHasMore || detailLoading) return;
+    if (browse.kind !== 'series' && browse.kind !== 'library') return;
+    detailLoadingMoreRef.current = true;
+    setDetailLoadingMore(true);
+    const nextPage = detailPage + 1;
+    try {
+      if (browse.kind === 'series') {
+        const page = await komgaSeriesBooksPage(browse.series.id, {
+          memberId,
+          size: 40,
+          page: nextPage,
+        });
+        const more = page.content || [];
+        setDetailBooks((prev) => {
+          const seen = new Set(prev.map((b) => b.id));
+          return [...prev, ...more.filter((b) => !seen.has(b.id))];
+        });
+        setDetailPage(nextPage);
+        setDetailHasMore(nextPage + 1 < (page.totalPages ?? 0));
+      } else if (browse.kind === 'library') {
+        const page = await komgaSeries({
+          size: 40,
+          page: nextPage,
+          memberId,
+          libraryId: browse.library.id,
+          sort: 'metadata.titleSort,asc',
+        });
+        const more = page?.content || [];
+        setDetailSeries((prev) => {
+          const seen = new Set(prev.map((s) => s.id));
+          return [...prev, ...more.filter((s) => !seen.has(s.id))];
+        });
+        setDetailPage(nextPage);
+        setDetailHasMore(nextPage + 1 < (page?.totalPages ?? 0));
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      detailLoadingMoreRef.current = false;
+      setDetailLoadingMore(false);
+    }
+  }, [browse, detailHasMore, detailLoading, detailPage, memberId]);
+
+  // Infinite scroll sentinel
+  useEffect(() => {
+    const el = loadMoreRef.current;
+    if (!el || !detailHasMore) return;
+    if (browse.kind !== 'series' && browse.kind !== 'library') return;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) void loadMoreDetail();
+      },
+      { root: null, rootMargin: '400px', threshold: 0 },
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [browse.kind, detailHasMore, loadMoreDetail, detailBooks.length, detailSeries.length]);
+
+  // If A–Z filter is active but nothing matches yet, keep pulling pages.
+  useEffect(() => {
+    if (browse.kind !== 'library' || !libraryLetter || !detailHasMore) return;
+    if (detailLoadingMore || detailLoading) return;
+    const hasMatch = detailSeries.some((s) => {
+      const first = (seriesTitle(s) || '').trim().charAt(0).toUpperCase();
+      return libraryLetter === '#' ? !/[A-Z]/.test(first) : first === libraryLetter;
+    });
+    if (!hasMatch) void loadMoreDetail();
+  }, [
+    browse.kind,
+    libraryLetter,
+    detailHasMore,
+    detailLoadingMore,
+    detailLoading,
+    detailSeries,
+    loadMoreDetail,
+  ]);
 
   const runSearch = async () => {
     const q = search.trim();
@@ -710,19 +813,24 @@ export function ComicsPage() {
                 </div>
               </div>
               <div>
-                <h3 className="text-sm font-bold text-fg mb-2">Books · reading order</h3>
-                <div className="rounded-2xl border border-border bg-elevated divide-y divide-border overflow-hidden">
-                  {detailBooks.map((b, i) => (
-                    <BookListRow
+                <h3 className="text-sm font-bold text-fg mb-3">Books · reading order</h3>
+                <div className="flex flex-wrap gap-4">
+                  {detailBooks.map((b) => (
+                    <BookCard
                       key={b.id}
                       book={b}
                       memberId={memberId}
-                      index={i}
                       onOpen={() => void openBookDetail(b)}
                     />
                   ))}
-                  {detailBooks.length === 0 && (
-                    <p className="p-4 text-sm text-muted">No books in this series.</p>
+                </div>
+                {detailBooks.length === 0 && (
+                  <p className="text-sm text-muted">No books in this series.</p>
+                )}
+                <div ref={loadMoreRef} className="h-8 flex items-center justify-center mt-4">
+                  {detailLoadingMore && <Loader2 className="w-5 h-5 animate-spin text-muted" />}
+                  {!detailHasMore && detailBooks.length > 40 && (
+                    <span className="text-xs text-muted">All books loaded</span>
                   )}
                 </div>
               </div>
@@ -736,9 +844,55 @@ export function ComicsPage() {
                 <h2 className="text-xl font-bold text-fg mt-0.5">
                   {browse.kind === 'collection' ? browse.collection.name : browse.library.name}
                 </h2>
+                {browse.kind === 'library' && (
+                  <p className="text-xs text-muted mt-1">Alphabetical · A–Z jump</p>
+                )}
               </div>
+              {browse.kind === 'library' && (
+                <div className="sticky top-0 z-10 -mx-1 px-1 py-2 bg-page/95 backdrop-blur-sm">
+                  <div className="flex flex-wrap gap-1">
+                    {['#', ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'].map((letter) => {
+                      const active = libraryLetter === letter;
+                      return (
+                        <button
+                          key={letter}
+                          type="button"
+                          onClick={() =>
+                            setLibraryLetter((prev) => (prev === letter ? null : letter))
+                          }
+                          className={
+                            'min-w-[1.75rem] h-7 px-1 rounded-lg text-xs font-bold transition-colors ' +
+                            (active
+                              ? 'bg-accent text-accent-ink'
+                              : 'bg-surface-2 text-muted hover:text-fg hover:bg-nav-hover')
+                          }
+                        >
+                          {letter}
+                        </button>
+                      );
+                    })}
+                    {libraryLetter && (
+                      <button
+                        type="button"
+                        onClick={() => setLibraryLetter(null)}
+                        className="h-7 px-2 rounded-lg text-xs font-semibold text-muted hover:text-fg"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
               <div className="flex flex-wrap gap-4">
-                {detailSeries.map((s) => (
+                {(browse.kind === 'library' && libraryLetter
+                  ? detailSeries.filter((s) => {
+                      const title = (seriesTitle(s) || '').trim();
+                      const first = title.charAt(0).toUpperCase();
+                      if (libraryLetter === '#') return !/[A-Z]/.test(first);
+                      return first === libraryLetter;
+                    })
+                  : detailSeries
+                ).map((s) => (
                   <SeriesCard
                     key={s.id}
                     series={s}
@@ -749,7 +903,27 @@ export function ComicsPage() {
                 {detailSeries.length === 0 && (
                   <p className="text-sm text-muted">Nothing here yet.</p>
                 )}
+                {browse.kind === 'library' &&
+                  libraryLetter &&
+                  detailSeries.length > 0 &&
+                  !detailSeries.some((s) => {
+                    const first = (seriesTitle(s) || '').trim().charAt(0).toUpperCase();
+                    return libraryLetter === '#' ? !/[A-Z]/.test(first) : first === libraryLetter;
+                  }) && (
+                    <p className="w-full text-sm text-muted">
+                      No series starting with {libraryLetter} in the loaded set
+                      {detailHasMore ? ' — scroll to load more.' : '.'}
+                    </p>
+                  )}
               </div>
+              {browse.kind === 'library' && (
+                <div ref={loadMoreRef} className="h-8 flex items-center justify-center mt-2">
+                  {detailLoadingMore && <Loader2 className="w-5 h-5 animate-spin text-muted" />}
+                  {!detailHasMore && detailSeries.length > 0 && (
+                    <span className="text-xs text-muted">{detailSeries.length} series</span>
+                  )}
+                </div>
+              )}
             </>
           ) : browse.kind === 'readlist' ? (
             <>

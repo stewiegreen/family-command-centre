@@ -166,14 +166,22 @@ export async function komgaBook(bookId: string, memberId?: string): Promise<Komg
 }
 
 export async function komgaSeries(
-  opts: { size?: number; page?: number; search?: string; libraryId?: string; memberId?: string } = {},
+  opts: {
+    size?: number;
+    page?: number;
+    search?: string;
+    libraryId?: string;
+    memberId?: string;
+    /** Default alphabetical by title. */
+    sort?: string;
+  } = {},
 ): Promise<PageResult<KomgaSeries>> {
   return proxyGet<PageResult<KomgaSeries>>('v1/series', {
     size: opts.size ?? 24,
     page: opts.page ?? 0,
     search: opts.search,
     library_id: opts.libraryId,
-    sort: 'metadata.title,asc',
+    sort: opts.sort ?? 'metadata.titleSort,asc',
     memberId: opts.memberId,
   });
 }
@@ -182,11 +190,30 @@ export async function komgaSeriesDetail(seriesId: string, memberId?: string): Pr
   return proxyGet<KomgaSeries>(`v1/series/${encodeURIComponent(seriesId)}`, { memberId });
 }
 
-export async function komgaSeriesBooks(seriesId: string, memberId?: string): Promise<KomgaBook[]> {
+/** One page of books in reading order (numberSort). */
+export async function komgaSeriesBooksPage(
+  seriesId: string,
+  opts: { memberId?: string; size?: number; page?: number } = {},
+): Promise<PageResult<KomgaBook>> {
   const data = await proxyGet<PageResult<KomgaBook> | KomgaBook[]>(
-    `v1/series/${encodeURIComponent(seriesId)}/books`, { memberId, size: 100, sort: 'metadata.numberSort,asc' },
+    `v1/series/${encodeURIComponent(seriesId)}/books`,
+    {
+      memberId: opts.memberId,
+      size: opts.size ?? 40,
+      page: opts.page ?? 0,
+      sort: 'metadata.numberSort,asc',
+    },
   );
-  return Array.isArray(data) ? data : data?.content || [];
+  if (Array.isArray(data)) {
+    return { content: data, totalElements: data.length, totalPages: 1 };
+  }
+  return data || { content: [], totalElements: 0, totalPages: 0 };
+}
+
+/** @deprecated prefer komgaSeriesBooksPage for infinite scroll */
+export async function komgaSeriesBooks(seriesId: string, memberId?: string): Promise<KomgaBook[]> {
+  const page = await komgaSeriesBooksPage(seriesId, { memberId, size: 100, page: 0 });
+  return page.content || [];
 }
 
 export async function komgaLibraries(memberId?: string): Promise<KomgaLibrary[]> {
