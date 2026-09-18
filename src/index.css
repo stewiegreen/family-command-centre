@@ -313,6 +313,24 @@ html.spyfamily .bg-accent {
   --color-secondary-ink: var(--app-secondary-ink, #1a1a1a);
   --font-family-display: var(--font-display);
   --font-family-sans: var(--font-ui);
+
+  /*
+   * Site-wide type scale ≈ +10% vs Tailwind defaults.
+   * Only font sizes change — spacing, icons, and layout stay on the normal rem scale.
+   */
+  --text-xs: 0.825rem; /* 0.75 → +10% */
+  --text-sm: 0.9625rem; /* 0.875 */
+  --text-base: 1.1rem; /* 1 */
+  --text-lg: 1.2375rem; /* 1.125 */
+  --text-xl: 1.375rem; /* 1.25 */
+  --text-2xl: 1.65rem; /* 1.5 */
+  --text-3xl: 2.0625rem; /* 1.875 */
+  --text-4xl: 2.475rem; /* 2.25 */
+  --text-5xl: 3.3rem; /* 3 */
+  --text-6xl: 4.125rem; /* 3.75 */
+  --text-7xl: 4.95rem; /* 4.5 */
+  --text-8xl: 6.6rem; /* 6 */
+  --text-9xl: 8.8rem; /* 8 */
 }
 
 html,
@@ -324,9 +342,36 @@ body,
 body {
   margin: 0;
   font-family: var(--font-ui);
+  font-size: 1.1rem; /* base copy ~10% larger; Tailwind text-* tokens match above */
   -webkit-tap-highlight-color: transparent;
   background-color: var(--app-page);
   color: var(--app-fg);
+}
+
+/*
+ * Arbitrary text-[Npx] utilities used for labels/chips — bump ~10% so they
+ * don't stay tiny while text-sm/base grow. Layout classes unchanged.
+ */
+.text-\[9px\] {
+  font-size: 10px !important;
+}
+.text-\[10px\] {
+  font-size: 11px !important;
+}
+.text-\[11px\] {
+  font-size: 12px !important;
+}
+.text-\[12px\] {
+  font-size: 13px !important;
+}
+.text-\[13px\] {
+  font-size: 14px !important;
+}
+.text-\[14px\] {
+  font-size: 15px !important;
+}
+.text-\[15px\] {
+  font-size: 16.5px !important;
 }
 
 /* Warm Precision headings; neon keeps Inter via --font-display */
