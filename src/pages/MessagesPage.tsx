@@ -5,8 +5,11 @@ import {
   MessageCircle,
   Pin,
   PinOff,
+  Reply,
   Search,
   Send,
+  SmilePlus,
+  X,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Avatar } from '../components/ui/Avatar';
@@ -52,7 +55,7 @@ function ChatImage({ url }: { url: string }) {
       <img
         src={url}
         alt=""
-        className="max-w-[min(100%,18rem)] max-h-64 rounded-lg object-cover"
+        className="max-w-[min(100%,20rem)] max-h-72 rounded-xl object-cover block"
         onError={() => setBroken(true)}
         loading="lazy"
       />
@@ -76,19 +79,21 @@ function MessageBody({ text }: { text: string }) {
   if (last < text.length) parts.push({ type: 'text', value: text.slice(last) });
   if (parts.length === 0) parts.push({ type: 'text', value: text });
 
-  const onlyImage = parts.length === 1 && parts[0]!.type === 'image';
+  // Prefer photo-first layout when message mixes image + caption
+  const images = parts.filter((p) => p.type === 'image');
+  const texts = parts.filter((p) => p.type === 'text' && p.value.trim());
+  const onlyImage = images.length > 0 && texts.length === 0;
 
   return (
-    <div className={onlyImage ? '' : 'space-y-1'}>
-      {parts.map((part, i) =>
-        part.type === 'image' ? (
-          <ChatImage key={`img-${i}`} url={part.value} />
-        ) : (
-          <span key={`t-${i}`} className="whitespace-pre-wrap">
-            {part.value}
-          </span>
-        ),
-      )}
+    <div className={onlyImage ? '' : 'space-y-1.5'}>
+      {images.map((part, i) => (
+        <ChatImage key={`img-${i}`} url={part.value} />
+      ))}
+      {texts.map((part, i) => (
+        <span key={`t-${i}`} className="whitespace-pre-wrap block">
+          {part.value.trim()}
+        </span>
+      ))}
     </div>
   );
 }
@@ -165,6 +170,7 @@ export function MessagesPage() {
     getMember,
     sendMessage,
     markThreadRead,
+    toggleMessageReaction,
     familyId,
     update,
   } = useApp();
@@ -186,6 +192,8 @@ export function MessagesPage() {
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
+  const [replyTo, setReplyTo] = useState<Message | null>(null);
+  const [reactForId, setReactForId] = useState<string | null>(null);
 
   const fileRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -347,6 +355,8 @@ export function MessagesPage() {
   const selectConversation = (id: string) => {
     setChatId(id);
     setMobileListOpen(false);
+    setReplyTo(null);
+    setReactForId(null);
   };
 
   const insertEmoji = (emoji: string) => {
@@ -403,13 +413,16 @@ export function MessagesPage() {
     if (!text.trim() || !chatId || sending) return;
     setSending(true);
     try {
-      await sendMessage(chatId, text);
+      await sendMessage(chatId, text, replyTo ? { replyToId: replyTo.id } : undefined);
       setText('');
+      setReplyTo(null);
       inputRef.current?.focus();
     } finally {
       setSending(false);
     }
   };
+
+  const REACTION_EMOJI = ['👍', '❤️', '😂', '😮', '❗', '🎉'] as const;
 
   const renderConvButton = (row: ConvRow) => {
     const member = others.find((m) => m.id === row.memberId) || getMember(row.memberId);
@@ -594,11 +607,22 @@ export function MessagesPage() {
                   const bubble = sender?.color || (mine ? '#6366f1' : '#64748b');
                   const ink = contrastText(bubble);
 
+                  const quoted = msg.replyToId
+                    ? thread.find((m) => m.id === msg.replyToId) ||
+                      data.messages.find((m) => m.id === msg.replyToId)
+                    : undefined;
+                  const quotedName = quoted
+                    ? getMember(quoted.fromId)?.name || 'Someone'
+                    : '';
+                  const reactionEntries = Object.entries(msg.reactions || {}).filter(
+                    ([, ids]) => ids.length > 0,
+                  );
+
                   return (
                     <div
                       key={msg.id}
                       className={cn(
-                        'flex gap-2 max-w-[min(100%,28rem)]',
+                        'group flex gap-2 max-w-[min(100%,28rem)]',
                         mine ? 'ml-auto flex-row-reverse' : 'mr-auto',
                         showAvatar ? 'mt-3' : 'mt-0.5',
                       )}
@@ -606,7 +630,7 @@ export function MessagesPage() {
                       <div className={cn('w-8 shrink-0', !showAvatar && 'invisible')}>
                         {showAvatar && sender && <Avatar {...sender} size="sm" />}
                       </div>
-                      <div className={cn('min-w-0', mine ? 'items-end' : 'items-start')}>
+                      <div className={cn('min-w-0 relative', mine ? 'items-end' : 'items-start')}>
                         <div
                           className={cn(
                             'px-3 py-2 text-sm leading-snug shadow-sm',
@@ -614,8 +638,96 @@ export function MessagesPage() {
                           )}
                           style={{ backgroundColor: bubble, color: ink }}
                         >
+                          {quoted && (
+                            <div
+                              className="mb-1.5 pl-2 border-l-2 text-xs opacity-90"
+                              style={{ borderColor: ink }}
+                            >
+                              <span className="font-semibold">{quotedName}</span>
+                              <div className="truncate opacity-80">{previewText(quoted.text, 60)}</div>
+                            </div>
+                          )}
                           <MessageBody text={msg.text} />
                         </div>
+
+                        {reactionEntries.length > 0 && (
+                          <div
+                            className={cn(
+                              'flex flex-wrap gap-1 mt-0.5',
+                              mine ? 'justify-end' : 'justify-start',
+                            )}
+                          >
+                            {reactionEntries.map(([emoji, ids]) => (
+                              <button
+                                key={emoji}
+                                type="button"
+                                title={ids.map((id) => getMember(id)?.name || id).join(', ')}
+                                onClick={() => void toggleMessageReaction(msg.id, emoji)}
+                                className={cn(
+                                  'text-[11px] px-1.5 py-0.5 rounded-full border border-border bg-surface/90',
+                                  ids.includes(me) && 'ring-1 ring-accent',
+                                )}
+                              >
+                                {emoji}
+                                {ids.length > 1 ? ` ${ids.length}` : ''}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+
+                        <div
+                          className={cn(
+                            'flex items-center gap-0.5 mt-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity',
+                            mine ? 'justify-end' : 'justify-start',
+                          )}
+                        >
+                          <button
+                            type="button"
+                            title="Reply"
+                            className="p-1 rounded-md text-faint hover:text-fg hover:bg-nav-hover"
+                            onClick={() => {
+                              setReplyTo(msg);
+                              setReactForId(null);
+                              inputRef.current?.focus();
+                            }}
+                          >
+                            <Reply className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            title="React"
+                            className="p-1 rounded-md text-faint hover:text-fg hover:bg-nav-hover"
+                            onClick={() =>
+                              setReactForId((id) => (id === msg.id ? null : msg.id))
+                            }
+                          >
+                            <SmilePlus className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+
+                        {reactForId === msg.id && (
+                          <div
+                            className={cn(
+                              'flex gap-1 mt-1 p-1 rounded-xl border border-border bg-elevated shadow-sm',
+                              mine ? 'justify-end' : 'justify-start',
+                            )}
+                          >
+                            {REACTION_EMOJI.map((emoji) => (
+                              <button
+                                key={emoji}
+                                type="button"
+                                className="text-base px-1.5 py-0.5 rounded-lg hover:bg-nav-hover"
+                                onClick={() => {
+                                  void toggleMessageReaction(msg.id, emoji);
+                                  setReactForId(null);
+                                }}
+                              >
+                                {emoji}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+
                         {showTime && (
                           <p
                             className={cn(
@@ -626,7 +738,7 @@ export function MessagesPage() {
                             {formatMessageTime(msg.timestamp)}
                             {mine && (
                               <span className="ml-1 opacity-80">
-                                {msg.read ? ' \u00b7 Read' : ' \u00b7 Sent'}
+                                {msg.read ? ' · Read' : ' · Sent'}
                               </span>
                             )}
                           </p>
@@ -640,6 +752,25 @@ export function MessagesPage() {
             </div>
 
             <div className="shrink-0 border-t border-border bg-elevated px-3 sm:px-4 py-3">
+              {replyTo && (
+                <div className="mb-2 flex items-start gap-2 rounded-xl border border-border bg-inset/50 px-3 py-2">
+                  <Reply className="w-4 h-4 text-accent shrink-0 mt-0.5" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-semibold text-fg">
+                      Replying to {getMember(replyTo.fromId)?.name || 'message'}
+                    </p>
+                    <p className="text-xs text-muted truncate">{previewText(replyTo.text, 80)}</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="p-1 rounded-md text-muted hover:text-fg"
+                    onClick={() => setReplyTo(null)}
+                    aria-label="Cancel reply"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
               {(uploading || uploadError) && (
                 <p
                   className={cn(

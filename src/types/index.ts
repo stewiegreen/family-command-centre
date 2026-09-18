@@ -545,6 +545,13 @@ export interface Message {
   text: string;
   timestamp: string;
   read: boolean;
+  /** Optional reply to another message in the same thread. */
+  replyToId?: string;
+  /**
+   * Emoji reactions: emoji → list of memberIds who reacted.
+   * Keep the set small (family); e.g. { "👍": ["abc"], "❤️": ["xyz"] }.
+   */
+  reactions?: Record<string, string[]>;
 }
 
 

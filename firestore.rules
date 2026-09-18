@@ -124,14 +124,28 @@ service cloud.firestore {
           && request.resource.data.text.size() > 0
           && request.resource.data.text.size() <= 2000;
 
+        // Mark read (recipient only) OR toggle reactions (either participant).
         allow update: if signedIn()
           && isMember(familyId)
-          && request.auth.uid == resource.data.toUid
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read'])
-          && request.resource.data.read == true
-          && request.resource.data.fromUid == resource.data.fromUid
-          && request.resource.data.toUid == resource.data.toUid
-          && request.resource.data.text == resource.data.text;
+          && (request.auth.uid == resource.data.fromUid
+              || request.auth.uid == resource.data.toUid)
+          && (
+            (
+              request.auth.uid == resource.data.toUid
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read'])
+              && request.resource.data.read == true
+              && request.resource.data.fromUid == resource.data.fromUid
+              && request.resource.data.toUid == resource.data.toUid
+              && request.resource.data.text == resource.data.text
+            )
+            || (
+              request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions'])
+              && request.resource.data.fromUid == resource.data.fromUid
+              && request.resource.data.toUid == resource.data.toUid
+              && request.resource.data.text == resource.data.text
+              && request.resource.data.timestamp == resource.data.timestamp
+            )
+          );
 
         allow delete: if signedIn()
           && isMember(familyId)

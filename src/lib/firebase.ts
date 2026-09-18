@@ -400,7 +400,7 @@ export async function cloudSendMessage(
 ): Promise<Message> {
   if (!db || !fsMod) throw new Error('Cloud not connected');
   const id = msg.id || uid();
-  const payload = {
+  const payload: Omit<Message, 'id'> = {
     fromId: msg.fromId,
     toId: msg.toId,
     fromUid: msg.fromUid || '',
@@ -409,8 +409,29 @@ export async function cloudSendMessage(
     timestamp: msg.timestamp || new Date().toISOString(),
     read: false,
   };
+  if (msg.replyToId) payload.replyToId = msg.replyToId;
   await fsMod.setDoc(fsMod.doc(messagesCol(familyId), id), payload);
   return { id, ...payload };
+}
+
+/** Toggle a reaction emoji for the current member on a message. */
+export async function cloudToggleMessageReaction(
+  familyId: string,
+  messageId: string,
+  emoji: string,
+  memberId: string,
+  current: Record<string, string[]> | undefined,
+): Promise<Record<string, string[]>> {
+  if (!db || !fsMod) throw new Error('Cloud not connected');
+  const next: Record<string, string[]> = { ...(current || {}) };
+  const list = [...(next[emoji] || [])];
+  const idx = list.indexOf(memberId);
+  if (idx >= 0) list.splice(idx, 1);
+  else list.push(memberId);
+  if (list.length) next[emoji] = list;
+  else delete next[emoji];
+  await fsMod.updateDoc(fsMod.doc(messagesCol(familyId), messageId), { reactions: next });
+  return next;
 }
 
 export async function cloudMarkMessageRead(familyId: string, messageId: string): Promise<void> {

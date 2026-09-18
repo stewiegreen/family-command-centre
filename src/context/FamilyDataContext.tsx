@@ -55,6 +55,7 @@ import {
   deleteCurrentUser,
   cloudListInvites,
   cloudMarkMessageRead,
+  cloudToggleMessageReaction,
   cloudRevokeInvite,
   cloudSendMessage,
   cloudWrite,
@@ -115,8 +116,9 @@ export interface FamilyDataContextValue {
   createInvite: (opts: { role: Role; label: string }) => Promise<Invite>;
   listInvites: () => Promise<Invite[]>;
   revokeInvite: (code: string) => Promise<void>;
-  sendMessage: (toMemberId: string, text: string) => Promise<void>;
+  sendMessage: (toMemberId: string, text: string, opts?: { replyToId?: string }) => Promise<void>;
   markThreadRead: (fromMemberId: string) => Promise<void>;
+  toggleMessageReaction: (messageId: string, emoji: string) => Promise<void>;
   signUp: (email: string, password: string, displayName: string, inviteCode: string) => Promise<import('firebase/auth').User>;
   signOut: () => Promise<void>;
 }
@@ -494,7 +496,7 @@ export function FamilyDataProvider({ children }: { children: ReactNode }) {
   );
 
   const sendMessage = useCallback(
-    async (toMemberId: string, text: string) => {
+    async (toMemberId: string, text: string, opts?: { replyToId?: string }) => {
       const auth = getFirebaseAuth();
       const fid = localStorage.getItem(FAMILY_ID_KEY);
       const me = dataRef.current.members.find((m) => m.id === dataRef.current.settings.currentUserId);
@@ -510,6 +512,7 @@ export function FamilyDataProvider({ children }: { children: ReactNode }) {
           text: trimmed,
           timestamp: new Date().toISOString(),
           read: false,
+          replyToId: opts?.replyToId,
         });
         setData((prev) => {
           if (prev.messages.some((m) => m.id === msg.id)) return prev;
@@ -534,6 +537,7 @@ export function FamilyDataProvider({ children }: { children: ReactNode }) {
           text: trimmed,
           timestamp: new Date().toISOString(),
           read: false,
+          replyToId: opts?.replyToId,
         };
         update((d) => {
           const next = [...d.messages, local];
@@ -573,6 +577,55 @@ export function FamilyDataProvider({ children }: { children: ReactNode }) {
       }));
     }
   }, [update]);
+
+  const toggleMessageReaction = useCallback(
+    async (messageId: string, emoji: string) => {
+      const me = dataRef.current.members.find((m) => m.id === dataRef.current.settings.currentUserId);
+      if (!me) return;
+      const msg = dataRef.current.messages.find((m) => m.id === messageId);
+      if (!msg) return;
+      const fid = localStorage.getItem(FAMILY_ID_KEY);
+      if (fid && getDb()) {
+        try {
+          const next = await cloudToggleMessageReaction(
+            fid,
+            messageId,
+            emoji,
+            me.id,
+            msg.reactions,
+          );
+          setData((prev) => ({
+            ...prev,
+            messages: prev.messages.map((m) =>
+              m.id === messageId ? { ...m, reactions: next } : m,
+            ),
+          }));
+        } catch (e) {
+          console.error('reaction failed', e);
+        }
+      } else {
+        update((d) => {
+          const m = d.messages.find((x) => x.id === messageId);
+          if (!m) return d;
+          const next: Record<string, string[]> = { ...(m.reactions || {}) };
+          const list = [...(next[emoji] || [])];
+          const i = list.indexOf(me.id);
+          if (i >= 0) list.splice(i, 1);
+          else list.push(me.id);
+          if (list.length) next[emoji] = list;
+          else delete next[emoji];
+          return {
+            ...d,
+            messages: d.messages.map((x) =>
+              x.id === messageId ? { ...x, reactions: next } : x,
+            ),
+          };
+        });
+      }
+    },
+    [update],
+  );
+
 
   const connectCloud = useCallback(
     async (cfg: FirebaseConfig) => {
@@ -938,6 +991,7 @@ export function FamilyDataProvider({ children }: { children: ReactNode }) {
     revokeInvite,
     sendMessage,
     markThreadRead,
+    toggleMessageReaction,
     signUp,
     signOut,
   };
