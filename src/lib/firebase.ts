@@ -411,7 +411,10 @@ export async function cloudSendMessage(
   };
   if (msg.channel) payload.channel = msg.channel;
   if (msg.replyToId) payload.replyToId = msg.replyToId;
-  if (msg.attachment) payload.attachment = msg.attachment;
+  // Reuses the recursive stripUndefined already defined above (used by
+  // cloudWrite) — attachment builders can pass `subtitle: cond ? x :
+  // undefined`, which Firestore's SDK otherwise throws on outright.
+  if (msg.attachment) payload.attachment = stripUndefined(msg.attachment);
   if (msg.channel === 'family') payload.readBy = msg.readBy || [];
   await fsMod.setDoc(fsMod.doc(messagesCol(familyId), id), payload);
   return { id, ...payload };

@@ -516,12 +516,33 @@ export function MessagesPage() {
     else if (att.type === 'quest') setView('chores');
   };
 
+  const [shareError, setShareError] = useState('');
+
   const shareAttachment = async (att: MessageAttachment) => {
     if (!chatId) return;
-    await sendMessage(chatId, att.title, { attachment: att });
-    setShareOpen(false);
-    setShareType(null);
+    setShareError('');
+    try {
+      await sendMessage(chatId, att.title, { attachment: att });
+      setShareOpen(false);
+      setShareType(null);
+    } catch (e) {
+      // Previously this failed silently (fire-and-forget `void shareAttachment(...)`
+      // at the call sites) — a thrown/rejected write here just did nothing visible,
+      // which is exactly how the undefined-subtitle bug went unnoticed. Surface it.
+      console.error('[messages] share failed', e);
+      setShareError('Could not share that — try again.');
+    }
   };
+
+  /**
+   * Spreads in `subtitle` only when it has a real value. Firestore's SDK
+   * throws on a literal `undefined` field (no ignoreUndefinedProperties
+   * here), so `subtitle: cond ? x : undefined` below would silently break
+   * the whole share for any item missing that optional field — this is
+   * what previously made tasks with no due date fail to share at all.
+   */
+  const withSubtitle = (subtitle: string | undefined | null) =>
+    subtitle ? { subtitle } : {};
 
   const renderConvButton = (row: ConvRow) => {
     const isFamily = row.memberId === FAMILY_CHANNEL_ID;
@@ -1009,11 +1030,17 @@ export function MessagesPage() {
                 onClick={() => {
                   setShareOpen(false);
                   setShareType(null);
+                  setShareError('');
                 }}
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
+            {shareError && (
+              <div className="px-4 py-2 text-xs text-red-500 border-b border-border bg-red-500/5">
+                {shareError}
+              </div>
+            )}
             <div className="overflow-y-auto p-3 space-y-2">
               {!shareType && (
                 <div className="grid grid-cols-2 gap-2">
@@ -1052,9 +1079,11 @@ export function MessagesPage() {
                           type: 'todo',
                           id: todo.id,
                           title: todo.text,
-                          subtitle: todo.dueAt
-                            ? `Due ${new Date(todo.dueAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}`
-                            : undefined,
+                          ...withSubtitle(
+                            todo.dueAt
+                              ? `Due ${new Date(todo.dueAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}`
+                              : undefined,
+                          ),
                         })
                       }
                     >
@@ -1077,9 +1106,11 @@ export function MessagesPage() {
                         type: 'event',
                         id: ev.id,
                         title: ev.title,
-                        subtitle: ev.start
-                          ? new Date(ev.start).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })
-                          : undefined,
+                        ...withSubtitle(
+                          ev.start
+                            ? new Date(ev.start).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })
+                            : undefined,
+                        ),
                       })
                     }
                   >
@@ -1097,7 +1128,7 @@ export function MessagesPage() {
                         type: 'note',
                         id: n.id,
                         title: n.title || 'Note',
-                        subtitle: n.content?.slice(0, 60),
+                        ...withSubtitle(n.content?.slice(0, 60)),
                       })
                     }
                   >
@@ -1118,7 +1149,7 @@ export function MessagesPage() {
                           type: 'shopping',
                           id: s.id,
                           title: s.text || 'Item',
-                          subtitle: s.store || s.category,
+                          ...withSubtitle(s.store || s.category),
                         })
                       }
                     >
