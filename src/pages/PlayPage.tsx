@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { GameChatPanel } from './play/GameChatPanel';
 import { Gamepad2, Loader2, Trash2, UserPlus, X } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Avatar } from '../components/ui/Avatar';
@@ -276,7 +277,8 @@ export function PlayPage() {
   const cloudOk = !!(familyId && authUid);
 
   return (
-    <div className="max-w-xl mx-auto p-4 space-y-5 pb-16">
+    <div className="p-4 space-y-5 pb-16">
+      <div className="max-w-xl mx-auto space-y-5">
       <div>
         <h1 className="text-xl font-bold text-fg flex items-center gap-2">
           <Gamepad2 className="w-6 h-6 text-accent" /> Play
@@ -370,41 +372,65 @@ export function PlayPage() {
         </div>
       </Card>
 
-      {active && isTtt(active) && (
-        <TttBoard
-          game={active}
-          me={me}
-          getMember={getMember}
-          onCell={(i) => void playTttCell(i)}
-          onClose={() => setActiveId(null)}
-          onCancel={() => void cancelGame(active)}
-          busy={busy}
-        />
-      )}
-      {active && isC4(active) && (
-        <C4Board
-          game={active}
-          me={me}
-          getMember={getMember}
-          onCol={(c) => void playC4Col(c)}
-          onClose={() => setActiveId(null)}
-          onCancel={() => void cancelGame(active)}
-          busy={busy}
-        />
-      )}
-      {active && isBs(active) && familyId && authUid && (
-        <BsBoard
-          game={active}
-          me={me}
-          familyId={familyId}
-          authUid={authUid}
-          getMember={getMember}
-          onClose={() => setActiveId(null)}
-          onCancel={() => void cancelGame(active)}
-          setErr={setErr}
-        />
+      </div>
+
+      {active && (
+        <div className="max-w-6xl mx-auto w-full flex flex-col lg:flex-row gap-6 items-start">
+          <div className="flex-1 min-w-0 w-full">
+            {isTtt(active) && (
+              <TttBoard
+                game={active}
+                me={me}
+                getMember={getMember}
+                onCell={(i) => void playTttCell(i)}
+                onClose={() => setActiveId(null)}
+                onCancel={() => void cancelGame(active)}
+                busy={busy}
+              />
+            )}
+            {isC4(active) && (
+              <C4Board
+                game={active}
+                me={me}
+                getMember={getMember}
+                onCol={(c) => void playC4Col(c)}
+                onClose={() => setActiveId(null)}
+                onCancel={() => void cancelGame(active)}
+                busy={busy}
+              />
+            )}
+            {isBs(active) && familyId && authUid && (
+              <BsBoard
+                game={active}
+                me={me}
+                familyId={familyId}
+                authUid={authUid}
+                getMember={getMember}
+                onClose={() => setActiveId(null)}
+                onCancel={() => void cancelGame(active)}
+                setErr={setErr}
+              />
+            )}
+          </div>
+          {active.guestUid && familyId && authUid && (
+            <div className="w-full lg:w-[360px] shrink-0">
+              <GameChatPanel
+                familyId={familyId}
+                gameId={active.id}
+                myUid={authUid}
+                myMemberId={me.id}
+                opponentUid={
+                  active.hostUid === authUid
+                    ? active.guestUid
+                    : active.hostUid
+                }
+              />
+            </div>
+          )}
+        </div>
       )}
 
+      <div className="max-w-xl mx-auto w-full space-y-5">
       {solo && (
         <WordleBoard
           key={solo}
@@ -486,6 +512,7 @@ export function PlayPage() {
           ))}
         </section>
       )}
+      </div>
     </div>
   );
 }

@@ -4,7 +4,7 @@
 import type { FirebaseApp } from 'firebase/app';
 import type { Auth, User } from 'firebase/auth';
 import type { Firestore } from 'firebase/firestore';
-import type { FamilyData, FirebaseConfig, Invite, JournalEntry, Member, Message, Role, TicTacToeGame, TicCell, Connect4Game, Connect4Cell, FamilyGame, BattleshipGame, BattleshipShot, Fleet } from '../types';
+import type { FamilyData, FirebaseConfig, Invite, JournalEntry, Member, Message, Role, TicTacToeGame, TicCell, Connect4Game, Connect4Cell, FamilyGame, BattleshipGame, BattleshipShot, Fleet, GameChatMessage } from '../types';
 import { MEMBER_COLORS, MEMBER_EMOJIS, migratePayload } from './defaults';
 import { makeFamilyCode, makeInviteCode, uid } from './uid';
 import { CURRENT_USER_KEY, FAMILY_ID_KEY } from './storage';
@@ -784,6 +784,55 @@ export type { User };
 
 function gamesCol(familyId: string) {
   return fsMod!.collection(db!, 'families', familyId, 'games');
+}
+
+function gameChatCol(familyId: string, gameId: string) {
+  return fsMod!.collection(db!, 'families', familyId, 'games', gameId, 'chat');
+}
+
+/** Live chat for one multiplayer game — both players only (rules-enforced). */
+export function subscribeGameChat(
+  familyId: string,
+  gameId: string,
+  onData: (messages: GameChatMessage[]) => void,
+  onError: (err: Error) => void,
+): () => void {
+  if (!db || !fsMod) {
+    onError(new Error('Cloud not connected'));
+    return () => {};
+  }
+  const q = fsMod.query(
+    gameChatCol(familyId, gameId),
+    fsMod.orderBy('timestamp', 'asc'),
+    fsMod.limit(200),
+  );
+  return fsMod.onSnapshot(
+    q,
+    (snap) =>
+      onData(
+        snap.docs.map(
+          (d) => ({ id: d.id, ...(d.data() as Omit<GameChatMessage, 'id'>) }) as GameChatMessage,
+        ),
+      ),
+    (err) => onError(err instanceof Error ? err : new Error(String(err))),
+  );
+}
+
+/** Send a short message into a multiplayer game's chat. */
+export async function cloudSendGameChat(
+  familyId: string,
+  gameId: string,
+  msg: { fromUid: string; fromMemberId: string; text: string },
+): Promise<void> {
+  if (!db || !fsMod) throw new Error('Cloud not connected');
+  const text = msg.text.trim().slice(0, 240);
+  if (!text) return;
+  await fsMod.addDoc(gameChatCol(familyId, gameId), {
+    fromUid: msg.fromUid,
+    fromMemberId: msg.fromMemberId,
+    text,
+    timestamp: new Date().toISOString(),
+  });
 }
 
 function gameDocToGame(id: string, data: Record<string, unknown>): FamilyGame | null {

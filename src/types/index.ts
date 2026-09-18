@@ -950,3 +950,13 @@ export type Fleet = {
 
 export type FamilyGame = TicTacToeGame | Connect4Game | BattleshipGame;
 
+/** Short-lived chat under families/{id}/games/{gameId}/chat/{messageId}. */
+export interface GameChatMessage {
+  id: string;
+  fromUid: string;
+  fromMemberId: string;
+  text: string;
+  /** ISO string, client-set — same convention as Message.timestamp. */
+  timestamp: string;
+}
+

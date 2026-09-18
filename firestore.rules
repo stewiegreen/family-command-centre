@@ -220,6 +220,27 @@ service cloud.firestore {
             && isMember(familyId)
             && request.auth.uid == uid;
         }
+
+        // Game chat — only the two players (hostUid / guestUid on the parent game doc).
+        function isGamePlayer() {
+          let g = get(/databases/$(database)/documents/families/$(familyId)/games/$(gameId)).data;
+          return request.auth.uid == g.hostUid || request.auth.uid == g.guestUid;
+        }
+
+        match /chat/{messageId} {
+          allow read: if signedIn() && isMember(familyId) && isGamePlayer();
+
+          allow create: if signedIn()
+            && isMember(familyId)
+            && isGamePlayer()
+            && request.resource.data.fromUid == request.auth.uid
+            && request.resource.data.keys().hasAll(['fromUid', 'fromMemberId', 'text', 'timestamp'])
+            && request.resource.data.text is string
+            && request.resource.data.text.size() > 0
+            && request.resource.data.text.size() <= 240;
+
+          // Immutable once sent — no edit / delete / reactions.
+        }
       }
 
       // Journal: one doc per entry. Privacy is per-document (not a FamilyData array).
