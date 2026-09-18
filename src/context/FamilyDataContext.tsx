@@ -19,7 +19,8 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import type { FamilyData, FirebaseConfig, Invite, Member, Message, Role, SyncStatus, ViewId } from '../types';
+import type { FamilyData, FirebaseConfig, Invite, Member, Message, MessageAttachment, Role, SyncStatus, ViewId } from '../types';
+import { FAMILY_CHANNEL_ID } from '../types';
 import {
   CURRENT_USER_KEY,
   FAMILY_ID_KEY,
@@ -55,6 +56,7 @@ import {
   deleteCurrentUser,
   cloudListInvites,
   cloudMarkMessageRead,
+  cloudMarkFamilyMessageRead,
   cloudToggleMessageReaction,
   cloudRevokeInvite,
   cloudSendMessage,
@@ -116,7 +118,11 @@ export interface FamilyDataContextValue {
   createInvite: (opts: { role: Role; label: string }) => Promise<Invite>;
   listInvites: () => Promise<Invite[]>;
   revokeInvite: (code: string) => Promise<void>;
-  sendMessage: (toMemberId: string, text: string, opts?: { replyToId?: string }) => Promise<void>;
+  sendMessage: (
+    toMemberId: string,
+    text: string,
+    opts?: { replyToId?: string; attachment?: MessageAttachment },
+  ) => Promise<void>;
   markThreadRead: (fromMemberId: string) => Promise<void>;
   toggleMessageReaction: (messageId: string, emoji: string) => Promise<void>;
   signUp: (email: string, password: string, displayName: string, inviteCode: string) => Promise<import('firebase/auth').User>;
@@ -496,23 +502,34 @@ export function FamilyDataProvider({ children }: { children: ReactNode }) {
   );
 
   const sendMessage = useCallback(
-    async (toMemberId: string, text: string, opts?: { replyToId?: string }) => {
+    async (
+      toMemberId: string,
+      text: string,
+      opts?: { replyToId?: string; attachment?: MessageAttachment },
+    ) => {
       const auth = getFirebaseAuth();
       const fid = localStorage.getItem(FAMILY_ID_KEY);
       const me = dataRef.current.members.find((m) => m.id === dataRef.current.settings.currentUserId);
-      const to = dataRef.current.members.find((m) => m.id === toMemberId);
-      if (!text.trim() || !me || !to) return;
+      if (!me) return;
+      const isFamily = toMemberId === FAMILY_CHANNEL_ID;
+      const to = isFamily ? null : dataRef.current.members.find((m) => m.id === toMemberId);
+      if (!isFamily && !to) return;
       const trimmed = text.trim();
+      if (!trimmed && !opts?.attachment) return;
+      const body = trimmed || opts?.attachment?.title || 'Shared item';
       if (fid && getDb() && auth?.currentUser) {
         const msg = await cloudSendMessage(fid, {
           fromId: me.id,
-          toId: to.id,
+          toId: isFamily ? FAMILY_CHANNEL_ID : to!.id,
           fromUid: auth.currentUser.uid,
-          toUid: to.uid || '',
-          text: trimmed,
+          toUid: isFamily ? '' : to!.uid || '',
+          channel: isFamily ? 'family' : 'dm',
+          text: body,
           timestamp: new Date().toISOString(),
           read: false,
+          readBy: isFamily ? [me.id] : undefined,
           replyToId: opts?.replyToId,
+          attachment: opts?.attachment,
         });
         setData((prev) => {
           if (prev.messages.some((m) => m.id === msg.id)) return prev;
@@ -533,11 +550,14 @@ export function FamilyDataProvider({ children }: { children: ReactNode }) {
         const local: Message = {
           id: `local_${Date.now()}`,
           fromId: me.id,
-          toId: to.id,
-          text: trimmed,
+          toId: isFamily ? FAMILY_CHANNEL_ID : to!.id,
+          channel: isFamily ? 'family' : 'dm',
+          text: body,
           timestamp: new Date().toISOString(),
           read: false,
+          readBy: isFamily ? [me.id] : undefined,
           replyToId: opts?.replyToId,
+          attachment: opts?.attachment,
         };
         update((d) => {
           const next = [...d.messages, local];
@@ -555,11 +575,58 @@ export function FamilyDataProvider({ children }: { children: ReactNode }) {
   const markThreadRead = useCallback(async (fromMemberId: string) => {
     const me = dataRef.current.members.find((m) => m.id === dataRef.current.settings.currentUserId);
     if (!me) return;
+    const fid = localStorage.getItem(FAMILY_ID_KEY);
+    const isFamily = fromMemberId === FAMILY_CHANNEL_ID;
+
+    if (isFamily) {
+      const unread = dataRef.current.messages.filter(
+        (m) =>
+          (m.channel === 'family' || m.toId === FAMILY_CHANNEL_ID) &&
+          m.fromId !== me.id &&
+          !(m.readBy || []).includes(me.id),
+      );
+      if (!unread.length) return;
+      if (fid && getDb()) {
+        await Promise.all(
+          unread.map((m) =>
+            cloudMarkFamilyMessageRead(fid, m.id, me.id, m.readBy).catch(() => null),
+          ),
+        );
+        setData((prev) => ({
+          ...prev,
+          messages: prev.messages.map((m) => {
+            if (
+              (m.channel === 'family' || m.toId === FAMILY_CHANNEL_ID) &&
+              m.fromId !== me.id &&
+              !(m.readBy || []).includes(me.id)
+            ) {
+              return { ...m, readBy: [...(m.readBy || []), me.id] };
+            }
+            return m;
+          }),
+        }));
+      } else {
+        update((d) => ({
+          ...d,
+          messages: d.messages.map((m) => {
+            if (
+              (m.channel === 'family' || m.toId === FAMILY_CHANNEL_ID) &&
+              m.fromId !== me.id &&
+              !(m.readBy || []).includes(me.id)
+            ) {
+              return { ...m, readBy: [...(m.readBy || []), me.id] };
+            }
+            return m;
+          }),
+        }));
+      }
+      return;
+    }
+
     const unread = dataRef.current.messages.filter(
       (m) => m.toId === me.id && m.fromId === fromMemberId && !m.read,
     );
     if (!unread.length) return;
-    const fid = localStorage.getItem(FAMILY_ID_KEY);
     if (fid && getDb()) {
       await Promise.all(unread.map((m) => cloudMarkMessageRead(fid, m.id).catch(() => {})));
       setData((prev) => ({

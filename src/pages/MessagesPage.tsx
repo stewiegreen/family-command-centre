@@ -1,14 +1,21 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
+  Calendar,
+  Home,
   ImagePlus,
+  Link2,
+  ListTodo,
   MessageCircle,
   Pin,
   PinOff,
   Reply,
   Search,
   Send,
+  ShoppingCart,
   SmilePlus,
+  StickyNote,
+  Swords,
   X,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
@@ -18,7 +25,12 @@ import { EmptyState } from '../components/ui/EmptyState';
 import { EmojiPicker } from '../components/EmojiPicker';
 import { MAX_MESSAGES_PER_THREAD, getFirebaseAuth } from '../lib/firebase';
 import { cn } from '../lib/cn';
-import type { Message } from '../types';
+import {
+  FAMILY_CHANNEL_ID,
+  type Message,
+  type MessageAttachment,
+  type MessageAttachmentType,
+} from '../types';
 
 function contrastText(hex: string): string {
   const c = (hex || '#6366f1').replace('#', '');
@@ -146,14 +158,66 @@ function previewText(text: string, max = 80): string {
   return t.slice(0, max - 1) + '\u2026';
 }
 
+function isFamilyMsg(m: Message): boolean {
+  return m.channel === 'family' || m.toId === FAMILY_CHANNEL_ID;
+}
+
 function threadMessages(messages: Message[], me: string, partnerId: string): Message[] {
   return messages
-    .filter(
-      (m) =>
+    .filter((m) => {
+      if (partnerId === FAMILY_CHANNEL_ID) return isFamilyMsg(m);
+      if (isFamilyMsg(m)) return false;
+      return (
         (m.fromId === me && m.toId === partnerId) ||
-        (m.fromId === partnerId && m.toId === me),
-    )
+        (m.fromId === partnerId && m.toId === me)
+      );
+    })
     .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+}
+
+function AttachmentCard({
+  att,
+  onOpen,
+}: {
+  att: MessageAttachment;
+  onOpen: () => void;
+}) {
+  const icon =
+    att.type === 'todo'
+      ? ListTodo
+      : att.type === 'event'
+        ? Calendar
+        : att.type === 'note'
+          ? StickyNote
+          : att.type === 'shopping'
+            ? ShoppingCart
+            : Swords;
+  const Icon = icon;
+  const label =
+    att.type === 'todo'
+      ? 'Task'
+      : att.type === 'event'
+        ? 'Event'
+        : att.type === 'note'
+          ? 'Note'
+          : att.type === 'shopping'
+            ? 'Shopping'
+            : 'Quest';
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="mt-1.5 w-full text-left rounded-xl border border-white/20 bg-black/15 px-3 py-2 hover:bg-black/25 transition-colors"
+    >
+      <div className="flex items-center gap-2 text-[10px] uppercase tracking-wide opacity-80">
+        <Icon className="w-3.5 h-3.5" />
+        {label}
+      </div>
+      <div className="font-semibold text-sm mt-0.5">{att.title}</div>
+      {att.subtitle && <div className="text-xs opacity-80 mt-0.5">{att.subtitle}</div>}
+      <div className="text-[11px] font-medium mt-1.5 opacity-90">Open →</div>
+    </button>
+  );
 }
 
 type ConvRow = {
@@ -173,6 +237,7 @@ export function MessagesPage() {
     toggleMessageReaction,
     familyId,
     update,
+    setView,
   } = useApp();
 
   const me = currentUser?.id || data.settings.currentUserId;
@@ -185,7 +250,7 @@ export function MessagesPage() {
     [data.members, getMember, me],
   );
 
-  const [chatId, setChatId] = useState(others[0]?.id || '');
+  const [chatId, setChatId] = useState<string>(FAMILY_CHANNEL_ID);
   const [search, setSearch] = useState('');
   const [mobileListOpen, setMobileListOpen] = useState(false);
   const [text, setText] = useState('');
@@ -194,6 +259,8 @@ export function MessagesPage() {
   const [uploadError, setUploadError] = useState('');
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [reactForId, setReactForId] = useState<string | null>(null);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareType, setShareType] = useState<MessageAttachmentType | null>(null);
 
   const fileRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -224,30 +291,41 @@ export function MessagesPage() {
   };
 
   useEffect(() => {
+    if (chatId === FAMILY_CHANNEL_ID) return;
     if (!chatId || !others.some((m) => m.id === chatId)) {
-      if (others[0]) setChatId(others[0].id);
-      else setChatId('');
+      setChatId(FAMILY_CHANNEL_ID);
     }
   }, [chatId, others]);
 
   const conversations = useMemo((): ConvRow[] => {
-    return others
-      .map((member) => {
-        const messages = threadMessages(data.messages, me, member.id);
-        const latest = messages[messages.length - 1];
-        const unread = messages.filter(
-          (m) => m.fromId === member.id && m.toId === me && !m.read,
-        ).length;
-        return { memberId: member.id, latest, unread };
-      })
-      .sort((a, b) => {
-        const aPin = pinnedIds.includes(a.memberId) ? 1 : 0;
-        const bPin = pinnedIds.includes(b.memberId) ? 1 : 0;
-        if (aPin !== bPin) return bPin - aPin;
-        const aTime = a.latest ? new Date(a.latest.timestamp).getTime() : 0;
-        const bTime = b.latest ? new Date(b.latest.timestamp).getTime() : 0;
-        return bTime - aTime;
-      });
+    const familyMsgs = threadMessages(data.messages, me, FAMILY_CHANNEL_ID);
+    const familyLatest = familyMsgs[familyMsgs.length - 1];
+    const familyUnread = familyMsgs.filter(
+      (m) => m.fromId !== me && !(m.readBy || []).includes(me),
+    ).length;
+
+    const dms = others.map((member) => {
+      const messages = threadMessages(data.messages, me, member.id);
+      const latest = messages[messages.length - 1];
+      const unread = messages.filter(
+        (m) => m.fromId === member.id && m.toId === me && !m.read,
+      ).length;
+      return { memberId: member.id, latest, unread };
+    });
+
+    const sorted = dms.sort((a, b) => {
+      const aPin = pinnedIds.includes(a.memberId) ? 1 : 0;
+      const bPin = pinnedIds.includes(b.memberId) ? 1 : 0;
+      if (aPin !== bPin) return bPin - aPin;
+      const aTime = a.latest ? new Date(a.latest.timestamp).getTime() : 0;
+      const bTime = b.latest ? new Date(b.latest.timestamp).getTime() : 0;
+      return bTime - aTime;
+    });
+
+    return [
+      { memberId: FAMILY_CHANNEL_ID, latest: familyLatest, unread: familyUnread },
+      ...sorted,
+    ];
   }, [data.messages, me, others, pinnedIds]);
 
   const filteredConversations = useMemo(() => {
@@ -259,7 +337,10 @@ export function MessagesPage() {
     const rows: ConvRow[] = [];
     for (const c of conversations) {
       const member = others.find((m) => m.id === c.memberId);
-      const nameHit = member?.name.toLowerCase().includes(q);
+      const nameHit =
+        c.memberId === FAMILY_CHANNEL_ID
+          ? 'family'.includes(q) || 'everyone'.includes(q)
+          : member?.name.toLowerCase().includes(q);
       const msgs = threadMessages(data.messages, me, c.memberId);
       const hit = msgs
         .slice()
@@ -315,8 +396,9 @@ export function MessagesPage() {
   }, [thread]);
 
   const meLook = getMember(me) || currentUser;
-  const chatPartner = getMember(chatId);
-  const isPinned = chatId ? pinnedIds.includes(chatId) : false;
+  const isFamilyChat = chatId === FAMILY_CHANNEL_ID;
+  const chatPartner = isFamilyChat ? null : getMember(chatId);
+  const isPinned = chatId && !isFamilyChat ? pinnedIds.includes(chatId) : false;
 
   useEffect(() => {
     if (chatId) void markThreadRead(chatId);
@@ -424,29 +506,61 @@ export function MessagesPage() {
 
   const REACTION_EMOJI = ['👍', '❤️', '😂', '😮', '❗', '🎉'] as const;
 
+  const memberNamesLine = others.map((m) => m.name).join(' · ');
+
+  const openAttachment = (att: MessageAttachment) => {
+    if (att.type === 'todo') setView('todos');
+    else if (att.type === 'event') setView('calendar');
+    else if (att.type === 'note') setView('notes');
+    else if (att.type === 'shopping') setView('shopping');
+    else if (att.type === 'quest') setView('chores');
+  };
+
+  const shareAttachment = async (att: MessageAttachment) => {
+    if (!chatId) return;
+    await sendMessage(chatId, att.title, { attachment: att });
+    setShareOpen(false);
+    setShareType(null);
+  };
+
   const renderConvButton = (row: ConvRow) => {
-    const member = others.find((m) => m.id === row.memberId) || getMember(row.memberId);
-    if (!member) return null;
-    const selected = member.id === chatId;
+    const isFamily = row.memberId === FAMILY_CHANNEL_ID;
+    const member = isFamily ? null : others.find((m) => m.id === row.memberId) || getMember(row.memberId);
+    if (!isFamily && !member) return null;
+    const selected = row.memberId === chatId;
     const { latest, unread, matchSnippet } = row;
+    const who =
+      latest && latest.fromId !== me
+        ? `${getMember(latest.fromId)?.name || 'Someone'}: `
+        : latest && latest.fromId === me
+          ? 'You: '
+          : '';
     const preview = matchSnippet
       ? `Match: ${matchSnippet}`
       : latest
-        ? `${latest.fromId === me ? 'You: ' : ''}${previewText(latest.text)}`
-        : 'No messages yet \u2014 say hello!';
+        ? `${who}${latest.attachment ? '📎 ' : ''}${previewText(latest.text)}`
+        : isFamily
+          ? 'Everyone in the household'
+          : 'No messages yet — say hello!';
 
     return (
       <button
-        key={member.id}
+        key={row.memberId}
         type="button"
-        onClick={() => selectConversation(member.id)}
+        onClick={() => selectConversation(row.memberId)}
         className={cn(
           'w-full flex items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors',
           selected ? 'bg-accent/12 text-fg' : 'hover:bg-nav-hover text-fg',
         )}
       >
         <div className="relative shrink-0">
-          <Avatar {...member} size="md" />
+          {isFamily ? (
+            <div className="w-10 h-10 rounded-full bg-accent/20 text-accent flex items-center justify-center">
+              <Home className="w-5 h-5" />
+            </div>
+          ) : (
+            member && <Avatar {...member} size="md" />
+          )}
           {unread > 0 && (
             <span className="absolute -right-1 -top-1 min-w-5 h-5 px-1 rounded-full bg-accent text-accent-ink text-[10px] font-bold flex items-center justify-center border-2 border-surface">
               {unread > 9 ? '9+' : unread}
@@ -456,9 +570,9 @@ export function MessagesPage() {
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span className={cn('font-semibold truncate text-sm', unread > 0 && 'text-accent')}>
-              {member.name}
+              {isFamily ? 'Family' : member!.name}
             </span>
-            {pinnedIds.includes(member.id) && (
+            {!isFamily && pinnedIds.includes(row.memberId) && (
               <Pin className="w-3 h-3 text-faint shrink-0" aria-label="Pinned" />
             )}
             {latest && (
@@ -473,7 +587,7 @@ export function MessagesPage() {
               unread > 0 ? 'text-fg-secondary font-medium' : 'text-muted',
             )}
           >
-            {preview}
+            {isFamily && !latest ? memberNamesLine || preview : preview}
           </p>
         </div>
       </button>
@@ -556,7 +670,7 @@ export function MessagesPage() {
           mobileListOpen ? 'hidden sm:flex' : 'flex',
         )}
       >
-        {chatPartner ? (
+        {chatId ? (
           <>
             <header className="shrink-0 h-[4.5rem] px-4 sm:px-6 border-b border-border bg-elevated flex items-center gap-3">
               <button
@@ -567,28 +681,40 @@ export function MessagesPage() {
               >
                 <ArrowLeft className="w-5 h-5" />
               </button>
-              <Avatar {...chatPartner} size="md" />
+              {isFamilyChat ? (
+                <div className="w-10 h-10 rounded-full bg-accent/20 text-accent flex items-center justify-center shrink-0">
+                  <Home className="w-5 h-5" />
+                </div>
+              ) : (
+                chatPartner && <Avatar {...chatPartner} size="md" />
+              )}
               <div className="min-w-0 flex-1">
-                <p className="font-semibold truncate">{chatPartner.name}</p>
-                <p className="text-xs text-muted truncate">Private conversation</p>
+                <p className="font-semibold truncate">{isFamilyChat ? 'Family' : chatPartner?.name}</p>
+                <p className="text-xs text-muted truncate">
+                  {isFamilyChat ? (memberNamesLine || 'Everyone in the household') : 'Private conversation'}
+                </p>
               </div>
-              <button
-                type="button"
-                title={isPinned ? 'Unpin conversation' : 'Pin conversation'}
-                onClick={() => togglePin(chatPartner.id)}
-                className={cn(
-                  'p-2 rounded-xl border border-border hover:bg-nav-hover',
-                  isPinned ? 'text-accent' : 'text-muted',
-                )}
-              >
-                {isPinned ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4" />}
-              </button>
+              {!isFamilyChat && chatPartner && (
+                <button
+                  type="button"
+                  title={isPinned ? 'Unpin conversation' : 'Pin conversation'}
+                  onClick={() => togglePin(chatPartner.id)}
+                  className={cn(
+                    'p-2 rounded-xl border border-border hover:bg-nav-hover',
+                    isPinned ? 'text-accent' : 'text-muted',
+                  )}
+                >
+                  {isPinned ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4" />}
+                </button>
+              )}
             </header>
 
             <div ref={threadScrollRef} className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-6 py-4 space-y-1">
               {thread.length === 0 ? (
                 <p className="text-center text-sm text-muted py-12">
-                  No messages yet. Say hello to {chatPartner.name}!
+                  {isFamilyChat
+                    ? 'No family messages yet. Say something everyone can see!'
+                    : `No messages yet. Say hello to ${chatPartner?.name}!`}
                 </p>
               ) : (
                 threadItems.map((item) => {
@@ -603,9 +729,10 @@ export function MessagesPage() {
                   }
                   const { msg, showAvatar, showTime } = item;
                   const mine = msg.fromId === me;
-                  const sender = mine ? meLook : chatPartner;
+                  const sender = getMember(msg.fromId) || (mine ? meLook : chatPartner);
                   const bubble = sender?.color || (mine ? '#6366f1' : '#64748b');
                   const ink = contrastText(bubble);
+                  const showName = isFamilyChat && !mine && showAvatar;
 
                   const quoted = msg.replyToId
                     ? thread.find((m) => m.id === msg.replyToId) ||
@@ -638,6 +765,11 @@ export function MessagesPage() {
                           )}
                           style={{ backgroundColor: bubble, color: ink }}
                         >
+                          {showName && (
+                            <div className="text-[11px] font-semibold mb-0.5 opacity-90">
+                              {sender?.name || 'Someone'}
+                            </div>
+                          )}
                           {quoted && (
                             <div
                               className="mb-1.5 pl-2 border-l-2 text-xs opacity-90"
@@ -647,7 +779,20 @@ export function MessagesPage() {
                               <div className="truncate opacity-80">{previewText(quoted.text, 60)}</div>
                             </div>
                           )}
-                          <MessageBody text={msg.text} />
+                          {!msg.attachment && <MessageBody text={msg.text} />}
+                          {msg.attachment && (
+                            <>
+                              {msg.text && msg.text !== msg.attachment.title && (
+                                <div className="mb-1">
+                                  <MessageBody text={msg.text} />
+                                </div>
+                              )}
+                              <AttachmentCard
+                                att={msg.attachment}
+                                onOpen={() => openAttachment(msg.attachment!)}
+                              />
+                            </>
+                          )}
                         </div>
 
                         {reactionEntries.length > 0 && (
@@ -803,11 +948,26 @@ export function MessagesPage() {
                 >
                   <ImagePlus className="w-5 h-5" />
                 </button>
+                <button
+                  type="button"
+                  title="Share GreenHQ item"
+                  onClick={() => {
+                    setShareOpen(true);
+                    setShareType(null);
+                  }}
+                  className="p-2.5 rounded-xl border border-border text-muted hover:text-fg hover:bg-nav-hover"
+                >
+                  <Link2 className="w-5 h-5" />
+                </button>
                 <Input
                   ref={inputRef}
                   value={text}
                   onChange={(e) => setText(e.target.value)}
-                  placeholder={`Message ${chatPartner.name}\u2026`}
+                  placeholder={
+                    isFamilyChat
+                      ? 'Message Family…'
+                      : `Message ${chatPartner?.name || ''}…`
+                  }
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault();
@@ -835,6 +995,171 @@ export function MessagesPage() {
           </div>
         )}
       </section>
+
+      {shareOpen && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-2xl border border-border bg-elevated shadow-xl max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+              <h2 className="font-semibold">
+                {shareType ? `Share ${shareType}` : 'Share GreenHQ item'}
+              </h2>
+              <button
+                type="button"
+                className="p-1.5 rounded-lg hover:bg-nav-hover"
+                onClick={() => {
+                  setShareOpen(false);
+                  setShareType(null);
+                }}
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="overflow-y-auto p-3 space-y-2">
+              {!shareType && (
+                <div className="grid grid-cols-2 gap-2">
+                  {(
+                    [
+                      ['todo', 'Task', ListTodo],
+                      ['event', 'Event', Calendar],
+                      ['note', 'Note', StickyNote],
+                      ['shopping', 'Shopping', ShoppingCart],
+                      ['quest', 'Quest', Swords],
+                    ] as const
+                  ).map(([type, label, Icon]) => (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => setShareType(type)}
+                      className="flex items-center gap-2 rounded-xl border border-border px-3 py-3 hover:bg-nav-hover text-left"
+                    >
+                      <Icon className="w-4 h-4 text-accent" />
+                      <span className="font-medium text-sm">{label}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {shareType === 'todo' &&
+                data.todos
+                  .filter((t) => !t.completed && t.status !== 'done')
+                  .slice(0, 40)
+                  .map((todo) => (
+                    <button
+                      key={todo.id}
+                      type="button"
+                      className="w-full text-left rounded-xl border border-border px-3 py-2 hover:bg-nav-hover"
+                      onClick={() =>
+                        void shareAttachment({
+                          type: 'todo',
+                          id: todo.id,
+                          title: todo.text,
+                          subtitle: todo.dueAt
+                            ? `Due ${new Date(todo.dueAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}`
+                            : undefined,
+                        })
+                      }
+                    >
+                      <div className="font-medium text-sm">{todo.text}</div>
+                      {todo.dueAt && (
+                        <div className="text-xs text-muted mt-0.5">
+                          Due {new Date(todo.dueAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
+                        </div>
+                      )}
+                    </button>
+                  ))}
+              {shareType === 'event' &&
+                data.events.slice(0, 40).map((ev) => (
+                  <button
+                    key={ev.id}
+                    type="button"
+                    className="w-full text-left rounded-xl border border-border px-3 py-2 hover:bg-nav-hover"
+                    onClick={() =>
+                      void shareAttachment({
+                        type: 'event',
+                        id: ev.id,
+                        title: ev.title,
+                        subtitle: ev.start
+                          ? new Date(ev.start).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })
+                          : undefined,
+                      })
+                    }
+                  >
+                    <div className="font-medium text-sm">{ev.title}</div>
+                  </button>
+                ))}
+              {shareType === 'note' &&
+                data.notes.slice(0, 40).map((n) => (
+                  <button
+                    key={n.id}
+                    type="button"
+                    className="w-full text-left rounded-xl border border-border px-3 py-2 hover:bg-nav-hover"
+                    onClick={() =>
+                      void shareAttachment({
+                        type: 'note',
+                        id: n.id,
+                        title: n.title || 'Note',
+                        subtitle: n.content?.slice(0, 60),
+                      })
+                    }
+                  >
+                    <div className="font-medium text-sm">{n.title || 'Note'}</div>
+                  </button>
+                ))}
+              {shareType === 'shopping' &&
+                data.shopping
+                  .filter((s) => !s.bought)
+                  .slice(0, 40)
+                  .map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      className="w-full text-left rounded-xl border border-border px-3 py-2 hover:bg-nav-hover"
+                      onClick={() =>
+                        void shareAttachment({
+                          type: 'shopping',
+                          id: s.id,
+                          title: s.text || 'Item',
+                          subtitle: s.store || s.category,
+                        })
+                      }
+                    >
+                      <div className="font-medium text-sm">{s.text}</div>
+                    </button>
+                  ))}
+              {shareType === 'quest' &&
+                data.chores
+                  .filter((q) => q.status === 'open' || q.status === 'pending')
+                  .slice(0, 40)
+                  .map((q) => (
+                    <button
+                      key={q.id}
+                      type="button"
+                      className="w-full text-left rounded-xl border border-border px-3 py-2 hover:bg-nav-hover"
+                      onClick={() =>
+                        void shareAttachment({
+                          type: 'quest',
+                          id: q.id,
+                          title: q.title,
+                          subtitle: `+${q.xp} XP · +${q.coins} coins`,
+                        })
+                      }
+                    >
+                      <div className="font-medium text-sm">{q.title}</div>
+                    </button>
+                  ))}
+              {shareType && (
+                <button
+                  type="button"
+                  className="text-sm text-muted hover:text-fg px-1 py-2"
+                  onClick={() => setShareType(null)}
+                >
+                  ← Back to types
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

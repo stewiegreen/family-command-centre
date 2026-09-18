@@ -409,7 +409,10 @@ export async function cloudSendMessage(
     timestamp: msg.timestamp || new Date().toISOString(),
     read: false,
   };
+  if (msg.channel) payload.channel = msg.channel;
   if (msg.replyToId) payload.replyToId = msg.replyToId;
+  if (msg.attachment) payload.attachment = msg.attachment;
+  if (msg.channel === 'family') payload.readBy = msg.readBy || [];
   await fsMod.setDoc(fsMod.doc(messagesCol(familyId), id), payload);
   return { id, ...payload };
 }
@@ -439,6 +442,20 @@ export async function cloudMarkMessageRead(familyId: string, messageId: string):
   await fsMod.updateDoc(fsMod.doc(messagesCol(familyId), messageId), { read: true });
 }
 
+/** Mark a family-channel message seen by memberId (readBy array). */
+export async function cloudMarkFamilyMessageRead(
+  familyId: string,
+  messageId: string,
+  memberId: string,
+  currentReadBy: string[] | undefined,
+): Promise<string[]> {
+  if (!db || !fsMod) throw new Error('Cloud not connected');
+  const next = [...(currentReadBy || [])];
+  if (!next.includes(memberId)) next.push(memberId);
+  await fsMod.updateDoc(fsMod.doc(messagesCol(familyId), messageId), { readBy: next });
+  return next;
+}
+
 export async function cloudDeleteMessage(familyId: string, messageId: string): Promise<void> {
   if (!db || !fsMod) throw new Error('Cloud not connected');
   await fsMod.deleteDoc(fsMod.doc(messagesCol(familyId), messageId));
@@ -458,9 +475,14 @@ export function partitionMessagesForPrune(
 ): { kept: Message[]; toDelete: Message[] } {
   const pairs = new Map<string, Message[]>();
   for (const m of messages) {
-    const a = m.fromId < m.toId ? m.fromId : m.toId;
-    const b = m.fromId < m.toId ? m.toId : m.fromId;
-    const key = `${a}|${b}`;
+    const key =
+      m.channel === 'family' || m.toId === '__family__'
+        ? '__family__'
+        : (() => {
+            const a = m.fromId < m.toId ? m.fromId : m.toId;
+            const b = m.fromId < m.toId ? m.toId : m.fromId;
+            return `${a}|${b}`;
+          })();
     const list = pairs.get(key);
     if (list) list.push(m);
     else pairs.set(key, [m]);
@@ -497,15 +519,17 @@ export function subscribeMessages(
     onError(new Error('Cloud not connected'));
     return () => {};
   }
-  // Two queries (from me / to me) — rules require participant match.
+  // from me / to me / shared family room (toId == __family__)
   const col = messagesCol(familyId);
   const qFrom = fsMod.query(col, fsMod.where('fromUid', '==', myUid));
   const qTo = fsMod.query(col, fsMod.where('toUid', '==', myUid));
+  const qFamily = fsMod.query(col, fsMod.where('toId', '==', '__family__'));
   let fromMsgs: Message[] = [];
   let toMsgs: Message[] = [];
+  let familyMsgs: Message[] = [];
   const emit = () => {
     const map = new Map<string, Message>();
-    for (const m of [...fromMsgs, ...toMsgs]) map.set(m.id, m);
+    for (const m of [...fromMsgs, ...toMsgs, ...familyMsgs]) map.set(m.id, m);
     onData(Array.from(map.values()).sort((a, b) => a.timestamp.localeCompare(b.timestamp)));
   };
   const unsub1 = fsMod.onSnapshot(
@@ -524,9 +548,18 @@ export function subscribeMessages(
     },
     (err) => onError(err),
   );
+  const unsub3 = fsMod.onSnapshot(
+    qFamily,
+    (snap) => {
+      familyMsgs = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Message, 'id'>) }));
+      emit();
+    },
+    (err) => onError(err),
+  );
   return () => {
     unsub1();
     unsub2();
+    unsub3();
   };
 }
 

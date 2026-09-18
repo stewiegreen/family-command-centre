@@ -30,6 +30,7 @@ import { cn } from '../lib/cn';
 import { nameFlairLabel } from '../lib/flair';
 import { WeatherHeaderChip } from './WeatherHeaderChip';
 import type { ViewId } from '../types';
+import { FAMILY_CHANNEL_ID } from '../types';
 import {
   getNotificationPermission,
   isNotificationsEnabled,
@@ -148,7 +149,12 @@ export function Layout({ children }: { children: ReactNode }) {
     }
   };
 
-  const unread = data.messages.filter((m) => m.toId === settings.currentUserId && !m.read).length;
+  const unread = data.messages.filter((m) => {
+    if (m.channel === 'family' || m.toId === FAMILY_CHANNEL_ID) {
+      return m.fromId !== settings.currentUserId && !(m.readBy || []).includes(settings.currentUserId);
+    }
+    return m.toId === settings.currentUserId && !m.read;
+  }).length;
   const themeStudioUnlocked = !!(
     currentUser &&
     (data.appearance?.[currentUser.id]?.unlockThemeStudio ||

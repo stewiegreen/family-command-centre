@@ -535,16 +535,40 @@ export interface Note {
   updatedAt: string;
 }
 
+/** Shared family channel id — never a real Member.id. */
+export const FAMILY_CHANNEL_ID = '__family__';
+
+export type MessageAttachmentType = 'todo' | 'event' | 'note' | 'shopping' | 'quest';
+
+/** Snapshot of a GreenHQ item shared into chat (explicit, not live). */
+export interface MessageAttachment {
+  type: MessageAttachmentType;
+  id: string;
+  title: string;
+  /** Optional one-line context, e.g. due date. */
+  subtitle?: string;
+}
+
 export interface Message {
   id: string;
   fromId: string;
+  /**
+   * DM: other member's id.
+   * Family channel: FAMILY_CHANNEL_ID ('__family__').
+   */
   toId: string;
   /** Auth uids — used by Firestore rules for private message access. */
   fromUid?: string;
+  /** Empty string for family channel messages. */
   toUid?: string;
+  /** 'family' for the shared household room; omit or 'dm' for private. */
+  channel?: 'dm' | 'family';
   text: string;
   timestamp: string;
+  /** DM only: recipient has opened the thread. */
   read: boolean;
+  /** Family channel: memberIds who have seen this message. */
+  readBy?: string[];
   /** Optional reply to another message in the same thread. */
   replyToId?: string;
   /**
@@ -552,6 +576,8 @@ export interface Message {
    * Keep the set small (family); e.g. { "👍": ["abc"], "❤️": ["xyz"] }.
    */
   reactions?: Record<string, string[]>;
+  /** Optional GreenHQ deep-link card (todo / event / note / shopping / quest). */
+  attachment?: MessageAttachment;
 }
 
 

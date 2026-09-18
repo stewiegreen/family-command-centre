@@ -110,10 +110,25 @@ service cloud.firestore {
       allow delete: if signedIn() && resource.data.adminUid == request.auth.uid;
 
       match /messages/{messageId} {
+        function isFamilyMsg() {
+          return resource.data.toId == '__family__'
+            || resource.data.channel == 'family';
+        }
+        function isFamilyMsgCreate() {
+          return request.resource.data.toId == '__family__'
+            || request.resource.data.channel == 'family';
+        }
+        function isParticipant() {
+          return request.auth.uid == resource.data.fromUid
+            || request.auth.uid == resource.data.toUid
+            || isFamilyMsg();
+        }
+
         allow read: if signedIn()
           && isMember(familyId)
           && (request.auth.uid == resource.data.fromUid
-              || request.auth.uid == resource.data.toUid);
+              || request.auth.uid == resource.data.toUid
+              || isFamilyMsg());
 
         allow create: if signedIn()
           && isMember(familyId)
@@ -122,16 +137,26 @@ service cloud.firestore {
           && request.resource.data.read == false
           && request.resource.data.text is string
           && request.resource.data.text.size() > 0
-          && request.resource.data.text.size() <= 2000;
+          && request.resource.data.text.size() <= 2000
+          && (
+            // Private DM
+            (!isFamilyMsgCreate()
+              && request.resource.data.toUid is string
+              && request.resource.data.toUid.size() > 0)
+            // Shared family room
+            || (isFamilyMsgCreate()
+              && request.resource.data.toId == '__family__'
+              && request.resource.data.channel == 'family')
+          );
 
-        // Mark read (recipient only) OR toggle reactions (either participant).
+        // Mark read (DM recipient) / readBy (family) / reactions (participants + family).
         allow update: if signedIn()
           && isMember(familyId)
-          && (request.auth.uid == resource.data.fromUid
-              || request.auth.uid == resource.data.toUid)
+          && isParticipant()
           && (
             (
-              request.auth.uid == resource.data.toUid
+              !isFamilyMsg()
+              && request.auth.uid == resource.data.toUid
               && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read'])
               && request.resource.data.read == true
               && request.resource.data.fromUid == resource.data.fromUid
@@ -139,9 +164,16 @@ service cloud.firestore {
               && request.resource.data.text == resource.data.text
             )
             || (
+              isFamilyMsg()
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readBy'])
+              && request.resource.data.fromUid == resource.data.fromUid
+              && request.resource.data.toId == resource.data.toId
+              && request.resource.data.text == resource.data.text
+            )
+            || (
               request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions'])
               && request.resource.data.fromUid == resource.data.fromUid
-              && request.resource.data.toUid == resource.data.toUid
+              && request.resource.data.toId == resource.data.toId
               && request.resource.data.text == resource.data.text
               && request.resource.data.timestamp == resource.data.timestamp
             )
