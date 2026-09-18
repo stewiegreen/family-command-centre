@@ -184,11 +184,28 @@ ${propsXml}
 }
 
 function collectionCtag(events: GhEvent[]): string {
-  let h = events.length;
-  for (const e of events) {
-    h = (Math.imul(31, h) + eventEtag(e).length + e.id.length) | 0;
+  // Hash real event identity + etag content so add/edit/delete always change the token.
+  // (Previously only hashed string lengths — two different calendars could collide and
+  // iOS would never notice a deletion.)
+  let h = events.length + 1;
+  const sorted = [...events].sort((a, b) => a.id.localeCompare(b.id));
+  for (const e of sorted) {
+    const tag = eventEtag(e);
+    for (let i = 0; i < e.id.length; i++) h = (Math.imul(31, h) + e.id.charCodeAt(i)) | 0;
+    for (let i = 0; i < tag.length; i++) h = (Math.imul(31, h) + tag.charCodeAt(i)) | 0;
   }
   return `greenhq-${(h >>> 0).toString(16)}-${events.length}`;
+}
+
+function todosCtag(todos: { id: string }[], etagFn: (t: { id: string }) => string): string {
+  let h = todos.length + 1;
+  const sorted = [...todos].sort((a, b) => a.id.localeCompare(b.id));
+  for (const td of sorted) {
+    const tag = etagFn(td);
+    for (let i = 0; i < td.id.length; i++) h = (Math.imul(31, h) + td.id.charCodeAt(i)) | 0;
+    for (let i = 0; i < tag.length; i++) h = (Math.imul(31, h) + tag.charCodeAt(i)) | 0;
+  }
+  return `tasks-${(h >>> 0).toString(16)}-${todos.length}`;
 }
 
 export const onRequest: PagesFunction<Env> = async (context) => {
@@ -292,7 +309,10 @@ ${propstat(`${root}/principals/${xmlEscape(user)}/`, `
       const user = parts[1]!;
       if (method === 'PROPFIND') {
         const depth = req.headers.get('Depth') ?? '1';
-        const { members: mems } = await load();
+        // Load members + events + todos so getctag reflects real content.
+        // Static tags (m-id / "all") never changed → iOS never re-fetched → deletes stuck on phone.
+        const { members: mems, events: allEv, todos: allTd } = await load();
+        const asGhHome = allEv.map(feedToGh);
         let responses = propstat(`${root}/calendars/${xmlEscape(user)}/`, `
   <d:resourcetype><d:collection/></d:resourcetype>
   <d:displayname>Calendar home</d:displayname>
@@ -305,11 +325,14 @@ ${propstat(`${root}/principals/${xmlEscape(user)}/`, `
           // One event calendar per family member → iOS can color each separately
           for (const m of visible) {
             const color = m.color && /^#[0-9A-Fa-f]{6}$/.test(m.color) ? m.color : '#34C759';
+            const mEvents = filterEvents(asGhHome, [m.id]);
+            const mCtag = collectionCtag(mEvents);
             responses += propstat(`${root}/calendars/${xmlEscape(user)}/${xmlEscape(m.id)}/`, `
   <d:resourcetype><d:collection/><c:calendar/></d:resourcetype>
   <d:displayname>${xmlEscape(m.name || m.id)}</d:displayname>
   <c:supported-calendar-component-set><c:comp name="VEVENT"/></c:supported-calendar-component-set>
-  <cs:getctag>m-${xmlEscape(m.id)}</cs:getctag>
+  <cs:getctag>${xmlEscape(mCtag)}</cs:getctag>
+  <d:sync-token>https://greenhq.io/sync/${xmlEscape(mCtag)}</d:sync-token>
   <a:calendar-color>${xmlEscape(color)}</a:calendar-color>
   ${REPORT_SET}
   ${PRIVILEGES}
@@ -317,11 +340,13 @@ ${propstat(`${root}/principals/${xmlEscape(user)}/`, `
           }
           // Combined "Everyone" event calendar (family token only)
           if (!auth.memberIdsFilter) {
+            const allCtag = collectionCtag(asGhHome);
             responses += propstat(`${root}/calendars/${xmlEscape(user)}/all/`, `
   <d:resourcetype><d:collection/><c:calendar/></d:resourcetype>
   <d:displayname>Everyone</d:displayname>
   <c:supported-calendar-component-set><c:comp name="VEVENT"/></c:supported-calendar-component-set>
-  <cs:getctag>all</cs:getctag>
+  <cs:getctag>${xmlEscape(allCtag)}</cs:getctag>
+  <d:sync-token>https://greenhq.io/sync/${xmlEscape(allCtag)}</d:sync-token>
   <a:calendar-color>#8E8E93</a:calendar-color>
   ${REPORT_SET}
   ${PRIVILEGES}
@@ -330,11 +355,14 @@ ${propstat(`${root}/principals/${xmlEscape(user)}/`, `
           // Task lists (VTODO) — one per visible member
           for (const m of visible) {
             const color = m.color && /^#[0-9A-Fa-f]{6}$/.test(m.color) ? m.color : '#007AFF';
+            const mTodos = allTd.filter((td) => td.memberId === m.id);
+            const tCtag = todosCtag(mTodos, (td) => todoEtag(td as never));
             responses += propstat(`${root}/calendars/${xmlEscape(user)}/tasks-${xmlEscape(m.id)}/`, `
   <d:resourcetype><d:collection/><c:calendar/></d:resourcetype>
   <d:displayname>${xmlEscape((m.name || m.id) + ' tasks')}</d:displayname>
   <c:supported-calendar-component-set><c:comp name="VTODO"/></c:supported-calendar-component-set>
-  <cs:getctag>tasks-${xmlEscape(m.id)}</cs:getctag>
+  <cs:getctag>${xmlEscape(tCtag)}</cs:getctag>
+  <d:sync-token>https://greenhq.io/sync/${xmlEscape(tCtag)}</d:sync-token>
   <a:calendar-color>${xmlEscape(color)}</a:calendar-color>
   ${REPORT_SET}
   ${PRIVILEGES}
@@ -521,6 +549,25 @@ ${responses}
         }
 
         if (method === 'REPORT') {
+          const reportBody = await req.text();
+          const isSync = /<[^>]*sync-collection/i.test(reportBody);
+          const syncTokenMatch = reportBody.match(/<[^>]*sync-token[^>]*>([^<]*)<\/[^>]*sync-token>/i);
+          const clientToken = (syncTokenMatch?.[1] || '').trim();
+          const currentToken = `https://greenhq.io/sync/${ctag}`;
+
+          // Incremental sync without tombstones cannot report deletions. If the client
+          // sends a stale token, force a full resync so iOS drops removed events.
+          if (isSync && clientToken && clientToken !== currentToken && !clientToken.endsWith(ctag)) {
+            console.log('[caldav] invalid sync-token → force full resync', clientToken.slice(0, 40));
+            return davXml(
+              403,
+              `<?xml version="1.0" encoding="utf-8"?>
+<d:error ${NS}>
+  <d:valid-sync-token/>
+</d:error>`,
+            );
+          }
+
           let responses = '';
           for (const ev of events) {
             const eh = `${calHref}/${encodeURIComponent(ev.id)}.ics`;
@@ -530,9 +577,12 @@ ${responses}
   <c:calendar-data><![CDATA[${data}]]></c:calendar-data>
 `);
           }
+          const syncTrailer = isSync
+            ? `\n  <d:sync-token>${xmlEscape(currentToken)}</d:sync-token>`
+            : '';
           return davXml(
             207,
-            `<?xml version="1.0" encoding="utf-8"?><d:multistatus ${NS}>${responses}</d:multistatus>`,
+            `<?xml version="1.0" encoding="utf-8"?><d:multistatus ${NS}>${responses}${syncTrailer}</d:multistatus>`,
           );
         }
       }

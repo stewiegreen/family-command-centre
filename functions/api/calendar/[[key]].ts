@@ -89,7 +89,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       status: 200,
       headers: {
         'Content-Type': 'text/calendar; charset=utf-8',
-        'Cache-Control': 'private, max-age=300',
+        'Cache-Control': 'private, max-age=60, must-revalidate',
+        'ETag': '"' + String(events.length) + '-' + events.map(e => e.id).join(',').slice(0, 120) + '"',
       },
     });
   } catch (e) {
