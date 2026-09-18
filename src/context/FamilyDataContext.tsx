@@ -674,13 +674,16 @@ export function FamilyDataProvider({ children }: { children: ReactNode }) {
         update((d) => {
           const m = d.messages.find((x) => x.id === messageId);
           if (!m) return d;
-          const next: Record<string, string[]> = { ...(m.reactions || {}) };
-          const list = [...(next[emoji] || [])];
-          const i = list.indexOf(me.id);
-          if (i >= 0) list.splice(i, 1);
-          else list.push(me.id);
-          if (list.length) next[emoji] = list;
-          else delete next[emoji];
+          // One reaction per person: clear member from all emojis, then set or toggle off.
+          const next: Record<string, string[]> = {};
+          for (const [em, ids] of Object.entries(m.reactions || {})) {
+            const filtered = ids.filter((id) => id !== me.id);
+            if (filtered.length) next[em] = filtered;
+          }
+          const already = (m.reactions?.[emoji] || []).includes(me.id);
+          if (!already) {
+            next[emoji] = [...(next[emoji] || []), me.id];
+          }
           return {
             ...d,
             messages: d.messages.map((x) =>

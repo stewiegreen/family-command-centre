@@ -420,7 +420,10 @@ export async function cloudSendMessage(
   return { id, ...payload };
 }
 
-/** Toggle a reaction emoji for the current member on a message. */
+/** Toggle a reaction emoji for the current member on a message.
+ *  One reaction per person per message: picking a new emoji replaces any prior one.
+ *  Tapping the same emoji again clears it.
+ */
 export async function cloudToggleMessageReaction(
   familyId: string,
   messageId: string,
@@ -429,13 +432,15 @@ export async function cloudToggleMessageReaction(
   current: Record<string, string[]> | undefined,
 ): Promise<Record<string, string[]>> {
   if (!db || !fsMod) throw new Error('Cloud not connected');
-  const next: Record<string, string[]> = { ...(current || {}) };
-  const list = [...(next[emoji] || [])];
-  const idx = list.indexOf(memberId);
-  if (idx >= 0) list.splice(idx, 1);
-  else list.push(memberId);
-  if (list.length) next[emoji] = list;
-  else delete next[emoji];
+  const next: Record<string, string[]> = {};
+  for (const [em, ids] of Object.entries(current || {})) {
+    const filtered = ids.filter((id) => id !== memberId);
+    if (filtered.length) next[em] = filtered;
+  }
+  const already = (current?.[emoji] || []).includes(memberId);
+  if (!already) {
+    next[emoji] = [...(next[emoji] || []), memberId];
+  }
   await fsMod.updateDoc(fsMod.doc(messagesCol(familyId), messageId), { reactions: next });
   return next;
 }

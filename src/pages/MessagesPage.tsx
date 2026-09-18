@@ -874,19 +874,26 @@ export function MessagesPage() {
                               mine ? 'justify-end' : 'justify-start',
                             )}
                           >
-                            {REACTION_EMOJI.map((emoji) => (
-                              <button
-                                key={emoji}
-                                type="button"
-                                className="text-base px-1.5 py-0.5 rounded-lg hover:bg-nav-hover"
-                                onClick={() => {
-                                  void toggleMessageReaction(msg.id, emoji);
-                                  setReactForId(null);
-                                }}
-                              >
-                                {emoji}
-                              </button>
-                            ))}
+                            {REACTION_EMOJI.map((emoji) => {
+                              const mine = (msg.reactions?.[emoji] || []).includes(me);
+                              return (
+                                <button
+                                  key={emoji}
+                                  type="button"
+                                  className={cn(
+                                    'text-base px-1.5 py-0.5 rounded-lg hover:bg-nav-hover',
+                                    mine && 'bg-accent/20 ring-1 ring-accent/40',
+                                  )}
+                                  title={mine ? 'Remove reaction' : 'React'}
+                                  onClick={() => {
+                                    void toggleMessageReaction(msg.id, emoji);
+                                    setReactForId(null);
+                                  }}
+                                >
+                                  {emoji}
+                                </button>
+                              );
+                            })}
                           </div>
                         )}
 
