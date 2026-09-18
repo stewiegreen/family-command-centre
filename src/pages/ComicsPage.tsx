@@ -13,8 +13,11 @@ import {
   Play,
   RefreshCw,
   Search,
+  Share2,
+  X,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import type { ComicRecommendation } from '../types';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Modal } from '../components/ui/Modal';
@@ -255,9 +258,11 @@ function BookListRow({
 }
 
 export function ComicsPage() {
-  const { data, currentUser } = useApp();
+  const { data, currentUser, update } = useApp();
   const memberId = currentUser?.id || data.settings.currentUserId || undefined;
   const memberName = currentUser?.name || 'You';
+  const members = data.members || [];
+  const others = members.filter((m) => m.id && m.id !== memberId);
 
   const [tab, setTab] = useState<Tab>('home');
   const [browse, setBrowse] = useState<Browse>({ kind: 'root' });
@@ -273,6 +278,15 @@ export function ComicsPage() {
   const [detailSeries, setDetailSeries] = useState<KomgaSeries[]>([]);
   const [selectedBook, setSelectedBook] = useState<KomgaBook | null>(null);
   const [reading, setReading] = useState<KomgaBook | null>(null);
+  const [recommendTarget, setRecommendTarget] = useState<
+    | { kind: 'book'; book: KomgaBook }
+    | { kind: 'series'; series: KomgaSeries }
+    | null
+  >(null);
+  const [recommendToId, setRecommendToId] = useState('');
+  const [recommendMsg, setRecommendMsg] = useState('');
+  const [recommendBusy, setRecommendBusy] = useState(false);
+  const [recommendFlash, setRecommendFlash] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [searchBooks, setSearchBooks] = useState<KomgaBook[]>([]);
   const [searchSeries, setSearchSeries] = useState<KomgaSeries[]>([]);
@@ -343,6 +357,89 @@ export function ComicsPage() {
     }
     return out;
   }, [onDeck, continueBooks]);
+
+
+  const myRecs = useMemo(() => {
+    const list = (data.comicRecommendations || []).filter(
+      (r) => r.toMemberId === memberId && r.status !== 'dismissed',
+    );
+    return [...list].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+  }, [data.comicRecommendations, memberId]);
+
+  const memberById = (id: string) => members.find((m) => m.id === id);
+
+  const sendRecommendation = () => {
+    if (!recommendTarget || !memberId || !recommendToId) return;
+    const to = members.find((m) => m.id === recommendToId);
+    if (!to) return;
+    setRecommendBusy(true);
+    const id = `crec_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+    const msg = recommendMsg.trim().slice(0, 280);
+    const rec: ComicRecommendation = {
+      id,
+      fromMemberId: memberId,
+      toMemberId: recommendToId,
+      kind: recommendTarget.kind,
+      title:
+        recommendTarget.kind === 'book'
+          ? bookTitle(recommendTarget.book)
+          : seriesTitle(recommendTarget.series),
+      komgaBookId: recommendTarget.kind === 'book' ? recommendTarget.book.id : undefined,
+      komgaSeriesId:
+        recommendTarget.kind === 'series'
+          ? recommendTarget.series.id
+          : recommendTarget.book.seriesId || undefined,
+      message: msg || undefined,
+      createdAt: new Date().toISOString(),
+      status: 'unread',
+    };
+    update((d) => ({
+      ...d,
+      comicRecommendations: [rec, ...(d.comicRecommendations || [])].slice(0, 100),
+    }));
+    setRecommendBusy(false);
+    setRecommendTarget(null);
+    setRecommendToId('');
+    setRecommendMsg('');
+    setRecommendFlash(`Recommended to ${to.name}`);
+    window.setTimeout(() => setRecommendFlash(null), 2800);
+  };
+
+  const dismissRec = (id: string) => {
+    update((d) => ({
+      ...d,
+      comicRecommendations: (d.comicRecommendations || []).map((r) =>
+        r.id === id ? { ...r, status: 'dismissed' as const } : r,
+      ),
+    }));
+  };
+
+  const openRecommendation = async (rec: ComicRecommendation) => {
+    update((d) => ({
+      ...d,
+      comicRecommendations: (d.comicRecommendations || []).map((r) =>
+        r.id === rec.id && r.status === 'unread' ? { ...r, status: 'opened' as const } : r,
+      ),
+    }));
+    try {
+      if (rec.kind === 'book' && rec.komgaBookId) {
+        const b = await komgaBook(rec.komgaBookId, memberId);
+        setSelectedBook(b);
+        return;
+      }
+      if (rec.komgaSeriesId) {
+        const s = await komgaSeriesDetail(rec.komgaSeriesId, memberId);
+        await openSeries(s);
+        return;
+      }
+      if (rec.komgaBookId) {
+        const b = await komgaBook(rec.komgaBookId, memberId);
+        setSelectedBook(b);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not open recommended comic');
+    }
+  };
 
   const openSeries = async (s: KomgaSeries) => {
     setBrowse({ kind: 'series', series: s });
@@ -591,12 +688,25 @@ export function ComicsPage() {
                       {browse.series.metadata.summary}
                     </p>
                   )}
-                  {seriesContinue && (
-                    <Button onClick={() => startReading(seriesContinue)}>
-                      <Play className="w-4 h-4" />
-                      {bookProgressPercent(seriesContinue) > 0 ? 'Continue reading' : 'Start series'}
-                    </Button>
-                  )}
+                  <div className="flex flex-wrap gap-2">
+                    {seriesContinue && (
+                      <Button onClick={() => startReading(seriesContinue)}>
+                        <Play className="w-4 h-4" />
+                        {bookProgressPercent(seriesContinue) > 0 ? 'Continue reading' : 'Start series'}
+                      </Button>
+                    )}
+                    {others.length > 0 && (
+                      <Button
+                        variant="secondary"
+                        onClick={() =>
+                          setRecommendTarget({ kind: 'series', series: browse.series })
+                        }
+                      >
+                        <Share2 className="w-4 h-4" />
+                        Recommend
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </div>
               <div>
@@ -718,6 +828,88 @@ export function ComicsPage() {
                   </div>
                 ))}
               </Section>
+
+              {myRecs.length > 0 && (
+                <section className="space-y-3">
+                  <div>
+                    <h2 className="text-base sm:text-lg font-bold text-fg tracking-tight">
+                      Recommended for you
+                    </h2>
+                    <p className="text-xs text-muted mt-0.5">From your family</p>
+                  </div>
+                  <div className="flex gap-4 overflow-x-auto pb-2 -mx-1 px-1">
+                    {myRecs.map((rec) => {
+                      const from = memberById(rec.fromMemberId);
+                      const thumb =
+                        rec.kind === 'book' && rec.komgaBookId
+                          ? komgaBookThumbUrl(rec.komgaBookId, memberId)
+                          : rec.komgaSeriesId
+                            ? komgaSeriesThumbUrl(rec.komgaSeriesId, memberId)
+                            : '';
+                      return (
+                        <div
+                          key={rec.id}
+                          className="shrink-0 w-[11rem] sm:w-[12rem] rounded-2xl border border-border bg-elevated p-2.5 shadow-sm"
+                        >
+                          <button
+                            type="button"
+                            onClick={() => void openRecommendation(rec)}
+                            className="w-full text-left group"
+                          >
+                            <div className="relative aspect-[2/3] rounded-xl overflow-hidden bg-surface-2 border border-border">
+                              {thumb ? (
+                                <img
+                                  src={thumb}
+                                  alt=""
+                                  className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform"
+                                  loading="lazy"
+                                />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center text-muted">
+                                  <BookOpen className="w-8 h-8 opacity-40" />
+                                </div>
+                              )}
+                              {rec.status === 'unread' && (
+                                <span className="absolute top-2 left-2 rounded-full bg-accent text-accent-ink text-[10px] font-bold px-1.5 py-0.5">
+                                  New
+                                </span>
+                              )}
+                            </div>
+                            <p className="mt-2 text-sm font-semibold text-fg line-clamp-2">
+                              {rec.title}
+                            </p>
+                            <p className="text-[11px] text-muted mt-0.5">
+                              {from?.name || 'Family'} recommended
+                            </p>
+                            {rec.message && (
+                              <p className="text-[11px] text-fg/80 mt-1 line-clamp-2 italic">
+                                “{rec.message}”
+                              </p>
+                            )}
+                          </button>
+                          <div className="mt-2 flex gap-1.5">
+                            <Button
+                              size="sm"
+                              className="flex-1"
+                              onClick={() => void openRecommendation(rec)}
+                            >
+                              View
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => dismissRec(rec.id)}
+                              title="Dismiss"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+              )}
 
               <Section title="Recently added" empty={latest.length === 0}>
                 {latest.map((b) => (
@@ -1023,11 +1215,94 @@ export function ComicsPage() {
             {selectedBook.metadata?.summary && (
               <p className="text-sm text-muted leading-relaxed">{selectedBook.metadata.summary}</p>
             )}
-            <Button className="w-full" onClick={() => startReading(selectedBook)}>
-              <BookOpen className="w-4 h-4" />
-              {bookProgressPercent(selectedBook) > 0 && bookProgressPercent(selectedBook) < 100
-                ? 'Continue reading'
-                : 'Read'}
+            <div className="flex flex-col gap-2">
+              <Button className="w-full" onClick={() => startReading(selectedBook)}>
+                <BookOpen className="w-4 h-4" />
+                {bookProgressPercent(selectedBook) > 0 && bookProgressPercent(selectedBook) < 100
+                  ? 'Continue reading'
+                  : 'Read'}
+              </Button>
+              {others.length > 0 && (
+                <Button
+                  className="w-full"
+                  variant="secondary"
+                  onClick={() => setRecommendTarget({ kind: 'book', book: selectedBook })}
+                >
+                  <Share2 className="w-4 h-4" />
+                  Recommend to…
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {recommendFlash && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] rounded-2xl bg-elevated border border-border shadow-lg px-4 py-2.5 text-sm font-semibold text-fg">
+          ✓ {recommendFlash}
+        </div>
+      )}
+
+      <Modal
+        open={!!recommendTarget}
+        onClose={() => {
+          if (recommendBusy) return;
+          setRecommendTarget(null);
+          setRecommendMsg('');
+          setRecommendToId('');
+        }}
+        title="Recommend this comic"
+        size="md"
+      >
+        {recommendTarget && (
+          <div className="space-y-4">
+            <p className="text-sm text-fg font-medium">
+              {recommendTarget.kind === 'book'
+                ? bookTitle(recommendTarget.book)
+                : seriesTitle(recommendTarget.series)}
+            </p>
+            <div>
+              <p className="text-xs font-semibold text-muted mb-2">Who would you recommend it to?</p>
+              <div className="space-y-1.5">
+                {others.map((m) => (
+                  <label
+                    key={m.id}
+                    className={
+                      'flex items-center gap-3 rounded-xl border px-3 py-2.5 cursor-pointer transition-colors ' +
+                      (recommendToId === m.id
+                        ? 'border-accent bg-accent/10'
+                        : 'border-border hover:bg-nav-hover')
+                    }
+                  >
+                    <input
+                      type="radio"
+                      name="rec-to"
+                      className="accent-current"
+                      checked={recommendToId === m.id}
+                      onChange={() => setRecommendToId(m.id)}
+                    />
+                    <span className="text-sm font-medium text-fg">{m.name}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-muted">Why? (optional)</label>
+              <textarea
+                value={recommendMsg}
+                onChange={(e) => setRecommendMsg(e.target.value.slice(0, 280))}
+                rows={3}
+                placeholder="I think you'll like this…"
+                className="mt-1 w-full rounded-xl border border-border bg-input px-3 py-2 text-sm text-fg placeholder:text-muted outline-none focus:border-accent resize-none"
+              />
+              <p className="text-[11px] text-muted mt-1 text-right">{recommendMsg.length}/280</p>
+            </div>
+            <Button
+              className="w-full"
+              disabled={!recommendToId || recommendBusy}
+              onClick={sendRecommendation}
+            >
+              {recommendBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Recommend'}
             </Button>
           </div>
         )}

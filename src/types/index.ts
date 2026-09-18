@@ -659,6 +659,22 @@ export interface PresenceEntry {
   updatedAt: string;
 }
 
+/** Family comic recommendation — Komga id is source of truth for the title. */
+export type ComicRecommendation = {
+  id: string;
+  fromMemberId: string;
+  toMemberId: string;
+  /** Prefer series when recommending a run; book for a specific issue. */
+  kind: 'book' | 'series';
+  komgaBookId?: string;
+  komgaSeriesId?: string;
+  /** Display snapshot (title can change in Komga; id still resolves). */
+  title: string;
+  message?: string;
+  createdAt: string;
+  status: 'unread' | 'opened' | 'dismissed';
+};
+
 export interface FamilyData {
   members: Member[];
   events: CalendarEvent[];
@@ -673,6 +689,8 @@ export interface FamilyData {
   /** Preferred store-tab order (store names). New stores append. */
   shoppingStoreOrder?: string[];
   notes: Note[];
+  /** Family comic recommendations (Phase 4). */
+  comicRecommendations?: ComicRecommendation[];
   /** Homeschool subjects. */
   studySubjects?: StudySubject[];
   /** Homeschool work blocks. */
