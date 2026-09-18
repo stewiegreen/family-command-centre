@@ -11,7 +11,7 @@ import {
   tuyaConfigured,
   type TuyaEnv,
 } from '../../lib/tuya';
-import { verifyParent, toErrorResponse, AuthError } from '../../_lib/auth';
+import { verifyParent, AuthError } from '../../_lib/auth';
 
 type Env = TuyaEnv & {
   FIREBASE_PROJECT_ID: string;
