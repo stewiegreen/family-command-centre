@@ -316,16 +316,33 @@ export function ComicsPage() {
     void loadHome();
   }, [loadHome]);
 
+  /** Started books (partial progress) — Komga IN_PROGRESS. */
   const continueBooks = useMemo(() => {
     const seen = new Set<string>();
     const out: KomgaBook[] = [];
-    for (const b of [...onDeck, ...inProgress]) {
+    for (const b of inProgress) {
       if (seen.has(b.id)) continue;
       seen.add(b.id);
       out.push(b);
     }
     return out;
-  }, [onDeck, inProgress]);
+  }, [inProgress]);
+
+  /**
+   * On Deck = next unread in a series you've started (book itself not started yet).
+   * Exclude anything already shown under Continue Reading.
+   */
+  const onDeckBooks = useMemo(() => {
+    const continuing = new Set(continueBooks.map((b) => b.id));
+    const seen = new Set<string>();
+    const out: KomgaBook[] = [];
+    for (const b of onDeck) {
+      if (continuing.has(b.id) || seen.has(b.id)) continue;
+      seen.add(b.id);
+      out.push(b);
+    }
+    return out;
+  }, [onDeck, continueBooks]);
 
   const openSeries = async (s: KomgaSeries) => {
     setBrowse({ kind: 'series', series: s });
@@ -666,10 +683,31 @@ export function ComicsPage() {
             <div className="space-y-10">
               <Section
                 title="Continue reading"
-                subtitle={continueBooks.length ? `Pick up where ${memberName} left off` : undefined}
+                subtitle={continueBooks.length ? `Comics you've started — pick up where you left off` : undefined}
                 empty={continueBooks.length === 0}
               >
                 {continueBooks.map((b) => (
+                  <div key={b.id} className="snap-start">
+                    <BookCard
+                      book={b}
+                      memberId={memberId}
+                      hero
+                      onOpen={() => void openBookDetail(b)}
+                    />
+                  </div>
+                ))}
+              </Section>
+
+              <Section
+                title="On deck"
+                subtitle={
+                  onDeckBooks.length
+                    ? 'Next unread in series you\'ve started (not opened yet)'
+                    : undefined
+                }
+                empty={onDeckBooks.length === 0}
+              >
+                {onDeckBooks.map((b) => (
                   <div key={b.id} className="snap-start">
                     <BookCard
                       book={b}
@@ -759,7 +797,7 @@ export function ComicsPage() {
                 ))}
               </Section>
 
-              {!continueBooks.length && !latest.length && !series.length && !error && (
+              {!continueBooks.length && !onDeckBooks.length && !latest.length && !series.length && !error && (
                 <Card className="p-10 text-center space-y-2">
                   <BookOpen className="w-10 h-10 text-muted mx-auto opacity-50" />
                   <p className="text-sm text-muted">
