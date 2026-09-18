@@ -19,6 +19,7 @@ import {
   X,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { ItemDetailModal } from './messages/ItemDetailModal';
 import { Avatar } from '../components/ui/Avatar';
 import { Input } from '../components/ui/Input';
 import { EmptyState } from '../components/ui/EmptyState';
@@ -508,13 +509,8 @@ export function MessagesPage() {
 
   const memberNamesLine = others.map((m) => m.name).join(' · ');
 
-  const openAttachment = (att: MessageAttachment) => {
-    if (att.type === 'todo') setView('todos');
-    else if (att.type === 'event') setView('calendar');
-    else if (att.type === 'note') setView('notes');
-    else if (att.type === 'shopping') setView('shopping');
-    else if (att.type === 'quest') setView('chores');
-  };
+  const [detailAttachment, setDetailAttachment] = useState<MessageAttachment | null>(null);
+  const openAttachment = (att: MessageAttachment) => setDetailAttachment(att);
 
   const [shareError, setShareError] = useState('');
 
@@ -1191,6 +1187,11 @@ export function MessagesPage() {
         </div>
       )}
 
+      <ItemDetailModal
+        attachment={detailAttachment}
+        onClose={() => setDetailAttachment(null)}
+        onOpenSource={setView}
+      />
     </div>
   );
 }
