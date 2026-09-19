@@ -1,9 +1,9 @@
 /**
  * Cloudflare Pages Function — Emby API proxy.
  *
- * Secrets (set in Cloudflare dashboard → Pages → Settings → Environment variables):
- *   EMBY_BASE_URL  e.g. https://emby.example.com:8096  (no trailing slash)
- *   EMBY_API_KEY   Emby admin/API key — NEVER expose to the client
+ * Secrets (Cloudflare Pages env):
+ *   EMBY_BASE_URL  e.g. https://media.example.com  (no trailing slash)
+ *   EMBY_API_KEY   Emby API key — NEVER expose to the client
  *
  * Only an allowlisted set of GET paths is forwarded. Anything else → 404.
  */
@@ -16,6 +16,7 @@ type Env = {
 const ALLOWED_QUERY = new Set([
   'MediaTypes',
   'Limit',
+  'StartIndex',
   'IncludeItemTypes',
   'ParentId',
   'maxWidth',
@@ -27,6 +28,14 @@ const ALLOWED_QUERY = new Set([
   'Recursive',
   'SortBy',
   'SortOrder',
+  'SearchTerm',
+  'Filters',
+  'UserId',
+  'GroupItemsIntoCollections',
+  'EnableUserData',
+  'ImageTypeLimit',
+  'ExcludeItemTypes',
+  'Ids',
 ]);
 
 function pathAllowed(joined: string): boolean {
@@ -34,6 +43,9 @@ function pathAllowed(joined: string): boolean {
   if (/^Users\/[^/]+\/Views$/.test(joined)) return true;
   if (/^Users\/[^/]+\/Items\/Resume$/.test(joined)) return true;
   if (/^Users\/[^/]+\/Items\/Latest$/.test(joined)) return true;
+  if (/^Users\/[^/]+\/Items$/.test(joined)) return true;
+  if (/^Users\/[^/]+\/Items\/[^/]+$/.test(joined)) return true;
+  if (joined === 'Shows/NextUp') return true;
   if (/^Items\/[^/]+\/Images\/[^/]+$/.test(joined)) return true;
   return false;
 }
@@ -55,10 +67,13 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   }
 
   const base = env.EMBY_BASE_URL.replace(/\/+$/, '');
-  // Prefer /emby/ prefix when base is host-only; if base already includes path, join carefully
-  const upstreamPath = joined.startsWith('System/') || joined.startsWith('Users/') || joined.startsWith('Items/')
-    ? `/emby/${joined}`
-    : `/${joined}`;
+  const upstreamPath =
+    joined.startsWith('System/') ||
+    joined.startsWith('Users/') ||
+    joined.startsWith('Items/') ||
+    joined.startsWith('Shows/')
+      ? `/emby/${joined}`
+      : `/${joined}`;
   const url = new URL(`${base}${upstreamPath}`);
 
   const incoming = new URL(context.request.url);
@@ -77,7 +92,10 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     });
   } catch (err) {
     return new Response(
-      JSON.stringify({ error: 'Upstream Emby request failed', detail: String(err) }),
+      JSON.stringify({
+        error: 'Upstream Emby request failed',
+        detail: err instanceof Error ? err.message : String(err),
+      }),
       { status: 502, headers: { 'Content-Type': 'application/json' } },
     );
   }
@@ -85,11 +103,11 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   const headers = new Headers();
   const ct = embyRes.headers.get('Content-Type');
   if (ct) headers.set('Content-Type', ct);
-  // Cache images briefly; never cache sensitive JSON long
+  const cache = embyRes.headers.get('Cache-Control');
+  if (cache) headers.set('Cache-Control', cache);
+  // Images can be cached at the edge briefly
   if (/\/Images\//.test(joined)) {
     headers.set('Cache-Control', 'public, max-age=3600');
-  } else {
-    headers.set('Cache-Control', 'private, max-age=30');
   }
 
   return new Response(embyRes.body, { status: embyRes.status, headers });
