@@ -161,7 +161,6 @@ function Section({
 
 export function MediaPage() {
   const { data, currentUser, setView } = useApp();
-  const memberId = currentUser?.id;
   const embyUserId = currentUser?.embyUserId?.trim() || '';
   const webUrl = resolveEmbyWebUrl(data.settings);
 
