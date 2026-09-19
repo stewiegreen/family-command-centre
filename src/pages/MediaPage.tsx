@@ -38,18 +38,17 @@ import {
   embyPublicInfo,
   embyResume,
   embySearch,
-  embyThumbUrl,
   embyViews,
   libraryKindLabel,
   openEmbyItem,
   playedPercent,
-  remainingLabel,
   resolveEmbyWebUrl,
   runtimeLabel,
   shortTitle,
   type EmbyItem,
   type EmbyView,
 } from '../lib/emby';
+import { MediaCard } from '../components/MediaCard';
 import { cn } from '../lib/cn';
 
 type Tab = 'home' | 'libraries' | 'search';
@@ -58,15 +57,6 @@ type Browse =
   | { kind: 'root' }
   | { kind: 'library'; view: EmbyView }
   | { kind: 'folder'; item: EmbyItem; title: string };
-
-function ProgressBar({ pct, className }: { pct: number; className?: string }) {
-  if (pct <= 0 || pct >= 100) return null;
-  return (
-    <div className={cn('h-1.5 rounded-full bg-black/45 overflow-hidden', className)}>
-      <div className="h-full bg-amber-400 rounded-full" style={{ width: `${pct}%` }} />
-    </div>
-  );
-}
 
 function Section({
   title,
@@ -91,104 +81,6 @@ function Section({
   );
 }
 
-/** Landscape Continue Watching card — Thumb / Backdrop, not poster. */
-function ContinueWatchingCard({ item, onOpen }: { item: EmbyItem; onOpen: () => void }) {
-  const pct = playedPercent(item);
-  const left = remainingLabel(item);
-  const epLine =
-    item.Type === 'Episode'
-      ? [
-          item.ParentIndexNumber != null ? `S${item.ParentIndexNumber}` : null,
-          item.IndexNumber != null ? `E${item.IndexNumber}` : null,
-          item.Name,
-        ]
-          .filter(Boolean)
-          .join(' · ')
-      : null;
-
-  return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className="shrink-0 w-[17rem] sm:w-[20rem] text-left group"
-      aria-label={displayTitle(item)}
-    >
-      <div className="relative aspect-video rounded-2xl overflow-hidden bg-surface-2 border border-border shadow-md">
-        <img
-          src={embyThumbUrl(item, 640)}
-          alt=""
-          className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-300"
-          loading="lazy"
-          onError={(e) => {
-            (e.target as HTMLImageElement).style.display = 'none';
-          }}
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent" />
-        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-          <span className="rounded-full bg-accent text-accent-ink p-3 shadow-lg">
-            <Play className="w-5 h-5 fill-current" />
-          </span>
-        </div>
-        <div className="absolute inset-x-0 bottom-0 p-3 space-y-1.5">
-          <p className="text-sm font-bold text-white line-clamp-1 drop-shadow">
-            {item.Type === 'Episode' && item.SeriesName ? item.SeriesName : item.Name}
-          </p>
-          {epLine && <p className="text-[11px] text-white/80 line-clamp-1">{epLine}</p>}
-          <div className="flex items-center justify-between gap-2">
-            <ProgressBar pct={pct} className="flex-1" />
-            {left && <span className="text-[10px] font-semibold text-white/75 shrink-0">{left}</span>}
-          </div>
-        </div>
-      </div>
-    </button>
-  );
-}
-
-/** Portrait poster card for Latest rows and browse grids. */
-function MediaPosterCard({ item, onOpen }: { item: EmbyItem; onOpen: () => void }) {
-  const pct = playedPercent(item);
-  return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className="shrink-0 w-[9.5rem] sm:w-[11rem] text-left group"
-      aria-label={displayTitle(item)}
-    >
-      <div className="relative aspect-[2/3] rounded-2xl overflow-hidden bg-surface-2 border border-border shadow-md">
-        <img
-          src={embyPosterUrl(item, 360)}
-          alt=""
-          className="w-full h-full object-cover group-hover:scale-[1.04] transition-transform duration-300"
-          loading="lazy"
-          onError={(e) => {
-            (e.target as HTMLImageElement).style.display = 'none';
-          }}
-        />
-        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/30">
-          <span className="rounded-full bg-accent text-accent-ink p-2.5 shadow-lg">
-            <Play className="w-4 h-4 fill-current" />
-          </span>
-        </div>
-        <div className="absolute inset-x-0 bottom-0 p-2 bg-gradient-to-t from-black/70 to-transparent">
-          <ProgressBar pct={pct} />
-        </div>
-        {item.UserData?.Played && (
-          <span className="absolute top-2 right-2 rounded-full bg-emerald-500 text-white text-[10px] font-bold px-1.5 py-0.5">
-            Watched
-          </span>
-        )}
-      </div>
-      <p className="mt-2 text-sm font-semibold text-fg line-clamp-2 leading-snug">{shortTitle(item)}</p>
-      <p className="text-[11px] text-muted mt-0.5">
-        {item.ProductionYear ||
-          (item.Type === 'Series' && item.UserData?.UnplayedItemCount
-            ? `${item.UserData.UnplayedItemCount} unwatched`
-            : item.Type || '')}
-      </p>
-    </button>
-  );
-}
-
 function libraryIcon(view: EmbyView) {
   const t = (view.CollectionType || '').toLowerCase();
   if (t === 'movies') return Clapperboard;
@@ -206,7 +98,8 @@ function LibraryEntryCard({ view, onOpen }: { view: EmbyView; onOpen: () => void
     <button
       type="button"
       onClick={onOpen}
-      className="shrink-0 w-[9.5rem] sm:w-[11rem] rounded-2xl border border-border bg-elevated p-4 text-left hover:border-accent/40 hover:bg-elevated/80 transition-colors group"
+      className="shrink-0 w-[9.5rem] sm:w-[11rem] border border-border bg-elevated p-4 text-left hover:border-accent/40 transition-colors group [border-radius:var(--app-card-radius,1rem)]"
+      style={{ boxShadow: 'var(--app-shadow-card)' }}
     >
       <div className="w-12 h-12 rounded-xl bg-accent/15 text-accent flex items-center justify-center mb-3 group-hover:scale-105 transition-transform">
         <Icon className="w-6 h-6" />
@@ -562,7 +455,11 @@ export function MediaPage() {
                 <div className="flex gap-4 overflow-x-auto pb-2 -mx-1 px-1 snap-x">
                   {continueItems.map((item) => (
                     <div key={item.Id} className="snap-start">
-                      <ContinueWatchingCard item={item} onOpen={() => void openFocus(item)} />
+                      <MediaCard
+                        item={item}
+                        variant="continue"
+                        onOpen={() => void openFocus(item)}
+                      />
                     </div>
                   ))}
                 </div>
@@ -583,7 +480,7 @@ export function MediaPage() {
                   <Section key={view.Id} title={`Latest ${view.Name}`} empty={false}>
                     <div className="flex gap-4 overflow-x-auto pb-2 -mx-1 px-1">
                       {items.map((item) => (
-                        <MediaPosterCard key={item.Id} item={item} onOpen={() => void openFocus(item)} />
+                        <MediaCard key={item.Id} item={item} onOpen={() => void openFocus(item)} />
                       ))}
                     </div>
                   </Section>
@@ -650,7 +547,7 @@ export function MediaPage() {
                 <>
                   <div className="flex flex-wrap gap-4">
                     {detailItems.map((item) => (
-                      <MediaPosterCard key={item.Id} item={item} onOpen={() => void openFocus(item)} />
+                      <MediaCard key={item.Id} item={item} onOpen={() => void openFocus(item)} />
                     ))}
                   </div>
                   {!detailItems.length && (
@@ -692,7 +589,7 @@ export function MediaPage() {
           )}
           <div className="flex flex-wrap gap-4">
             {searchResults.map((item) => (
-              <MediaPosterCard key={item.Id} item={item} onOpen={() => void openFocus(item)} />
+              <MediaCard key={item.Id} item={item} onOpen={() => void openFocus(item)} />
             ))}
           </div>
         </div>
@@ -730,54 +627,68 @@ export function MediaPage() {
       >
         {focus && (
           <div className="space-y-4 -mt-1">
-            <div className="relative -mx-4 -mt-2 sm:rounded-t-2xl overflow-hidden min-h-[11rem] sm:min-h-[14rem]">
+            {/* Hero — backdrop + poster, GreenHQ elevated chrome */}
+            <div className="relative -mx-4 -mt-2 overflow-hidden min-h-[12rem] sm:min-h-[15rem] border-b border-border">
               <img
                 src={embyBackdropUrl(focus, 1280)}
                 alt=""
                 className="absolute inset-0 w-full h-full object-cover"
                 onError={(e) => {
-                  (e.target as HTMLImageElement).style.opacity = '0.3';
+                  (e.target as HTMLImageElement).style.opacity = '0.25';
                 }}
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-surface via-surface/70 to-black/30" />
-              <div className="relative z-10 flex flex-col justify-end min-h-[11rem] sm:min-h-[14rem] p-4 sm:p-5 gap-3">
-                {logoUrl ? (
+              <div className="absolute inset-0 bg-gradient-to-t from-[var(--app-elevated,var(--app-surface,#111))] via-black/50 to-black/20" />
+              <div className="relative z-10 flex gap-4 items-end min-h-[12rem] sm:min-h-[15rem] p-4 sm:p-5">
+                <div
+                  className="hidden xs:block sm:block w-[5.5rem] sm:w-28 shrink-0 overflow-hidden border border-border bg-surface-2 shadow-lg"
+                  style={{ borderRadius: 'var(--app-card-radius, 1rem)' }}
+                >
                   <img
-                    src={logoUrl}
-                    alt={displayTitle(focus)}
-                    className="max-h-16 sm:max-h-20 w-auto max-w-[85%] object-contain object-left drop-shadow-lg"
+                    src={embyPosterUrl(focus, 280)}
+                    alt=""
+                    className="w-full aspect-[2/3] object-cover"
                   />
-                ) : (
-                  <h3 className="text-xl sm:text-2xl font-bold text-fg leading-tight drop-shadow">
-                    {displayTitle(focus)}
-                  </h3>
-                )}
-                <div className="flex flex-wrap gap-2 text-xs text-fg-secondary">
-                  {focus.ProductionYear ? <span>{focus.ProductionYear}</span> : null}
-                  {focus.OfficialRating ? <span>· {focus.OfficialRating}</span> : null}
-                  {runtimeLabel(focus) ? <span>· {runtimeLabel(focus)}</span> : null}
-                  {focus.Genres?.slice(0, 2).map((g) => (
-                    <span key={g}>· {g}</span>
-                  ))}
-                  {playedPercent(focus) > 0 && playedPercent(focus) < 100 ? (
-                    <span className="text-accent font-semibold">
-                      · {Math.round(playedPercent(focus))}% watched
-                    </span>
-                  ) : null}
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    size="sm"
-                    disabled={!embyUserId}
-                    onClick={() => play(focus)}
-                  >
-                    <Play className="w-4 h-4" />
-                    {playedPercent(focus) > 0 && playedPercent(focus) < 100 ? 'Resume' : 'Play'}
-                  </Button>
-                  <Button size="sm" variant="secondary" disabled={!canPlay} onClick={() => playExternal(focus)}>
-                    <ExternalLink className="w-4 h-4" />
-                    Emby
-                  </Button>
+                <div className="min-w-0 flex-1 space-y-2.5 pb-0.5">
+                  {logoUrl ? (
+                    <img
+                      src={logoUrl}
+                      alt={displayTitle(focus)}
+                      className="max-h-14 sm:max-h-[4.5rem] w-auto max-w-full object-contain object-left drop-shadow-md"
+                    />
+                  ) : (
+                    <h3 className="text-xl sm:text-2xl font-bold text-white leading-tight drop-shadow-md">
+                      {displayTitle(focus)}
+                    </h3>
+                  )}
+                  <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-xs text-white/80">
+                    {focus.ProductionYear ? <span>{focus.ProductionYear}</span> : null}
+                    {focus.OfficialRating ? <span>· {focus.OfficialRating}</span> : null}
+                    {runtimeLabel(focus) ? <span>· {runtimeLabel(focus)}</span> : null}
+                    {focus.Genres?.slice(0, 2).map((g) => (
+                      <span key={g}>· {g}</span>
+                    ))}
+                    {playedPercent(focus) > 0 && playedPercent(focus) < 100 ? (
+                      <span className="text-amber-300 font-semibold">
+                        · {Math.round(playedPercent(focus))}% watched
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="flex flex-wrap gap-2 pt-0.5">
+                    <Button size="sm" disabled={!embyUserId} onClick={() => play(focus)}>
+                      <Play className="w-4 h-4" />
+                      {playedPercent(focus) > 0 && playedPercent(focus) < 100 ? 'Resume' : 'Play'}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      disabled={!canPlay}
+                      onClick={() => playExternal(focus)}
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                      Emby
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>
