@@ -5,6 +5,7 @@
 import { Film, Play } from 'lucide-react';
 import {
   displayTitle,
+  embyEpisodeArtUrl,
   embyPosterUrl,
   embyThumbUrl,
   playedPercent,
@@ -105,13 +106,17 @@ function runtimeFromItem(item: EmbyItem): string | null {
  */
 export function MediaCard({ item, onOpen, variant = 'poster', className }: Props) {
   const pct = playedPercent(item);
-  // Episodes always use landscape thumb art (not portrait posters).
+  // Episodes always use landscape art; Primary is the episode still/screenshot.
   const isEpisode = item.Type === 'Episode';
   const isContinue = variant === 'continue' || isEpisode;
   const title = primaryTitle(item, isContinue ? 'continue' : variant);
   const sub = secondaryLine(item, isContinue ? 'continue' : variant);
   const left = isContinue ? remainingLabel(item) : null;
-  const img = isContinue ? embyThumbUrl(item, 640) : embyPosterUrl(item, 360);
+  const img = isEpisode
+    ? embyEpisodeArtUrl(item, 640)
+    : isContinue
+      ? embyThumbUrl(item, 640)
+      : embyPosterUrl(item, 360);
 
   return (
     <button

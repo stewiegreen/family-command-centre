@@ -323,6 +323,34 @@ export function embyThumbUrl(item: EmbyItem, maxWidth = 480): string {
   return embyImageUrl(item.Id, { type: 'Primary', maxWidth });
 }
 
+/**
+ * Episode landscape art — Emby Primary on an episode is usually the episode still/screenshot.
+ * Prefer that over Thumb/series poster so each episode looks distinct.
+ */
+export function embyEpisodeArtUrl(item: EmbyItem, maxWidth = 640): string {
+  if (item.ImageTags?.Primary) {
+    return embyImageUrl(item.Id, { type: 'Primary', maxWidth, tag: item.ImageTags.Primary });
+  }
+  if (item.ImageTags?.Thumb) {
+    return embyImageUrl(item.Id, { type: 'Thumb', maxWidth, tag: item.ImageTags.Thumb });
+  }
+  if (item.ImageTags?.Backdrop) {
+    return embyImageUrl(item.Id, { type: 'Backdrop', maxWidth, tag: item.ImageTags.Backdrop });
+  }
+  // Last resort: series backdrop / primary (better than blank)
+  if (item.ParentBackdropItemId && item.ParentBackdropImageTags?.[0]) {
+    return embyImageUrl(item.ParentBackdropItemId, {
+      type: 'Backdrop',
+      maxWidth,
+      tag: item.ParentBackdropImageTags[0],
+    });
+  }
+  if (item.SeriesId && item.SeriesPrimaryImageTag) {
+    return embyImageUrl(item.SeriesId, { type: 'Primary', maxWidth, tag: item.SeriesPrimaryImageTag });
+  }
+  return embyImageUrl(item.Id, { type: 'Primary', maxWidth });
+}
+
 /** Portrait poster for Latest / library grids. */
 export function embyPosterUrl(item: EmbyItem, maxWidth = 320): string {
   if (item.ImageTags?.Primary) {
