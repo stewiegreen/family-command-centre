@@ -44,6 +44,7 @@ import {
   embySortByForParent,
   embyViews,
   libraryKindLabel,
+  showEmbyLatestRow,
   sortMediaItems,
   openEmbyItem,
   playedPercent,
