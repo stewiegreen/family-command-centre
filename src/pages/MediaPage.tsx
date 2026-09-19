@@ -38,8 +38,10 @@ import {
   embyPublicInfo,
   embyResume,
   embySearch,
+  embySortByForParent,
   embyViews,
   libraryKindLabel,
+  sortMediaItems,
   openEmbyItem,
   playedPercent,
   resolveEmbyWebUrl,
@@ -236,8 +238,11 @@ export function MediaPage() {
       setDetailItems([]);
       setDetailStart(0);
       try {
-        const { items, total } = await embyChildren(embyUserId, item.Id, { limit: 48 });
-        setDetailItems(items);
+        const { items, total } = await embyChildren(embyUserId, item.Id, {
+          limit: 48,
+          parentType: item.Type,
+        });
+        setDetailItems(sortMediaItems(items));
         setDetailTotal(total);
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));
@@ -265,14 +270,16 @@ export function MediaPage() {
     setDetailItems([]);
     setDetailStart(0);
     try {
+      const sortBy = embySortByForParent({ collectionType: view.CollectionType });
       const { items, total } = await embyItems(embyUserId, {
         parentId: view.Id,
         recursive: false,
-        sortBy: 'SortName',
+        sortBy,
+        sortOrder: 'Ascending',
         limit: 48,
         startIndex: 0,
       });
-      setDetailItems(items);
+      setDetailItems(sortMediaItems(items));
       setDetailTotal(total);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -290,14 +297,21 @@ export function MediaPage() {
     setDetailLoading(true);
     const next = detailStart + 48;
     try {
+      const sortBy =
+        browse.kind === 'library'
+          ? embySortByForParent({ collectionType: browse.view.CollectionType })
+          : browse.kind === 'folder'
+            ? embySortByForParent({ parentType: browse.item.Type })
+            : 'IndexNumber,SortName';
       const { items, total } = await embyItems(embyUserId, {
         parentId,
         recursive: false,
-        sortBy: 'SortName',
+        sortBy,
+        sortOrder: 'Ascending',
         limit: 48,
         startIndex: next,
       });
-      setDetailItems((prev) => [...prev, ...items]);
+      setDetailItems((prev) => sortMediaItems([...prev, ...items]));
       setDetailTotal(total);
       setDetailStart(next);
     } catch {

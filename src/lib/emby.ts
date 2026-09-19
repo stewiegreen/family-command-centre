@@ -168,19 +168,84 @@ export async function embyItems(
   return { items: data.Items || [], total: data.TotalRecordCount ?? data.Items?.length ?? 0 };
 }
 
+/**
+ * Client-side ordering safety net when Emby returns mixed order.
+ * Prefers season → episode index, then track index, then numeric name.
+ */
+export function sortMediaItems(items: EmbyItem[]): EmbyItem[] {
+  return [...items].sort((a, b) => {
+    const ap = a.ParentIndexNumber;
+    const bp = b.ParentIndexNumber;
+    if (ap != null && bp != null && ap !== bp) return ap - bp;
+
+    const ai = a.IndexNumber;
+    const bi = b.IndexNumber;
+    if (ai != null && bi != null && ai !== bi) return ai - bi;
+    // Prefer items that have an index over those that don't
+    if (ai != null && bi == null) return -1;
+    if (ai == null && bi != null) return 1;
+
+    const ay = a.ProductionYear;
+    const by = b.ProductionYear;
+    if (ay != null && by != null && ay !== by) return ay - by;
+
+    return (a.Name || '').localeCompare(b.Name || '', undefined, {
+      numeric: true,
+      sensitivity: 'base',
+    });
+  });
+}
+
+/** Emby SortBy string for a parent folder / library context. */
+export function embySortByForParent(opts: {
+  parentType?: string;
+  collectionType?: string;
+}): string {
+  const type = (opts.parentType || '').toLowerCase();
+  const col = (opts.collectionType || '').toLowerCase();
+
+  // Inside a series → seasons; inside a season → episodes; albums → tracks
+  if (type === 'series' || type === 'season' || type === 'musicalbum' || type === 'folder') {
+    return 'IndexNumber,SortName';
+  }
+  if (type === 'boxset') return 'ProductionYear,SortName';
+
+  // Library roots
+  if (col === 'music' || col === 'musicvideos') return 'IndexNumber,SortName';
+  if (col === 'tvshows' || col === 'movies' || col === 'homevideos') return 'SortName';
+
+  // Default: try index first (safe for episode-like folders), then name
+  return 'IndexNumber,SortName';
+}
+
 export async function embyChildren(
   userId: string,
   parentId: string,
-  opts: { limit?: number; startIndex?: number; includeItemTypes?: string } = {},
+  opts: {
+    limit?: number;
+    startIndex?: number;
+    includeItemTypes?: string;
+    /** Emby parent Type (Series, Season, …) for correct ordering */
+    parentType?: string;
+    sortBy?: string;
+  } = {},
 ): Promise<{ items: EmbyItem[]; total: number }> {
-  return embyItems(userId, {
+  const sortBy =
+    opts.sortBy ||
+    embySortByForParent({ parentType: opts.parentType });
+  const result = await embyItems(userId, {
     parentId,
     recursive: false,
-    sortBy: 'SortName',
+    sortBy,
+    sortOrder: 'Ascending',
     limit: opts.limit ?? 60,
     startIndex: opts.startIndex ?? 0,
     includeItemTypes: opts.includeItemTypes,
   });
+  return {
+    items: sortMediaItems(result.items),
+    total: result.total,
+  };
 }
 
 export async function embySearch(
