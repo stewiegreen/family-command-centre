@@ -66,11 +66,13 @@ type Browse =
 
 function Section({
   title,
+  subtitle,
   children,
   empty,
   action,
 }: {
   title: string;
+  subtitle?: string;
   children: ReactNode;
   empty?: boolean;
   action?: ReactNode;
@@ -79,11 +81,32 @@ function Section({
   return (
     <section className="space-y-3">
       <div className="flex items-end justify-between gap-2 px-0.5">
-        <h2 className="text-lg font-bold text-fg tracking-tight">{title}</h2>
+        <div className="min-w-0">
+          <h2 className="text-base sm:text-lg font-bold text-fg tracking-tight">{title}</h2>
+          {subtitle ? <p className="text-xs text-muted mt-0.5">{subtitle}</p> : null}
+        </div>
         {action}
       </div>
       {children}
     </section>
+  );
+}
+
+function EmptyState({
+  icon: Icon,
+  title,
+  body,
+}: {
+  icon: typeof Film;
+  title: string;
+  body: string;
+}) {
+  return (
+    <Card className="p-10 sm:p-12 text-center space-y-2 border-dashed">
+      <Icon className="w-10 h-10 text-muted mx-auto opacity-40" />
+      <p className="text-sm font-semibold text-fg">{title}</p>
+      <p className="text-sm text-muted max-w-md mx-auto leading-relaxed">{body}</p>
+    </Card>
   );
 }
 
@@ -104,13 +127,13 @@ function LibraryEntryCard({ view, onOpen }: { view: EmbyView; onOpen: () => void
     <button
       type="button"
       onClick={onOpen}
-      className="shrink-0 w-[9.5rem] sm:w-[11rem] border border-border bg-elevated p-4 text-left hover:border-accent/40 transition-colors group [border-radius:var(--app-card-radius,1rem)]"
+      className="shrink-0 w-[9.5rem] sm:w-[11rem] rounded-2xl border border-border bg-elevated p-4 text-left hover:border-accent/50 hover:shadow-md transition-all group"
       style={{ boxShadow: 'var(--app-shadow-card)' }}
     >
-      <div className="w-12 h-12 rounded-xl bg-accent/15 text-accent flex items-center justify-center mb-3 group-hover:scale-105 transition-transform">
-        <Icon className="w-6 h-6" />
+      <div className="w-11 h-11 rounded-2xl bg-accent/12 text-accent flex items-center justify-center mb-3 group-hover:scale-105 transition-transform">
+        <Icon className="w-5 h-5" />
       </div>
-      <p className="text-sm font-bold text-fg line-clamp-2">{view.Name}</p>
+      <p className="text-sm font-bold text-fg line-clamp-2 leading-snug">{view.Name}</p>
       <p className="text-[11px] text-muted mt-1">{kind}</p>
     </button>
   );
@@ -464,14 +487,11 @@ export function MediaPage() {
           <Film className="w-6 h-6 text-accent" />
           Media
         </h1>
-        <Card className="p-8 text-center space-y-2">
-          <Tv className="w-10 h-10 text-muted mx-auto opacity-50" />
-          <p className="text-sm font-semibold text-fg">Emby account not linked</p>
-          <p className="text-sm text-muted max-w-md mx-auto">
-            A parent needs to set this profile&apos;s Emby user id in Settings before Continue Watching and
-            the library can load.
-          </p>
-        </Card>
+        <EmptyState
+          icon={Tv}
+          title="Media not linked yet"
+          body="A parent needs to link this profile’s media account in Settings before Continue Watching and libraries can load."
+        />
         <Card className="p-4 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-sm font-bold text-fg">Comics</h2>
@@ -489,30 +509,20 @@ export function MediaPage() {
     <div className="p-4 lg:p-6 max-w-6xl mx-auto space-y-5">
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-fg flex items-center gap-2">
-            <Film className="w-6 h-6 text-accent" />
+          <h1 className="text-2xl font-bold text-fg flex items-center gap-2 tracking-tight">
+            <Film className="w-7 h-7 text-accent" />
             Media
           </h1>
-          <p className="text-xs text-muted mt-0.5">
-            {serverName ? `${serverName} · ` : ''}
-            {currentUser?.name}&apos;s library
+          <p className="text-sm text-muted mt-1">
+            {currentUser?.name ? `${currentUser.name}'s collection` : 'Your collection'}
+            {serverName ? ` · ${serverName}` : ''}
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button size="sm" variant="secondary" onClick={() => void loadHome()} disabled={loading}>
+          <Button size="sm" variant="secondary" onClick={() => void loadHome()} disabled={loading} aria-label="Refresh">
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
             Refresh
           </Button>
-          {webUrl && (
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={() => window.open(webUrl, '_blank', 'noopener,noreferrer')}
-            >
-              Open Emby
-              <ExternalLink className="w-3.5 h-3.5" />
-            </Button>
-          )}
         </div>
       </div>
 
@@ -522,21 +532,23 @@ export function MediaPage() {
         </p>
       )}
 
-      <div className="flex gap-1 p-1 rounded-xl bg-surface-2 border border-border w-full sm:w-auto overflow-x-auto">
-        {tabs.map((t) => (
+      <div className="flex gap-1 p-1 rounded-2xl bg-surface-2 border border-border w-full sm:w-fit overflow-x-auto">
+        {tabs.map((tabItem) => (
           <button
-            key={t.id}
+            key={tabItem.id}
             type="button"
             onClick={() => {
-              setTab(t.id);
-              if (t.id === 'home') goRoot();
+              setTab(tabItem.id);
+              if (tabItem.id === 'home') goRoot();
             }}
             className={cn(
-              'px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors whitespace-nowrap',
-              tab === t.id ? 'bg-elevated text-fg shadow-sm' : 'text-muted hover:text-fg',
+              'px-3.5 py-1.5 rounded-xl text-sm font-semibold transition-colors whitespace-nowrap',
+              tab === tabItem.id
+                ? 'bg-elevated text-fg shadow-sm'
+                : 'text-muted hover:text-fg',
             )}
           >
-            {t.label}
+            {tabItem.label}
           </button>
         ))}
       </div>
@@ -545,13 +557,18 @@ export function MediaPage() {
       {tab === 'home' && (
         <div className="space-y-9">
           {loading && !continueItems.length && !views.length ? (
-            <div className="flex justify-center py-16 text-muted">
+            <div className="flex flex-col items-center justify-center py-20 gap-3 text-muted">
               <Loader2 className="w-8 h-8 animate-spin" />
+              <p className="text-sm">Loading your collection…</p>
             </div>
           ) : (
             <>
-              <Section title="Continue Watching" empty={!continueItems.length}>
-                <div className="flex gap-4 overflow-x-auto pb-2 -mx-1 px-1 snap-x">
+              <Section
+                title="Continue Watching"
+                subtitle={continueItems.length ? 'Pick up where you left off' : undefined}
+                empty={!continueItems.length}
+              >
+                <div className="flex gap-3.5 overflow-x-auto pb-2 -mx-1 px-1 snap-x scroll-smooth">
                   {continueItems.map((item) => (
                     <div key={item.Id} className="snap-start">
                       <MediaCard
@@ -564,7 +581,11 @@ export function MediaPage() {
                 </div>
               </Section>
 
-              <Section title="Your Media" empty={!views.length}>
+              <Section
+                title="Your Libraries"
+                subtitle="Jump into a collection"
+                empty={!views.length}
+              >
                 <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1">
                   {views.map((v) => (
                     <LibraryEntryCard key={v.Id} view={v} onOpen={() => void openLibrary(v)} />
@@ -572,8 +593,12 @@ export function MediaPage() {
                 </div>
               </Section>
 
-              <Section title="Recommended for You" empty={!myMediaRecommendations.length}>
-                <div className="flex gap-4 overflow-x-auto pb-2 -mx-1 px-1">
+              <Section
+                title="Recommended for You"
+                subtitle="From your family"
+                empty={!myMediaRecommendations.length}
+              >
+                <div className="flex gap-3.5 overflow-x-auto pb-2 -mx-1 px-1">
                   {myMediaRecommendations.map((rec) => {
                     const from = members.find((m) => m.id === rec.fromMemberId);
                     return (
@@ -639,8 +664,8 @@ export function MediaPage() {
                 const items = latestByView[view.Id] || [];
                 if (!items.length) return null;
                 return (
-                  <Section key={view.Id} title={`Latest ${view.Name}`} empty={false}>
-                    <div className="flex gap-4 overflow-x-auto pb-2 -mx-1 px-1">
+                  <Section key={view.Id} title={`Latest in ${view.Name}`} empty={false}>
+                    <div className="flex gap-3.5 overflow-x-auto pb-2 -mx-1 px-1">
                       {items.map((item) => (
                         <MediaCard key={item.Id} item={item} onOpen={() => void openFocus(item)} />
                       ))}
@@ -649,19 +674,13 @@ export function MediaPage() {
                 );
               })}
 
-              {!loading &&
-                !error &&
-                !continueItems.length &&
-                !views.length && (
-                  <Card className="p-10 text-center space-y-2">
-                    <Film className="w-10 h-10 text-muted mx-auto opacity-50" />
-                    <p className="text-sm font-semibold text-fg">Nothing to show yet</p>
-                    <p className="text-sm text-muted max-w-md mx-auto">
-                      Emby is reachable but this account has no libraries. Check library access for this
-                      Emby user.
-                    </p>
-                  </Card>
-                )}
+              {!loading && !error && !continueItems.length && !views.length && (
+                <EmptyState
+                  icon={Film}
+                  title="Nothing to show yet"
+                  body="This profile’s media account has no libraries yet. A parent can check library access in Settings."
+                />
+              )}
             </>
           )}
         </div>
@@ -693,13 +712,23 @@ export function MediaPage() {
           ) : (
             <>
               <div>
-                <p className="text-xs font-semibold text-muted uppercase tracking-wide">
-                  {browse.kind === 'library' ? 'Library' : browse.item.Type || 'Folder'}
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+                  {browse.kind === 'library'
+                    ? 'Library'
+                    : browse.item.Type === 'Series'
+                      ? 'Series'
+                      : browse.item.Type === 'Season'
+                        ? 'Season'
+                        : browse.item.Type || 'Folder'}
                 </p>
-                <h2 className="text-xl font-bold text-fg">
+                <h2 className="text-2xl font-bold text-fg tracking-tight mt-0.5">
                   {browse.kind === 'library' ? browse.view.Name : browse.title}
                 </h2>
-                {detailTotal > 0 && <p className="text-xs text-muted mt-0.5">{detailTotal} items</p>}
+                {detailTotal > 0 && (
+                  <p className="text-sm text-muted mt-1">
+                    {detailTotal} {detailTotal === 1 ? 'title' : 'titles'}
+                  </p>
+                )}
               </div>
               {detailLoading && !detailItems.length ? (
                 <div className="flex justify-center py-12 text-muted">
@@ -757,12 +786,12 @@ export function MediaPage() {
         </div>
       )}
 
-      <Card className="p-4 flex flex-wrap items-center justify-between gap-3">
+      <Card className="p-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl">
         <div>
-          <h2 className="text-sm font-bold text-fg">Comics</h2>
-          <p className="text-xs text-muted mt-0.5">Komga library in GreenHQ.</p>
+          <h2 className="text-sm font-bold text-fg tracking-tight">Comics</h2>
+          <p className="text-xs text-muted mt-0.5">Your family comic library</p>
         </div>
-        <Button size="sm" onClick={() => setView('comics')}>
+        <Button size="sm" variant="secondary" onClick={() => setView('comics')}>
           Open Comics
         </Button>
       </Card>
@@ -848,7 +877,7 @@ export function MediaPage() {
                       onClick={() => playExternal(focus)}
                     >
                       <ExternalLink className="w-4 h-4" />
-                      Emby
+                      Open externally
                     </Button>
                     {otherMembers.length > 0 && (
                       <Button
