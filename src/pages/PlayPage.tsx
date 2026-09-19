@@ -797,9 +797,9 @@ function C4Board({
         {statusText}
       </p>
 
-      {/* Column drop targets */}
-      <div className="max-w-[320px] mx-auto space-y-1">
-        <div className="grid grid-cols-7 gap-1">
+      {/* Board — full width up to ~36rem so discs are actually tappable */}
+      <div className="w-full max-w-[min(100%,36rem)] mx-auto space-y-2 flex-1 flex flex-col justify-center">
+        <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
           {Array.from({ length: C4_COLS }, (_, col) => {
             const can = myTurn && !busy && dropRow(game.board, col) >= 0;
             return (
@@ -809,12 +809,13 @@ function C4Board({
                 disabled={!can}
                 onClick={() => onCol(col)}
                 className={cn(
-                  'h-7 rounded-md text-[10px] font-bold',
+                  'h-9 sm:h-11 rounded-lg text-sm font-bold',
                   can
-                    ? 'bg-accent/20 text-accent hover:bg-accent/30'
+                    ? 'bg-accent/20 text-accent hover:bg-accent/30 active:scale-95'
                     : 'bg-surface-2/40 text-faint cursor-default',
                 )}
                 title={can ? `Drop in column ${col + 1}` : undefined}
+                aria-label={can ? `Drop in column ${col + 1}` : `Column ${col + 1}`}
               >
                 ▼
               </button>
@@ -822,7 +823,7 @@ function C4Board({
           })}
         </div>
         <div
-          className="grid grid-cols-7 gap-1 p-2 rounded-xl bg-blue-900/40 border border-blue-700/30"
+          className="grid grid-cols-7 gap-1.5 sm:gap-2 p-2.5 sm:p-3 rounded-2xl bg-blue-900/40 border border-blue-700/30 w-full"
           style={{ gridTemplateRows: `repeat(${C4_ROWS}, minmax(0, 1fr))` }}
         >
           {Array.from({ length: C4_ROWS }, (_, row) =>
@@ -837,12 +838,13 @@ function C4Board({
                   disabled={!(myTurn && !busy && dropRow(game.board, col) >= 0)}
                   onClick={() => onCol(col)}
                   className={cn(
-                    'aspect-square rounded-full border-2 flex items-center justify-center transition-transform',
-                    !cell && 'bg-surface/80 border-border/50',
+                    'aspect-square w-full min-h-[2.5rem] sm:min-h-[3.25rem] rounded-full border-2 flex items-center justify-center transition-transform',
+                    !cell && 'bg-surface/80 border-border/50 hover:border-accent/40',
                     cell === 'R' && 'bg-red-500 border-red-300 shadow-md',
                     cell === 'Y' && 'bg-amber-400 border-amber-200 shadow-md',
                     isWin && 'ring-2 ring-accent scale-105',
                   )}
+                  aria-label={`Row ${row + 1}, column ${col + 1}${cell ? `, ${cell === 'R' ? 'red' : 'yellow'}` : ''}`}
                 />
               );
             }),
