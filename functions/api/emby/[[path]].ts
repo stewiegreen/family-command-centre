@@ -1,11 +1,12 @@
 /**
- * Cloudflare Pages Function — Emby API proxy.
+ * Cloudflare Pages Function — Emby API proxy (browse + playback).
  *
  * Secrets (Cloudflare Pages env):
  *   EMBY_BASE_URL  e.g. https://media.example.com  (no trailing slash)
  *   EMBY_API_KEY   Emby API key — NEVER expose to the client
  *
- * Only an allowlisted set of GET paths is forwarded. Anything else → 404.
+ * GET: allowlisted library + stream paths.
+ * POST: allowlisted session progress endpoints only.
  */
 
 type Env = {
@@ -36,9 +37,26 @@ const ALLOWED_QUERY = new Set([
   'ImageTypeLimit',
   'ExcludeItemTypes',
   'Ids',
+  // Playback / stream
+  'Static',
+  'MediaSourceId',
+  'DeviceId',
+  'PlaySessionId',
+  'VideoCodec',
+  'AudioCodec',
+  'MaxStreamingBitrate',
+  'StartTimeTicks',
+  'Container',
+  'TranscodingProtocol',
+  'TranscodingContainer',
+  'AudioStreamIndex',
+  'SubtitleStreamIndex',
+  'VideoStreamIndex',
+  'SubtitleMethod',
+  'api_key', // ignored client-side; we always set server key
 ]);
 
-function pathAllowed(joined: string): boolean {
+function pathAllowedGet(joined: string): boolean {
   if (joined === 'System/Info/Public') return true;
   if (/^Users\/[^/]+\/Views$/.test(joined)) return true;
   if (/^Users\/[^/]+\/Items\/Resume$/.test(joined)) return true;
@@ -47,48 +65,127 @@ function pathAllowed(joined: string): boolean {
   if (/^Users\/[^/]+\/Items\/[^/]+$/.test(joined)) return true;
   if (joined === 'Shows/NextUp') return true;
   if (/^Items\/[^/]+\/Images\/[^/]+$/.test(joined)) return true;
+  if (/^Items\/[^/]+\/PlaybackInfo$/.test(joined)) return true;
+  // Video + HLS segments under Videos/{id}/...
+  if (/^Videos\/[^/]+(\/.*)?$/.test(joined)) return true;
+  if (/^Audio\/[^/]+(\/.*)?$/.test(joined)) return true;
   return false;
 }
 
-export const onRequestGet: PagesFunction<Env> = async (context) => {
-  const env = context.env;
-  if (!env.EMBY_BASE_URL || !env.EMBY_API_KEY) {
-    return new Response(
-      JSON.stringify({ error: 'Emby proxy not configured (EMBY_BASE_URL / EMBY_API_KEY)' }),
-      { status: 503, headers: { 'Content-Type': 'application/json' } },
-    );
-  }
+function pathAllowedPost(joined: string): boolean {
+  if (joined === 'Sessions/Playing') return true;
+  if (joined === 'Sessions/Playing/Progress') return true;
+  if (joined === 'Sessions/Playing/Stopped') return true;
+  if (/^Items\/[^/]+\/PlaybackInfo$/.test(joined)) return true;
+  return false;
+}
 
-  const raw = context.params.path;
-  const segments = Array.isArray(raw) ? raw : raw ? [raw] : [];
-  const joined = segments.map(decodeURIComponent).join('/');
-  if (!pathAllowed(joined)) {
-    return new Response('Not found', { status: 404 });
-  }
-
+function upstreamUrl(env: Env, joined: string, request: Request): URL {
   const base = env.EMBY_BASE_URL.replace(/\/+$/, '');
   const upstreamPath =
     joined.startsWith('System/') ||
     joined.startsWith('Users/') ||
     joined.startsWith('Items/') ||
-    joined.startsWith('Shows/')
+    joined.startsWith('Shows/') ||
+    joined.startsWith('Videos/') ||
+    joined.startsWith('Audio/') ||
+    joined.startsWith('Sessions/')
       ? `/emby/${joined}`
       : `/${joined}`;
   const url = new URL(`${base}${upstreamPath}`);
-
-  const incoming = new URL(context.request.url);
+  const incoming = new URL(request.url);
   for (const [k, v] of incoming.searchParams) {
+    if (k === 'api_key') continue;
     if (ALLOWED_QUERY.has(k)) url.searchParams.set(k, v);
   }
   url.searchParams.set('api_key', env.EMBY_API_KEY);
+  return url;
+}
+
+function notConfigured(): Response {
+  return new Response(
+    JSON.stringify({ error: 'Emby proxy not configured (EMBY_BASE_URL / EMBY_API_KEY)' }),
+    { status: 503, headers: { 'Content-Type': 'application/json' } },
+  );
+}
+
+function pathFromContext(context: { params: { path?: string | string[] } }): string {
+  const raw = context.params.path;
+  const segments = Array.isArray(raw) ? raw : raw ? [raw] : [];
+  return segments.map(decodeURIComponent).join('/');
+}
+
+export const onRequestGet: PagesFunction<Env> = async (context) => {
+  const env = context.env;
+  if (!env.EMBY_BASE_URL || !env.EMBY_API_KEY) return notConfigured();
+
+  const joined = pathFromContext(context);
+  if (!pathAllowedGet(joined)) {
+    return new Response('Not found', { status: 404 });
+  }
+
+  const url = upstreamUrl(env, joined, context.request);
+  const headers: Record<string, string> = {
+    Accept: context.request.headers.get('Accept') || '*/*',
+  };
+  const range = context.request.headers.get('Range');
+  if (range) headers.Range = range;
+
+  let embyRes: Response;
+  try {
+    embyRes = await fetch(url.toString(), { method: 'GET', headers });
+  } catch (err) {
+    return new Response(
+      JSON.stringify({
+        error: 'Upstream Emby request failed',
+        detail: err instanceof Error ? err.message : String(err),
+      }),
+      { status: 502, headers: { 'Content-Type': 'application/json' } },
+    );
+  }
+
+  const out = new Headers();
+  for (const h of [
+    'Content-Type',
+    'Content-Length',
+    'Content-Range',
+    'Accept-Ranges',
+    'Cache-Control',
+  ]) {
+    const v = embyRes.headers.get(h);
+    if (v) out.set(h, v);
+  }
+  if (/\/Images\//.test(joined)) {
+    out.set('Cache-Control', 'public, max-age=3600');
+  }
+  // Allow media element to consume stream
+  out.set('Access-Control-Allow-Origin', '*');
+  out.set('Access-Control-Expose-Headers', 'Content-Range, Accept-Ranges, Content-Length');
+
+  return new Response(embyRes.body, { status: embyRes.status, headers: out });
+};
+
+export const onRequestPost: PagesFunction<Env> = async (context) => {
+  const env = context.env;
+  if (!env.EMBY_BASE_URL || !env.EMBY_API_KEY) return notConfigured();
+
+  const joined = pathFromContext(context);
+  if (!pathAllowedPost(joined)) {
+    return new Response('Not found', { status: 404 });
+  }
+
+  const url = upstreamUrl(env, joined, context.request);
+  const body = await context.request.arrayBuffer();
 
   let embyRes: Response;
   try {
     embyRes = await fetch(url.toString(), {
-      method: 'GET',
+      method: 'POST',
       headers: {
-        Accept: context.request.headers.get('Accept') || 'application/json',
+        Accept: 'application/json',
+        'Content-Type': context.request.headers.get('Content-Type') || 'application/json',
       },
+      body,
     });
   } catch (err) {
     return new Response(
@@ -103,12 +200,17 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   const headers = new Headers();
   const ct = embyRes.headers.get('Content-Type');
   if (ct) headers.set('Content-Type', ct);
-  const cache = embyRes.headers.get('Cache-Control');
-  if (cache) headers.set('Cache-Control', cache);
-  // Images can be cached at the edge briefly
-  if (/\/Images\//.test(joined)) {
-    headers.set('Cache-Control', 'public, max-age=3600');
-  }
-
   return new Response(embyRes.body, { status: embyRes.status, headers });
 };
+
+/** CORS preflight for video element / fetch */
+export const onRequestOptions: PagesFunction = async () =>
+  new Response(null, {
+    status: 204,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Range, Accept',
+      'Access-Control-Max-Age': '86400',
+    },
+  });

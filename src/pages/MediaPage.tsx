@@ -38,6 +38,7 @@ import {
   type EmbyItem,
   type EmbyView,
 } from '../lib/emby';
+import { VideoPlayer } from '../components/VideoPlayer';
 import { cn } from '../lib/cn';
 
 type Tab = 'home' | 'libraries' | 'search';
@@ -192,10 +193,25 @@ export function MediaPage() {
 
   const [focus, setFocus] = useState<EmbyItem | null>(null);
   const [focusLoading, setFocusLoading] = useState(false);
+  const [watching, setWatching] = useState<EmbyItem | null>(null);
 
   const canPlay = Boolean(webUrl && serverId);
 
   const play = useCallback(
+    (item: EmbyItem) => {
+      // In-app player for video titles; still need Emby user id
+      if (embyUserId && (item.Type === 'Movie' || item.Type === 'Episode' || !item.Type)) {
+        setFocus(null);
+        setWatching(item);
+        return;
+      }
+      if (!webUrl || !serverId) return;
+      openEmbyItem({ webUrl, serverId, itemId: item.Id });
+    },
+    [webUrl, serverId, embyUserId],
+  );
+
+  const playExternal = useCallback(
     (item: EmbyItem) => {
       if (!webUrl || !serverId) return;
       openEmbyItem({ webUrl, serverId, itemId: item.Id });
@@ -629,6 +645,19 @@ export function MediaPage() {
         </Button>
       </Card>
 
+      {watching && embyUserId && (
+        <VideoPlayer
+          item={watching}
+          userId={embyUserId}
+          webUrl={webUrl}
+          serverId={serverId}
+          onClose={() => {
+            setWatching(null);
+            void loadHome();
+          }}
+        />
+      )}
+
       {/* Detail / Play modal */}
       <Modal open={!!focus} onClose={() => setFocus(null)} title={focus ? shortTitle(focus) : 'Title'}>
         {focus && (
@@ -660,20 +689,26 @@ export function MediaPage() {
             <div className="flex flex-wrap gap-2">
               <Button
                 className="flex-1 min-w-[8rem]"
-                disabled={!canPlay}
+                disabled={!embyUserId}
                 onClick={() => play(focus)}
               >
                 <Play className="w-4 h-4" />
-                {playedPercent(focus) > 0 && playedPercent(focus) < 100 ? 'Resume in Emby' : 'Play in Emby'}
+                {playedPercent(focus) > 0 && playedPercent(focus) < 100 ? 'Resume' : 'Play'}
+              </Button>
+              <Button
+                variant="secondary"
+                disabled={!canPlay}
+                onClick={() => playExternal(focus)}
+              >
+                <ExternalLink className="w-4 h-4" />
+                Emby
               </Button>
               <Button variant="secondary" onClick={() => setFocus(null)}>
                 Close
               </Button>
             </div>
-            {!canPlay && (
-              <p className="text-xs text-muted">
-                Set the Emby web URL in Settings (and ensure the server is reachable) to open titles.
-              </p>
+            {!embyUserId && (
+              <p className="text-xs text-muted">Link an Emby user id on this profile to play in GreenHQ.</p>
             )}
           </div>
         )}

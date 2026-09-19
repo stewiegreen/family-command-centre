@@ -276,3 +276,182 @@ export function openEmbyItem(opts: {
 export function resolveEmbyWebUrl(settings: Settings): string {
   return (settings.emby?.webUrl || settings.embyUrl || '').replace(/\/+$/, '');
 }
+
+// ─── Playback (Phase B) ───────────────────────────────────────────────
+
+const PROXY_ORIGIN = () =>
+  typeof window !== 'undefined' ? window.location.origin : 'http://local';
+
+export type EmbyMediaSource = {
+  Id: string;
+  Name?: string;
+  Container?: string;
+  SupportsDirectPlay?: boolean;
+  SupportsDirectStream?: boolean;
+  SupportsTranscoding?: boolean;
+  DirectStreamUrl?: string;
+  TranscodingUrl?: string;
+  RunTimeTicks?: number;
+  DefaultAudioStreamIndex?: number;
+  DefaultSubtitleStreamIndex?: number;
+};
+
+export type EmbyPlaybackInfo = {
+  MediaSources?: EmbyMediaSource[];
+  PlaySessionId?: string;
+};
+
+export function embyDeviceId(): string {
+  try {
+    const key = 'greenhq-emby-device-id';
+    let id = localStorage.getItem(key);
+    if (!id) {
+      id = `ghq-${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
+      localStorage.setItem(key, id);
+    }
+    return id;
+  } catch {
+    return 'greenhq-web';
+  }
+}
+
+export async function embyPlaybackInfo(
+  userId: string,
+  itemId: string,
+): Promise<EmbyPlaybackInfo> {
+  return proxyGet<EmbyPlaybackInfo>(`Items/${encodeURIComponent(itemId)}/PlaybackInfo`, {
+    UserId: userId,
+  });
+}
+
+/**
+ * Prefer progressive MP4-ish stream through the proxy (works in most browsers
+ * when Emby can direct-stream or transcode to a browser-friendly format).
+ */
+export function embyStreamUrl(opts: {
+  itemId: string;
+  userId: string;
+  mediaSourceId?: string;
+  playSessionId?: string;
+  startTicks?: number;
+  maxBitrate?: number;
+}): string {
+  const q = new URLSearchParams();
+  q.set('UserId', opts.userId);
+  q.set('DeviceId', embyDeviceId());
+  q.set('Static', 'true');
+  if (opts.mediaSourceId) q.set('MediaSourceId', opts.mediaSourceId);
+  if (opts.playSessionId) q.set('PlaySessionId', opts.playSessionId);
+  if (opts.startTicks && opts.startTicks > 0) q.set('StartTimeTicks', String(Math.floor(opts.startTicks)));
+  if (opts.maxBitrate) q.set('MaxStreamingBitrate', String(opts.maxBitrate));
+  // Encourage browser-playable output when Static direct fails server-side Emby may still remux
+  q.set('Container', 'mp4');
+  return `${PROXY}/Videos/${encodeURIComponent(opts.itemId)}/stream?${q.toString()}`;
+}
+
+/** HLS master — Safari (and some others) can play natively. */
+export function embyHlsUrl(opts: {
+  itemId: string;
+  userId: string;
+  mediaSourceId?: string;
+  playSessionId?: string;
+}): string {
+  const q = new URLSearchParams();
+  q.set('UserId', opts.userId);
+  q.set('DeviceId', embyDeviceId());
+  if (opts.mediaSourceId) q.set('MediaSourceId', opts.mediaSourceId);
+  if (opts.playSessionId) q.set('PlaySessionId', opts.playSessionId);
+  return `${PROXY}/Videos/${encodeURIComponent(opts.itemId)}/master.m3u8?${q.toString()}`;
+}
+
+/** Transcode-friendly progressive stream when direct Static fails. */
+export function embyTranscodeStreamUrl(opts: {
+  itemId: string;
+  userId: string;
+  mediaSourceId?: string;
+  playSessionId?: string;
+  startTicks?: number;
+}): string {
+  const q = new URLSearchParams();
+  q.set('UserId', opts.userId);
+  q.set('DeviceId', embyDeviceId());
+  q.set('VideoCodec', 'h264');
+  q.set('AudioCodec', 'aac');
+  q.set('MaxStreamingBitrate', '8000000');
+  q.set('Container', 'mp4');
+  if (opts.mediaSourceId) q.set('MediaSourceId', opts.mediaSourceId);
+  if (opts.playSessionId) q.set('PlaySessionId', opts.playSessionId);
+  if (opts.startTicks && opts.startTicks > 0) q.set('StartTimeTicks', String(Math.floor(opts.startTicks)));
+  return `${PROXY}/Videos/${encodeURIComponent(opts.itemId)}/stream?${q.toString()}`;
+}
+
+async function postSession(path: string, body: Record<string, unknown>): Promise<void> {
+  const res = await fetch(`${PROXY_ORIGIN()}${PROXY}/${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    // Non-fatal for progress — playback still works
+    console.warn('Emby session post failed', path, res.status);
+  }
+}
+
+export async function embyReportStart(opts: {
+  itemId: string;
+  mediaSourceId?: string;
+  playSessionId?: string;
+  positionTicks?: number;
+}): Promise<void> {
+  await postSession('Sessions/Playing', {
+    ItemId: opts.itemId,
+    MediaSourceId: opts.mediaSourceId,
+    PlaySessionId: opts.playSessionId,
+    PositionTicks: opts.positionTicks ?? 0,
+    CanSeek: true,
+    IsPaused: false,
+    IsMuted: false,
+  });
+}
+
+export async function embyReportProgress(opts: {
+  itemId: string;
+  mediaSourceId?: string;
+  playSessionId?: string;
+  positionTicks: number;
+  isPaused?: boolean;
+}): Promise<void> {
+  await postSession('Sessions/Playing/Progress', {
+    ItemId: opts.itemId,
+    MediaSourceId: opts.mediaSourceId,
+    PlaySessionId: opts.playSessionId,
+    PositionTicks: Math.max(0, Math.floor(opts.positionTicks)),
+    IsPaused: !!opts.isPaused,
+    CanSeek: true,
+    IsMuted: false,
+  });
+}
+
+export async function embyReportStop(opts: {
+  itemId: string;
+  mediaSourceId?: string;
+  playSessionId?: string;
+  positionTicks: number;
+}): Promise<void> {
+  await postSession('Sessions/Playing/Stopped', {
+    ItemId: opts.itemId,
+    MediaSourceId: opts.mediaSourceId,
+    PlaySessionId: opts.playSessionId,
+    PositionTicks: Math.max(0, Math.floor(opts.positionTicks)),
+  });
+}
+
+/** Convert Emby ticks (10M / second) ↔ seconds */
+export function ticksToSeconds(ticks?: number): number {
+  if (!ticks || ticks <= 0) return 0;
+  return ticks / 10_000_000;
+}
+
+export function secondsToTicks(seconds: number): number {
+  return Math.floor(Math.max(0, seconds) * 10_000_000);
+}
