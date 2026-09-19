@@ -4,7 +4,7 @@ import type { Settings } from '../types';
 const PROXY = '/api/emby';
 
 const DETAIL_FIELDS =
-  'Overview,UserData,PrimaryImageAspectRatio,SeriesName,ProductionYear,ChildCount,RecursiveItemCount,RunTimeTicks,OfficialRating,Genres,CommunityRating,ParentId,SeasonName,IndexNumber,ParentIndexNumber';
+  'Overview,UserData,PrimaryImageAspectRatio,SeriesName,ProductionYear,ChildCount,RecursiveItemCount,RunTimeTicks,OfficialRating,Genres,CommunityRating,ParentId,SeasonName,IndexNumber,ParentIndexNumber,ParentLogoItemId,ParentLogoImageTag,ParentBackdropItemId,ParentBackdropImageTags,SeriesPrimaryImageTag,SeriesId';
 
 export type EmbyUserData = {
   PlaybackPositionTicks?: number;
@@ -31,8 +31,20 @@ export type EmbyItem = {
   ParentIndexNumber?: number;
   ParentId?: string;
   UserData?: EmbyUserData;
-  ImageTags?: { Primary?: string; Backdrop?: string };
+  ImageTags?: {
+    Primary?: string;
+    Backdrop?: string;
+    Thumb?: string;
+    Logo?: string;
+    Banner?: string;
+  };
   PrimaryImageItemId?: string;
+  SeriesId?: string;
+  SeriesPrimaryImageTag?: string;
+  ParentLogoItemId?: string;
+  ParentLogoImageTag?: string;
+  ParentBackdropItemId?: string;
+  ParentBackdropImageTags?: string[];
   CollectionType?: string;
 };
 
@@ -94,10 +106,14 @@ export async function embyResume(userId: string, limit = 16): Promise<EmbyItem[]
   return data.Items || [];
 }
 
-export async function embyLatest(userId: string, limit = 16): Promise<EmbyItem[]> {
+export async function embyLatest(
+  userId: string,
+  limit = 16,
+  parentId?: string,
+): Promise<EmbyItem[]> {
   const data = await proxyGet<EmbyItemsResponse | EmbyItem[]>(
     `Users/${encodeURIComponent(userId)}/Items/Latest`,
-    { Limit: limit, Fields: DETAIL_FIELDS },
+    { Limit: limit, Fields: DETAIL_FIELDS, ParentId: parentId },
   );
   if (Array.isArray(data)) return data;
   return data.Items || [];
@@ -188,10 +204,120 @@ export async function embyPublicInfo(): Promise<EmbyPublicInfo> {
   return proxyGet<EmbyPublicInfo>('System/Info/Public');
 }
 
+export type EmbyImageType = 'Primary' | 'Backdrop' | 'Thumb' | 'Logo' | 'Banner';
+
+export type EmbyImageOpts = {
+  type?: EmbyImageType;
+  maxWidth?: number;
+  maxHeight?: number;
+  fillWidth?: number;
+  fillHeight?: number;
+  tag?: string;
+  /** For Logo — helps Emby crop whitespace */
+  background?: string;
+};
+
 /** Image URL via same-origin proxy (api_key never leaves the edge). */
-export function embyImageUrl(itemId: string, maxWidth = 320, imageType = 'Primary'): string {
-  const q = new URLSearchParams({ maxWidth: String(maxWidth) });
-  return `${PROXY}/Items/${encodeURIComponent(itemId)}/Images/${encodeURIComponent(imageType)}?${q}`;
+export function embyImageUrl(itemId: string, opts: EmbyImageOpts | number = 320, imageType: EmbyImageType = 'Primary'): string {
+  // Back-compat: embyImageUrl(id, 320) or embyImageUrl(id, 320, 'Thumb')
+  let o: EmbyImageOpts;
+  if (typeof opts === 'number') {
+    o = { maxWidth: opts, type: imageType };
+  } else {
+    o = opts;
+  }
+  const type = o.type || 'Primary';
+  const q = new URLSearchParams();
+  if (o.maxWidth) q.set('maxWidth', String(o.maxWidth));
+  if (o.maxHeight) q.set('maxHeight', String(o.maxHeight));
+  if (o.fillWidth) q.set('fillWidth', String(o.fillWidth));
+  if (o.fillHeight) q.set('fillHeight', String(o.fillHeight));
+  if (o.tag) q.set('tag', o.tag);
+  if (o.background) q.set('background', o.background);
+  if (!o.maxWidth && !o.maxHeight && !o.fillWidth && !o.fillHeight) {
+    q.set('maxWidth', '400');
+  }
+  return `${PROXY}/Items/${encodeURIComponent(itemId)}/Images/${encodeURIComponent(type)}?${q}`;
+}
+
+/** Continue Watching / resume — prefer Thumb, then Backdrop, then Primary. */
+export function embyThumbUrl(item: EmbyItem, maxWidth = 480): string {
+  if (item.ImageTags?.Thumb) {
+    return embyImageUrl(item.Id, { type: 'Thumb', maxWidth, tag: item.ImageTags.Thumb });
+  }
+  if (item.ImageTags?.Backdrop) {
+    return embyImageUrl(item.Id, { type: 'Backdrop', maxWidth, tag: item.ImageTags.Backdrop });
+  }
+  if (item.ParentBackdropItemId && item.ParentBackdropImageTags?.[0]) {
+    return embyImageUrl(item.ParentBackdropItemId, {
+      type: 'Backdrop',
+      maxWidth,
+      tag: item.ParentBackdropImageTags[0],
+    });
+  }
+  return embyImageUrl(item.Id, { type: 'Primary', maxWidth });
+}
+
+/** Portrait poster for Latest / library grids. */
+export function embyPosterUrl(item: EmbyItem, maxWidth = 320): string {
+  if (item.ImageTags?.Primary) {
+    return embyImageUrl(item.Id, { type: 'Primary', maxWidth, tag: item.ImageTags.Primary });
+  }
+  if (item.SeriesId && item.SeriesPrimaryImageTag) {
+    return embyImageUrl(item.SeriesId, { type: 'Primary', maxWidth, tag: item.SeriesPrimaryImageTag });
+  }
+  return embyImageUrl(item.Id, { type: 'Primary', maxWidth });
+}
+
+/** Detail hero backdrop. */
+export function embyBackdropUrl(item: EmbyItem, maxWidth = 1280): string {
+  if (item.ImageTags?.Backdrop) {
+    return embyImageUrl(item.Id, { type: 'Backdrop', maxWidth, tag: item.ImageTags.Backdrop });
+  }
+  if (item.ParentBackdropItemId && item.ParentBackdropImageTags?.[0]) {
+    return embyImageUrl(item.ParentBackdropItemId, {
+      type: 'Backdrop',
+      maxWidth,
+      tag: item.ParentBackdropImageTags[0],
+    });
+  }
+  return embyPosterUrl(item, maxWidth);
+}
+
+/**
+ * Logo as visual title — item logo → parent/series logo → null (caller uses text).
+ */
+export function embyBestLogoUrl(item: EmbyItem, maxHeight = 96): string | null {
+  if (item.ImageTags?.Logo) {
+    return embyImageUrl(item.Id, {
+      type: 'Logo',
+      maxHeight,
+      tag: item.ImageTags.Logo,
+      background: 'transparent',
+    });
+  }
+  if (item.ParentLogoItemId && item.ParentLogoImageTag) {
+    return embyImageUrl(item.ParentLogoItemId, {
+      type: 'Logo',
+      maxHeight,
+      tag: item.ParentLogoImageTag,
+      background: 'transparent',
+    });
+  }
+  return null;
+}
+
+
+export function libraryKindLabel(view: EmbyView): string {
+  const t = (view.CollectionType || '').toLowerCase();
+  if (t === 'movies') return 'Movies';
+  if (t === 'tvshows') return 'TV';
+  if (t === 'music') return 'Music';
+  if (t === 'homevideos' || t === 'homevideos') return 'Home videos';
+  if (t === 'boxsets') return 'Collections';
+  if (t === 'playlists') return 'Playlists';
+  if (t === 'livetv') return 'Live TV';
+  return view.Name || 'Library';
 }
 
 export function playedPercent(item: EmbyItem): number {
@@ -231,6 +357,21 @@ export function runtimeLabel(item: EmbyItem): string | null {
   const h = Math.floor(mins / 60);
   const m = mins % 60;
   return m ? `${h}h ${m}m` : `${h}h`;
+}
+
+export function remainingLabel(item: EmbyItem): string | null {
+  const ticks = item.RunTimeTicks;
+  if (!ticks || ticks <= 0) return null;
+  const pct = item.UserData?.PlayedPercentage;
+  if (pct == null || pct <= 0 || pct >= 100) {
+    return runtimeLabel(item);
+  }
+  const left = Math.round((ticks * (100 - pct)) / 100 / 600_000_000);
+  if (left <= 0) return null;
+  if (left < 60) return `${left}m left`;
+  const h = Math.floor(left / 60);
+  const m = left % 60;
+  return m ? `${h}h ${m}m left` : `${h}h left`;
 }
 
 /**

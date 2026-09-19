@@ -54,6 +54,9 @@ const ALLOWED_QUERY = new Set([
   'VideoStreamIndex',
   'SubtitleMethod',
   'api_key', // ignored client-side; we always set server key
+  'fillWidth',
+  'fillHeight',
+  'background',
 ]);
 
 function pathAllowedGet(joined: string): boolean {
