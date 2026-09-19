@@ -105,9 +105,11 @@ function runtimeFromItem(item: EmbyItem): string | null {
  */
 export function MediaCard({ item, onOpen, variant = 'poster', className }: Props) {
   const pct = playedPercent(item);
-  const isContinue = variant === 'continue';
-  const title = primaryTitle(item, variant);
-  const sub = secondaryLine(item, variant);
+  // Episodes always use landscape thumb art (not portrait posters).
+  const isEpisode = item.Type === 'Episode';
+  const isContinue = variant === 'continue' || isEpisode;
+  const title = primaryTitle(item, isContinue ? 'continue' : variant);
+  const sub = secondaryLine(item, isContinue ? 'continue' : variant);
   const left = isContinue ? remainingLabel(item) : null;
   const img = isContinue ? embyThumbUrl(item, 640) : embyPosterUrl(item, 360);
 

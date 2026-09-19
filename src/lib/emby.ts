@@ -435,6 +435,7 @@ export type EmbyMediaSource = {
   RunTimeTicks?: number;
   DefaultAudioStreamIndex?: number;
   DefaultSubtitleStreamIndex?: number;
+  MediaStreams?: { Type?: string; Index?: number; Codec?: string; IsDefault?: boolean }[];
 };
 
 export type EmbyPlaybackInfo = {
@@ -476,42 +477,30 @@ export function embyStreamUrl(opts: {
   playSessionId?: string;
   startTicks?: number;
   maxBitrate?: number;
+  audioStreamIndex?: number;
 }): string {
   const q = new URLSearchParams();
   q.set('UserId', opts.userId);
   q.set('DeviceId', embyDeviceId());
+  // Static original file often has AC3/DTS audio browsers cannot play → silent video.
+  // Prefer container remux when possible; still pass AudioStreamIndex.
   q.set('Static', 'true');
   if (opts.mediaSourceId) q.set('MediaSourceId', opts.mediaSourceId);
   if (opts.playSessionId) q.set('PlaySessionId', opts.playSessionId);
   if (opts.startTicks && opts.startTicks > 0) q.set('StartTimeTicks', String(Math.floor(opts.startTicks)));
   if (opts.maxBitrate) q.set('MaxStreamingBitrate', String(opts.maxBitrate));
-  // Encourage browser-playable output when Static direct fails server-side Emby may still remux
-  q.set('Container', 'mp4');
+  if (opts.audioStreamIndex != null) q.set('AudioStreamIndex', String(opts.audioStreamIndex));
   return `${PROXY}/Videos/${encodeURIComponent(opts.itemId)}/stream?${q.toString()}`;
 }
 
-/** HLS master — Safari (and some others) can play natively. */
+
 export function embyHlsUrl(opts: {
   itemId: string;
   userId: string;
   mediaSourceId?: string;
   playSessionId?: string;
-}): string {
-  const q = new URLSearchParams();
-  q.set('UserId', opts.userId);
-  q.set('DeviceId', embyDeviceId());
-  if (opts.mediaSourceId) q.set('MediaSourceId', opts.mediaSourceId);
-  if (opts.playSessionId) q.set('PlaySessionId', opts.playSessionId);
-  return `${PROXY}/Videos/${encodeURIComponent(opts.itemId)}/master.m3u8?${q.toString()}`;
-}
-
-/** Transcode-friendly progressive stream when direct Static fails. */
-export function embyTranscodeStreamUrl(opts: {
-  itemId: string;
-  userId: string;
-  mediaSourceId?: string;
-  playSessionId?: string;
   startTicks?: number;
+  audioStreamIndex?: number;
 }): string {
   const q = new URLSearchParams();
   q.set('UserId', opts.userId);
@@ -519,12 +508,45 @@ export function embyTranscodeStreamUrl(opts: {
   q.set('VideoCodec', 'h264');
   q.set('AudioCodec', 'aac');
   q.set('MaxStreamingBitrate', '8000000');
-  q.set('Container', 'mp4');
+  q.set('TranscodingProtocol', 'hls');
+  q.set('SegmentContainer', 'ts');
   if (opts.mediaSourceId) q.set('MediaSourceId', opts.mediaSourceId);
   if (opts.playSessionId) q.set('PlaySessionId', opts.playSessionId);
   if (opts.startTicks && opts.startTicks > 0) q.set('StartTimeTicks', String(Math.floor(opts.startTicks)));
-  return `${PROXY}/Videos/${encodeURIComponent(opts.itemId)}/stream?${q.toString()}`;
+  if (opts.audioStreamIndex != null) q.set('AudioStreamIndex', String(opts.audioStreamIndex));
+  return `${PROXY}/Videos/${encodeURIComponent(opts.itemId)}/master.m3u8?${q.toString()}`;
 }
+
+
+/**
+ * Browser-safe progressive stream: H.264 + AAC in MP4.
+ * Use this as the default web path — Static originals often have no usable audio in Chrome.
+ */
+export function embyTranscodeStreamUrl(opts: {
+  itemId: string;
+  userId: string;
+  mediaSourceId?: string;
+  playSessionId?: string;
+  startTicks?: number;
+  audioStreamIndex?: number;
+}): string {
+  const q = new URLSearchParams();
+  q.set('UserId', opts.userId);
+  q.set('DeviceId', embyDeviceId());
+  q.set('VideoCodec', 'h264');
+  q.set('AudioCodec', 'aac');
+  q.set('AudioBitrate', '192000');
+  q.set('MaxStreamingBitrate', '8000000');
+  q.set('Container', 'mp4');
+  q.set('TranscodingContainer', 'mp4');
+  q.set('TranscodingProtocol', 'http');
+  if (opts.mediaSourceId) q.set('MediaSourceId', opts.mediaSourceId);
+  if (opts.playSessionId) q.set('PlaySessionId', opts.playSessionId);
+  if (opts.startTicks && opts.startTicks > 0) q.set('StartTimeTicks', String(Math.floor(opts.startTicks)));
+  if (opts.audioStreamIndex != null) q.set('AudioStreamIndex', String(opts.audioStreamIndex));
+  return `${PROXY}/Videos/${encodeURIComponent(opts.itemId)}/stream.mp4?${q.toString()}`;
+}
+
 
 async function postSession(path: string, body: Record<string, unknown>): Promise<void> {
   const res = await fetch(`${PROXY_ORIGIN()}${PROXY}/${path}`, {

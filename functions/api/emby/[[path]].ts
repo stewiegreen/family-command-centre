@@ -50,6 +50,8 @@ const ALLOWED_QUERY = new Set([
   'TranscodingProtocol',
   'TranscodingContainer',
   'AudioStreamIndex',
+  'AudioBitrate',
+  'SegmentContainer',
   'SubtitleStreamIndex',
   'VideoStreamIndex',
   'SubtitleMethod',
@@ -145,6 +147,57 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       }),
       { status: 502, headers: { 'Content-Type': 'application/json' } },
     );
+  }
+
+  const ct = embyRes.headers.get('Content-Type') || '';
+  const isPlaylist =
+    /mpegurl|m3u8/i.test(ct) ||
+    joined.endsWith('.m3u8') ||
+    joined.includes('master.m3u8');
+
+  // HLS playlists often contain absolute Emby URLs — rewrite so the browser
+  // keeps hitting our proxy (with API key) for every segment.
+  if (isPlaylist && embyRes.ok) {
+    const text = await embyRes.text();
+    const base = env.EMBY_BASE_URL.replace(/\/+$/, '');
+    const rewritten = text
+      .split('\n')
+      .map((line) => {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith('#')) return line;
+        // Absolute Emby URL → relative proxy path
+        if (trimmed.startsWith(base)) {
+          const path = trimmed.slice(base.length).replace(/^\//, '');
+          return `/api/emby/${path}`;
+        }
+        if (/^https?:\/\//i.test(trimmed)) {
+          try {
+            const u = new URL(trimmed);
+            const baseHost = new URL(base).host;
+            if (u.host === baseHost) {
+              return `/api/emby${u.pathname}${u.search}`;
+            }
+          } catch {
+            /* keep */
+          }
+          return line;
+        }
+        // Relative segment path (e.g. Videos/id/hls1/seg.ts?...)
+        if (!trimmed.startsWith('/api/emby')) {
+          const path = trimmed.replace(/^\//, '');
+          if (path.startsWith('Videos/') || path.startsWith('Audio/')) {
+            return `/api/emby/${path}`;
+          }
+        }
+        return line;
+      })
+      .join('\n');
+
+    const out = new Headers();
+    out.set('Content-Type', ct || 'application/vnd.apple.mpegurl');
+    out.set('Access-Control-Allow-Origin', '*');
+    out.set('Cache-Control', 'no-store');
+    return new Response(rewritten, { status: embyRes.status, headers: out });
   }
 
   const out = new Headers();

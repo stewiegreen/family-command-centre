@@ -63,6 +63,7 @@ export function VideoPlayer({ item, userId, webUrl, serverId, onClose }: Props) 
   const lastTicks = useRef(0);
   const mediaSourceId = useRef<string | undefined>(undefined);
   const playSessionId = useRef<string | undefined>(undefined);
+  const audioStreamIndex = useRef<number | undefined>(undefined);
   const modeRef = useRef<StreamMode>('static');
   const startedRef = useRef(false);
 
@@ -87,13 +88,14 @@ export function VideoPlayer({ item, userId, webUrl, serverId, onClose }: Props) 
   }, []);
 
   const buildSrc = useCallback(
-    (mode: StreamMode, msId?: string, session?: string) => {
+    (mode: StreamMode, msId?: string, session?: string, audioIdx?: number) => {
       const common = {
         itemId: item.Id,
         userId,
         mediaSourceId: msId,
         playSessionId: session,
         startTicks: startAt > 0 ? secondsToTicks(startAt) : undefined,
+        audioStreamIndex: audioIdx,
       };
       if (mode === 'hls') return embyHlsUrl(common);
       if (mode === 'transcode') return embyTranscodeStreamUrl(common);
@@ -112,6 +114,7 @@ export function VideoPlayer({ item, userId, webUrl, serverId, onClose }: Props) 
     void (async () => {
       let msId: string | undefined;
       let session: string | undefined;
+      let audioIdx: number | undefined;
       try {
         const info = await embyPlaybackInfo(userId, item.Id);
         if (cancelled) return;
@@ -120,14 +123,20 @@ export function VideoPlayer({ item, userId, webUrl, serverId, onClose }: Props) 
         session = info.PlaySessionId;
         mediaSourceId.current = msId;
         playSessionId.current = session;
+        audioIdx =
+          src0?.DefaultAudioStreamIndex ??
+          src0?.MediaStreams?.find((s) => s.Type === 'Audio')?.Index;
+        audioStreamIndex.current = audioIdx;
       } catch {
         /* PlaybackInfo optional — still try stream */
       }
 
-      const mode: StreamMode = prefersHls() ? 'hls' : 'static';
+      // Prefer H.264+AAC transcode so Chrome/Firefox get real audio (Static often = silent AC3/DTS).
+      // Safari can try HLS first (also requests AAC).
+      const mode: StreamMode = prefersHls() ? 'hls' : 'transcode';
       modeRef.current = mode;
       if (cancelled) return;
-      setSrc(buildSrc(mode, msId, session));
+      setSrc(buildSrc(mode, msId, session, audioIdx));
       setLoading(false);
       bumpUi();
     })();
@@ -183,12 +192,12 @@ export function VideoPlayer({ item, userId, webUrl, serverId, onClose }: Props) 
 
   const tryNextMode = useCallback(() => {
     const order: StreamMode[] = prefersHls()
-      ? ['hls', 'static', 'transcode']
-      : ['static', 'transcode', 'hls'];
+      ? ['hls', 'transcode', 'static']
+      : ['transcode', 'static', 'hls'];
     const idx = order.indexOf(modeRef.current);
     const next = order[idx + 1];
     if (!next) {
-      setError('This title could not be played in GreenHQ. Open it in Emby instead.');
+      setError('Could not play this title in the browser. Try Open in Emby.');
       setLoading(false);
       return;
     }
@@ -196,7 +205,12 @@ export function VideoPlayer({ item, userId, webUrl, serverId, onClose }: Props) 
     setLoading(true);
     setError(null);
     setSrc(
-      buildSrc(next, mediaSourceId.current, playSessionId.current),
+      buildSrc(
+        next,
+        mediaSourceId.current,
+        playSessionId.current,
+        audioStreamIndex.current,
+      ),
     );
   }, [buildSrc]);
 
@@ -393,12 +407,14 @@ export function VideoPlayer({ item, userId, webUrl, serverId, onClose }: Props) 
             src={src}
             className="max-h-full max-w-full w-full h-full object-contain bg-black"
             playsInline
+            // Never start muted — silent playback was a common failure mode with Static streams
+            muted={false}
             autoPlay
             onClick={(e) => {
               e.stopPropagation();
               togglePlay();
             }}
-            onLoadedMetadata={onLoadedMetadata}
+            onLoadedMetadata={(e) => { e.currentTarget.muted = false; e.currentTarget.volume = 1; onLoadedMetadata(e); }}
             onPlay={onPlay}
             onPause={onPause}
             onTimeUpdate={onTimeUpdate}
@@ -422,11 +438,16 @@ export function VideoPlayer({ item, userId, webUrl, serverId, onClose }: Props) 
               <div className="flex flex-col gap-2">
                 <Button
                   onClick={() => {
-                    modeRef.current = prefersHls() ? 'hls' : 'static';
+                    modeRef.current = prefersHls() ? 'hls' : 'transcode';
                     setError(null);
                     setLoading(true);
                     setSrc(
-                      buildSrc(modeRef.current, mediaSourceId.current, playSessionId.current),
+                      buildSrc(
+                        modeRef.current,
+                        mediaSourceId.current,
+                        playSessionId.current,
+                        audioStreamIndex.current,
+                      ),
                     );
                   }}
                 >
