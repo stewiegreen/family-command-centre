@@ -373,6 +373,27 @@ export function embyBestLogoUrl(item: EmbyItem, maxHeight = 96): string | null {
 }
 
 
+/** Libraries that get a "Latest …" row on Media home (movies/TV-style only). */
+export function showEmbyLatestRow(view: EmbyView): boolean {
+  const t = (view.CollectionType || '').toLowerCase();
+  const name = (view.Name || '').toLowerCase();
+  // Explicitly excluded per family preference
+  if (['music', 'musicvideos', 'livetv', 'photos', 'photovideos'].includes(t)) return false;
+  if (
+    name.includes('music') ||
+    name.includes('classical') ||
+    name.includes('live tv') ||
+    name.includes('recording') ||
+    name.includes('photo')
+  ) {
+    return false;
+  }
+  // Prefer movies / TV / box sets; allow unnamed generic folders that aren't the above
+  if (t === 'movies' || t === 'tvshows' || t === 'boxsets') return true;
+  if (!t || t === 'folders' || t === 'mixed') return true;
+  return false;
+}
+
 export function libraryKindLabel(view: EmbyView): string {
   const t = (view.CollectionType || '').toLowerCase();
   if (t === 'movies') return 'Movies';

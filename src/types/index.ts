@@ -675,6 +675,21 @@ export type ComicRecommendation = {
   status: 'unread' | 'opened' | 'dismissed';
 };
 
+/** Family media recommendation — Emby item id is source of truth (no media copy in Firestore). */
+export type MediaRecommendation = {
+  id: string;
+  fromMemberId: string;
+  toMemberId: string;
+  embyItemId: string;
+  /** Emby Type snapshot: Movie, Series, Episode, MusicAlbum, … */
+  mediaType?: string;
+  /** Display snapshot only; live metadata comes from Emby. */
+  title: string;
+  message?: string;
+  createdAt: string;
+  status: 'unread' | 'opened' | 'dismissed';
+};
+
 export interface FamilyData {
   members: Member[];
   events: CalendarEvent[];
@@ -691,6 +706,8 @@ export interface FamilyData {
   notes: Note[];
   /** Family comic recommendations (Phase 4). */
   comicRecommendations?: ComicRecommendation[];
+  /** Family Emby recommendations (Media Step 4). */
+  mediaRecommendations?: MediaRecommendation[];
   /** Homeschool subjects. */
   studySubjects?: StudySubject[];
   /** Homeschool work blocks. */

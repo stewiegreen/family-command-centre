@@ -353,6 +353,7 @@ export async function cloudWrite(familyId: string, data: FamilyData): Promise<vo
     choreQuest: data.choreQuest ?? null,
     wordleDaily: data.wordleDaily ?? null,
     comicRecommendations: (data.comicRecommendations || []).slice(0, 100),
+    mediaRecommendations: (data.mediaRecommendations || []).slice(0, 100),
     updatedAt: new Date().toISOString(),
   };
 

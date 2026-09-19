@@ -17,9 +17,12 @@ import {
   Play,
   RefreshCw,
   Search,
+  Share2,
   Tv,
+  X,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import type { MediaRecommendation } from '../types';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
@@ -113,7 +116,9 @@ function LibraryEntryCard({ view, onOpen }: { view: EmbyView; onOpen: () => void
 }
 
 export function MediaPage() {
-  const { data, currentUser, setView } = useApp();
+  const { data, currentUser, setView, update } = useApp();
+  const members = data.members || [];
+  const memberId = currentUser?.id || '';
   const embyUserId = currentUser?.embyUserId?.trim() || '';
   const webUrl = resolveEmbyWebUrl(data.settings);
 
@@ -147,6 +152,13 @@ export function MediaPage() {
   const [focus, setFocus] = useState<EmbyItem | null>(null);
   const [focusLoading, setFocusLoading] = useState(false);
   const [watching, setWatching] = useState<EmbyItem | null>(null);
+
+  const [recommendTarget, setRecommendTarget] = useState<EmbyItem | null>(null);
+  const [recommendToId, setRecommendToId] = useState('');
+  const [recommendMsg, setRecommendMsg] = useState('');
+  const [recommendBusy, setRecommendBusy] = useState(false);
+  const [recommendFlash, setRecommendFlash] = useState<string | null>(null);
+  const [recUnavailable, setRecUnavailable] = useState<string | null>(null);
 
   const canPlay = Boolean(webUrl && serverId);
   const logoUrl = focus ? embyBestLogoUrl(focus, 120) : null;
@@ -209,9 +221,10 @@ export function MediaPage() {
       setResume(r);
       setNextUp(n);
 
-      // Latest per discovered library (parallel, capped)
+      // Latest only for movies/TV-style libraries (skip Music, Live TV, Photos, …)
+      const latestViews = v.filter(showEmbyLatestRow).slice(0, 8);
       const latestEntries = await Promise.all(
-        v.slice(0, 12).map(async (view) => {
+        latestViews.map(async (view) => {
           const items = await embyLatest(embyUserId, 14, view.Id).catch(() => [] as EmbyItem[]);
           return [view.Id, items] as const;
         }),
@@ -361,6 +374,77 @@ export function MediaPage() {
   );
 
   // Merge resume + next-up for Continue (dedupe by Id, resume first)
+  const myMediaRecommendations = useMemo(() => {
+    return (data.mediaRecommendations || []).filter(
+      (r) => r.toMemberId === memberId && r.status !== 'dismissed',
+    );
+  }, [data.mediaRecommendations, memberId]);
+
+  const otherMembers = useMemo(
+    () => members.filter((m) => m.id && m.id !== memberId),
+    [members, memberId],
+  );
+
+  const sendMediaRecommendation = () => {
+    if (!recommendTarget || !memberId || !recommendToId) return;
+    const to = members.find((m) => m.id === recommendToId);
+    if (!to) return;
+    setRecommendBusy(true);
+    const msg = recommendMsg.trim().slice(0, 280);
+    const rec: MediaRecommendation = {
+      id: `mr-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+      fromMemberId: memberId,
+      toMemberId: recommendToId,
+      embyItemId: recommendTarget.Id,
+      mediaType: recommendTarget.Type,
+      title: displayTitle(recommendTarget),
+      message: msg || undefined,
+      createdAt: new Date().toISOString(),
+      status: 'unread',
+    };
+    update((d) => ({
+      ...d,
+      mediaRecommendations: [rec, ...(d.mediaRecommendations || [])].slice(0, 100),
+    }));
+    setRecommendBusy(false);
+    setRecommendTarget(null);
+    setRecommendToId('');
+    setRecommendMsg('');
+    setRecommendFlash(`Recommended to ${to.name}`);
+    window.setTimeout(() => setRecommendFlash(null), 2800);
+  };
+
+  const dismissMediaRecommendation = (id: string) => {
+    update((d) => ({
+      ...d,
+      mediaRecommendations: (d.mediaRecommendations || []).map((r) =>
+        r.id === id ? { ...r, status: 'dismissed' as const } : r,
+      ),
+    }));
+  };
+
+  const openMediaRecommendation = async (rec: MediaRecommendation) => {
+    setRecUnavailable(null);
+    update((d) => ({
+      ...d,
+      mediaRecommendations: (d.mediaRecommendations || []).map((r) =>
+        r.id === rec.id && r.status === 'unread' ? { ...r, status: 'opened' as const } : r,
+      ),
+    }));
+    if (!embyUserId) {
+      setRecUnavailable('Link an Emby account on this profile to open recommendations.');
+      return;
+    }
+    try {
+      const item = await embyItem(embyUserId, rec.embyItemId);
+      void openFocus(item);
+    } catch {
+      setRecUnavailable(
+        `"${rec.title}" isn't available on your Emby account. Emby permissions still apply.`,
+      );
+    }
+  };
+
   const continueItems = useMemo(() => {
     const seen = new Set<string>();
     const out: EmbyItem[] = [];
@@ -487,7 +571,70 @@ export function MediaPage() {
                 </div>
               </Section>
 
-              {views.map((view) => {
+              <Section title="Recommended for You" empty={!myMediaRecommendations.length}>
+                <div className="flex gap-4 overflow-x-auto pb-2 -mx-1 px-1">
+                  {myMediaRecommendations.map((rec) => {
+                    const from = members.find((m) => m.id === rec.fromMemberId);
+                    return (
+                      <div key={rec.id} className="shrink-0 w-[9.5rem] sm:w-[11rem] space-y-1.5">
+                        <button
+                          type="button"
+                          onClick={() => void openMediaRecommendation(rec)}
+                          className="w-full text-left group"
+                        >
+                          <div
+                            className="relative aspect-[2/3] overflow-hidden bg-surface-2 border border-border"
+                            style={{
+                              borderRadius: 'var(--app-card-radius, 1rem)',
+                              boxShadow: 'var(--app-shadow-card)',
+                            }}
+                          >
+                            {embyUserId ? (
+                              <img
+                                src={`/api/emby/Items/${encodeURIComponent(rec.embyItemId)}/Images/Primary?maxWidth=360`}
+                                alt=""
+                                className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform"
+                                loading="lazy"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).style.display = 'none';
+                                }}
+                              />
+                            ) : null}
+                            <div className="absolute inset-x-0 bottom-0 p-2 bg-gradient-to-t from-black/75 to-transparent">
+                              <p className="text-[10px] font-semibold text-white line-clamp-2">
+                                {from ? `${from.name} recommended` : 'Recommended'}
+                              </p>
+                            </div>
+                          </div>
+                          <p className="mt-1.5 text-sm font-semibold text-fg line-clamp-2">{rec.title}</p>
+                          {rec.message ? (
+                            <p className="text-[11px] text-muted line-clamp-2">"{rec.message}"</p>
+                          ) : null}
+                          {rec.mediaType ? (
+                            <p className="text-[10px] text-muted capitalize">{rec.mediaType}</p>
+                          ) : null}
+                        </button>
+                        <button
+                          type="button"
+                          className="text-[11px] font-semibold text-muted hover:text-fg inline-flex items-center gap-1"
+                          onClick={() => dismissMediaRecommendation(rec.id)}
+                        >
+                          <X className="w-3 h-3" />
+                          Dismiss
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </Section>
+
+              {recUnavailable && (
+                <p className="text-sm text-warn bg-warn/10 rounded-xl px-3 py-2" role="status">
+                  {recUnavailable}
+                </p>
+              )}
+
+              {views.filter(showEmbyLatestRow).map((view) => {
                 const items = latestByView[view.Id] || [];
                 if (!items.length) return null;
                 return (
@@ -702,6 +849,20 @@ export function MediaPage() {
                       <ExternalLink className="w-4 h-4" />
                       Emby
                     </Button>
+                    {otherMembers.length > 0 && (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => {
+                          setRecommendTarget(focus);
+                          setRecommendToId(otherMembers[0]?.id || '');
+                          setRecommendMsg('');
+                        }}
+                      >
+                        <Share2 className="w-4 h-4" />
+                        Recommend
+                      </Button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -718,6 +879,72 @@ export function MediaPage() {
           </div>
         )}
       </Modal>
+
+      {/* Recommend to family member */}
+      <Modal
+        open={!!recommendTarget}
+        onClose={() => !recommendBusy && setRecommendTarget(null)}
+        title={recommendTarget ? `Recommend ${shortTitle(recommendTarget)}` : 'Recommend'}
+      >
+        {recommendTarget && (
+          <div className="space-y-4">
+            <p className="text-sm text-muted">
+              Send this title to someone in the family. They&apos;ll see it under{' '}
+              <span className="font-semibold text-fg">Recommended for You</span>. Emby still
+              controls whether they can play it.
+            </p>
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-muted uppercase tracking-wide">Who?</p>
+              <div className="flex flex-wrap gap-2">
+                {otherMembers.map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => setRecommendToId(m.id)}
+                    className={
+                      recommendToId === m.id
+                        ? 'px-3 py-1.5 rounded-xl text-sm font-semibold bg-accent text-accent-ink'
+                        : 'px-3 py-1.5 rounded-xl text-sm font-semibold border border-border text-fg hover:border-accent/40'
+                    }
+                  >
+                    {m.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <label className="block space-y-1">
+              <span className="text-xs font-semibold text-muted uppercase tracking-wide">
+                Message (optional)
+              </span>
+              <Input
+                value={recommendMsg}
+                onChange={(e) => setRecommendMsg(e.target.value.slice(0, 280))}
+                placeholder="You'd love this one!"
+                maxLength={280}
+              />
+            </label>
+            <div className="flex gap-2">
+              <Button
+                className="flex-1"
+                disabled={!recommendToId || recommendBusy}
+                onClick={sendMediaRecommendation}
+              >
+                {recommendBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Share2 className="w-4 h-4" />}
+                Recommend
+              </Button>
+              <Button variant="secondary" disabled={recommendBusy} onClick={() => setRecommendTarget(null)}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {recommendFlash && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[180] rounded-xl bg-elevated border border-border shadow-lg px-4 py-2 text-sm font-semibold text-fg">
+          {recommendFlash}
+        </div>
+      )}
     </div>
   );
 }
