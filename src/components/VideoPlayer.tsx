@@ -217,6 +217,8 @@ export function VideoPlayer({ item, userId, webUrl, serverId, onClose }: Props) 
   const onLoadedMetadata = () => {
     const v = videoRef.current;
     if (!v) return;
+    v.muted = false;
+    v.volume = 1;
     setDuration(v.duration || 0);
     if (startAt > 0 && Math.abs(v.currentTime - startAt) > 2) {
       try {
@@ -414,7 +416,7 @@ export function VideoPlayer({ item, userId, webUrl, serverId, onClose }: Props) 
               e.stopPropagation();
               togglePlay();
             }}
-            onLoadedMetadata={(e) => { e.currentTarget.muted = false; e.currentTarget.volume = 1; onLoadedMetadata(e); }}
+            onLoadedMetadata={onLoadedMetadata}
             onPlay={onPlay}
             onPause={onPause}
             onTimeUpdate={onTimeUpdate}
