@@ -21,6 +21,8 @@ type Props = {
   item: EmbyItem;
   onOpen: () => void;
   variant?: MediaCardVariant;
+  /** Force square art (music libraries / folders that Emby types as Folder). */
+  square?: boolean;
   className?: string;
 };
 
@@ -30,7 +32,20 @@ const COVER_LANDSCAPE = 'w-[16.5rem] sm:w-[19.5rem]';
 
 function isMusicAlbum(item: EmbyItem): boolean {
   const t = item.Type || '';
-  return t === 'MusicAlbum' || t === 'Album';
+  // Emby often returns album folders as Type "Folder" under a music library / artist.
+  return t === 'MusicAlbum' || t === 'Album' || t === 'MusicArtist';
+}
+
+function isSquareItem(item: EmbyItem, forceSquare?: boolean): boolean {
+  if (forceSquare) return true;
+  if (isMusicAlbum(item)) return true;
+  const t = (item.Type || '').toLowerCase();
+  if (t === 'musicalbum' || t === 'album') return true;
+  // Some servers tag audio containers this way
+  const extra = item as EmbyItem & { MediaType?: string; IsFolder?: boolean };
+  const mt = String(extra.MediaType || '').toLowerCase();
+  if (mt === 'audio' && (item.Type === 'Folder' || extra.IsFolder)) return true;
+  return false;
 }
 
 function ProgressBar({ pct, className }: { pct: number; className?: string }) {
@@ -91,6 +106,10 @@ function secondaryLine(item: EmbyItem, landscape: boolean): string | null {
   if (item.Type === 'Season') {
     return item.IndexNumber != null ? `Season ${item.IndexNumber}` : 'Season';
   }
+  // Don't surface raw "Folder" under titles — year or nothing
+  if (item.Type === 'Folder' || (item as EmbyItem & { IsFolder?: boolean }).IsFolder) {
+    return item.ProductionYear ? String(item.ProductionYear) : null;
+  }
   return item.ProductionYear ? String(item.ProductionYear) : item.Type || null;
 }
 
@@ -139,11 +158,11 @@ function CoverFrame({
   );
 }
 
-export function MediaCard({ item, onOpen, variant = 'poster', className }: Props) {
+export function MediaCard({ item, onOpen, variant = 'poster', square: forceSquare, className }: Props) {
   const pct = playedPercent(item);
   const isEpisode = item.Type === 'Episode';
-  const album = isMusicAlbum(item);
-  // Albums stay square even if someone opens them from a continue-style row
+  const album = isSquareItem(item, forceSquare);
+  // Albums / music folders stay square even from continue-style rows
   const landscape = !album && (variant === 'continue' || isEpisode);
   const shape: 'poster' | 'landscape' | 'square' = album
     ? 'square'

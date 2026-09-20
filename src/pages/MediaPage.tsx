@@ -154,6 +154,23 @@ export function MediaPage() {
   const pushBrowse = (b: Browse) => setBrowseStack((s) => [...s, b]);
   const goRoot = () => setBrowseStack([{ kind: 'root' }]);
 
+  /** Emby music trees often use Type=Folder for albums — force square covers in that context. */
+  const inMusicContext = (() => {
+    for (const frame of browseStack) {
+      if (frame.kind === 'library') {
+        const ct = (frame.view.CollectionType || '').toLowerCase();
+        if (ct === 'music' || ct === 'musicvideos') return true;
+      }
+      if (frame.kind === 'folder') {
+        const ty = frame.item.Type || '';
+        if (ty === 'MusicArtist' || ty === 'MusicAlbum' || ty === 'MusicGenre' || ty === 'MusicVideo') {
+          return true;
+        }
+      }
+    }
+    return false;
+  })();
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [serverId, setServerId] = useState('');
@@ -552,7 +569,7 @@ export function MediaPage() {
   }
 
   return (
-    <div className="p-4 lg:p-6 max-w-7xl mx-auto space-y-5">
+    <div className="p-4 lg:p-6 max-w-6xl mx-auto space-y-5">
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-fg flex items-center gap-2 tracking-tight">
@@ -713,7 +730,7 @@ export function MediaPage() {
                   <Section key={view.Id} title={`Latest in ${view.Name}`} empty={false}>
                     <div className="flex gap-3.5 overflow-x-auto pb-2 -mx-1 px-1">
                       {items.map((item) => (
-                        <MediaCard key={item.Id} item={item} onOpen={() => void openFocus(item)} />
+                        <MediaCard key={item.Id} item={item} square={inMusicContext} onOpen={() => void openFocus(item)} />
                       ))}
                     </div>
                   </Section>
@@ -784,7 +801,7 @@ export function MediaPage() {
                 <>
                   <div className="flex flex-wrap gap-4">
                     {detailItems.map((item) => (
-                      <MediaCard key={item.Id} item={item} onOpen={() => void openFocus(item)} />
+                      <MediaCard key={item.Id} item={item} square={inMusicContext} onOpen={() => void openFocus(item)} />
                     ))}
                   </div>
                   {!detailItems.length && (
@@ -826,7 +843,7 @@ export function MediaPage() {
           )}
           <div className="flex flex-wrap gap-4">
             {searchResults.map((item) => (
-              <MediaCard key={item.Id} item={item} onOpen={() => void openFocus(item)} />
+              <MediaCard key={item.Id} item={item} square={inMusicContext} onOpen={() => void openFocus(item)} />
             ))}
           </div>
         </div>
