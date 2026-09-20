@@ -1,17 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  BookMarked,
-  Check,
   Coins,
   MonitorPlay,
-  Pencil,
   Play,
   Plus,
-  ShoppingBag,
   Square,
   Sword,
-  Trash2,
-  Trophy,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Avatar } from '../components/ui/Avatar';
@@ -20,9 +14,6 @@ import { Card } from '../components/ui/Card';
 import { Modal } from '../components/ui/Modal';
 import type {
   Quest,
-  RedemptionRecord,
-  RewardItem,
-  RewardKind,
   ScreenTimerSession,
 } from '../types';
 import { formatCountdown } from '../lib/screenTimer';
@@ -36,7 +27,6 @@ import {
   rewardsForDifficultyWithConfig,
 } from '../lib/quest';
 import { nameFlairLabel } from '../lib/flair';
-import { markThemeStudioUnlockedLocally } from '../lib/themeStudioUnlock';
 import {
   claimStreakChest,
   daysUntilWeekEnd,
@@ -47,11 +37,16 @@ import {
 } from '../lib/weekCycle';
 import { cn } from '../lib/cn';
 import { fireConfetti } from '../lib/confetti';
-import { QuestCard } from './chores/QuestCard';
 import { QuestFormModal } from './chores/QuestFormModal';
 import { TemplateFormModal } from './chores/TemplateFormModal';
 import { RatesTab } from './chores/RatesTab';
 import { useQuestCatalogActions } from './chores/useQuestCatalogActions';
+import { QuestsTab } from './chores/QuestsTab';
+import { CatalogTab } from './chores/CatalogTab';
+import { ShopTab } from './chores/ShopTab';
+import { VaultTab } from './chores/VaultTab';
+import { BoardTab } from './chores/BoardTab';
+import type { TabId } from './chores/tabTypes';
 
 function newId() {
   return crypto.randomUUID();
@@ -60,34 +55,10 @@ function newId() {
 /** Bump when shipping a Chores/ChoreQuest UI change so deploy lag is obvious. */
 const CHOREQUEST_UI_VERSION = 'picture-frame-1';
 
-type TabId = 'quests' | 'catalog' | 'shop' | 'vault' | 'board' | 'rates';
-
-const KIND_LABEL: Record<RewardKind, string> = {
-  screen_time: 'Screen time',
-  treat: 'Treat',
-  choice: 'Choice',
-  late_bed: 'Late bedtime',
-  allowance: 'Allowance',
-  avatar_flair: 'Avatar flair',
-  name_flair: 'Name flair',
-  picture_frame: 'Picture frame',
-  picture_frame_2: 'Second picture frame',
-  theme_studio: 'Theme Studio',
-  theme_slot: 'Theme slot +1',
-  theme_accents: 'Accent packs',
-  theme_wallpapers: 'Wallpaper packs',
-  theme_fonts: 'Font vibe packs',
-  custom: 'Custom',
-};
-
 export function ChoresPage() {
   const { data, update, currentUser, isParent, getMember, setView } = useApp();
   const me = currentUser;
   const myId = me?.id || data.settings.currentUserId;
-  const shopRecipients = useMemo(
-    () => (data.members || []).filter((m) => m.role !== 'media'),
-    [data.members],
-  );
   const chores = data.chores || [];
   const progressMap = data.memberProgress || {};
   const coinBalances = data.coinBalances || {};
@@ -136,11 +107,6 @@ export function ChoresPage() {
   // Kid on their own device: detect level increase after parent approves elsewhere
   const lastLevelRef = useRef<number | null>(null);
 
-  const [shopEditOpen, setShopEditOpen] = useState(false);
-  const [showArchivedTemplates, setShowArchivedTemplates] = useState(false);
-  const [chestMsg, setChestMsg] = useState<string | null>(null);
-  /** Shop item id → member id who receives screen time (defaults to self). */
-  const [screenGiftFor, setScreenGiftFor] = useState<Record<string, string>>({});
 
   // Idempotent weekly rollover (safe if app wasn't opened all weekend)
   useEffect(() => {
@@ -149,39 +115,7 @@ export function ChoresPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [me?.id]);
 
-  const [shopForm, setShopForm] = useState<{
-    id?: string;
-    label: string;
-    icon: string;
-    kind: RewardKind;
-    coinCost: number;
-    screenMinutes: number;
-    featured: boolean;
-  }>({
-    label: '',
-    icon: '🎁',
-    kind: 'custom',
-    coinCost: 20,
-    screenMinutes: 0,
-    featured: false,
-  });
 
-  const openQuests = useMemo(
-    () => chores.filter((c) => c.status === 'open' || !c.status),
-    [chores],
-  );
-  const pendingQuests = useMemo(
-    () => chores.filter((c) => c.status === 'pending'),
-    [chores],
-  );
-  const doneQuests = useMemo(
-    () =>
-      chores
-        .filter((c) => c.status === 'done' && c.repeatable === false)
-        .sort((a, b) => (b.approvedAt || '').localeCompare(a.approvedAt || ''))
-        .slice(0, 40),
-    [chores],
-  );
 
   const myProgress = ensureProgress(progressMap[myId]);
   const myBar = progressTowardNextLevel(myProgress.xp);
@@ -214,434 +148,19 @@ export function ChoresPage() {
     [data.members],
   );
 
-  const leaderboard = useMemo(() => {
-    return kids
-      .map((k) => {
-        const prog = ensureProgress(progressMap[k.id]);
-        const bar = progressTowardNextLevel(prog.xp);
-        const streak = streakStatus(weekState, k.id, cq);
-        return {
-          member: k,
-          xp: prog.xp,
-          level: bar.level,
-          coins: coinBalances[k.id] ?? 0,
-          weekQuests: streak.completions,
-          chestClaimed: streak.claimed,
-        };
-      })
-      .sort((a, b) => b.level - a.level || b.xp - a.xp || b.weekQuests - a.weekQuests);
-  }, [kids, progressMap, coinBalances, weekState]);
 
-  const pendingRedemptions = useMemo(
-    () =>
-      redemptions
-        .filter((r) => r.status === 'pending')
-        .sort((a, b) => b.requestedAt.localeCompare(a.requestedAt)),
-    [redemptions],
-  );
-  const myPendingRedemptions = useMemo(
-    () => pendingRedemptions.filter((r) => r.memberId === myId),
-    [pendingRedemptions, myId],
-  );
-  const recentRedemptions = useMemo(
-    () =>
-      redemptions
-        .filter((r) => r.status !== 'pending')
-        .sort((a, b) => (b.fulfilledAt || b.requestedAt).localeCompare(a.fulfilledAt || a.requestedAt))
-        .slice(0, 15),
-    [redemptions],
-  );
 
-  const activeShop = useMemo(
-    () =>
-      catalog
-        .filter((r) => r.active)
-        .slice()
-        .sort((a, b) => {
-          // Featured pinned first, then cheapest → most expensive
-          const fa = a.featured ? 0 : 1;
-          const fb = b.featured ? 0 : 1;
-          if (fa !== fb) return fa - fb;
-          const ca = Number(a.coinCost) || 0;
-          const cb = Number(b.coinCost) || 0;
-          if (ca !== cb) return ca - cb;
-          return (Number(a.sort) || 0) - (Number(b.sort) || 0) || a.label.localeCompare(b.label);
-        }),
-    [catalog],
-  );
 
   /* ─── Quest catalog (templates) ─────────────────────────── */
-  /* Create/edit form + CRUD handlers now live in QuestFormModal, QuestCard
-     and useQuestCatalogActions — this page only keeps the derived lists the
-     Catalog tab renders. */
 
-  const activeTemplates = useMemo(
-    () =>
-      questCatalog
-        .filter((t) => t.active)
-        .slice()
-        .sort((a, b) => a.sort - b.sort || a.title.localeCompare(b.title)),
-    [questCatalog],
-  );
-  const archivedTemplates = useMemo(
-    () =>
-      questCatalog
-        .filter((t) => !t.active)
-        .slice()
-        .sort((a, b) => a.title.localeCompare(b.title)),
-    [questCatalog],
-  );
 
-  /* ─── Shop / redeem / vault ────────────────────────────── */
 
-  const redeem = (item: RewardItem) => {
-    if (!me || me.role === 'media') return;
-    const balance = coinBalances[myId] ?? 0;
-    if (balance < item.coinCost) return;
 
-    // One-shot unlocks: never charge again if already owned
-    const app = data.appearance?.[myId];
-    if (item.kind === 'theme_studio' && app?.unlockThemeStudio) {
-      setView('themestudio');
-      return;
-    }
-    if (item.kind === 'avatar_flair' && app?.unlockAvatarFlair) {
-      setView('dashboard');
-      return;
-    }
-    if (item.kind === 'name_flair' && app?.unlockNameFlair) {
-      setView('dashboard');
-      return;
-    }
-    if (item.kind === 'picture_frame' && app?.unlockPictureFrame) {
-      setView('dashboard');
-      return;
-    }
-    if (item.kind === 'picture_frame_2' && app?.unlockPictureFrame2) {
-      setView('dashboard');
-      return;
-    }
-    if (item.kind === 'theme_accents' && app?.unlockAccentPacks) {
-      setView('themestudio');
-      return;
-    }
-    if (item.kind === 'theme_wallpapers' && app?.unlockWallpapers) {
-      setView('themestudio');
-      return;
-    }
-    if (item.kind === 'theme_fonts' && app?.unlockFontPacks) {
-      setView('themestudio');
-      return;
-    }
 
-    const isScreen = item.kind === 'screen_time' && (item.screenMinutes || 0) > 0;
-    const forId =
-      isScreen
-        ? screenGiftFor[item.id] || myId
-        : myId;
-    const forMember = getMember(forId);
-    const forName = forMember?.name || 'them';
-    const isGift = isScreen && forId !== myId;
 
-    if (
-      (item.kind === 'theme_slot' ||
-        item.kind === 'theme_accents' ||
-        item.kind === 'theme_wallpapers' ||
-        item.kind === 'theme_fonts') &&
-      !data.appearance?.[myId]?.unlockThemeStudio
-    ) {
-      alert('Unlock Theme Studio first — these are Studio add-ons.');
-      return;
-    }
-    if (
-      item.kind === 'picture_frame_2' &&
-      !data.appearance?.[myId]?.unlockPictureFrame
-    ) {
-      alert('Unlock your first picture frame before buying a second one.');
-      return;
-    }
 
-    const confirmMsg = isGift
-      ? `Spend ${item.coinCost} coins on “${item.label}” for ${forName}?`
-      : `Spend ${item.coinCost} coins on “${item.label}”?`;
-    if (!confirm(confirmMsg)) return;
 
-    const at = new Date().toISOString();
-    const weekId = isoWeekId();
-    const redemptionId = newId();
 
-    update((d) => {
-      const bal = d.coinBalances?.[myId] ?? 0;
-      if (bal < item.coinCost) return d;
-
-      const nextBalances = {
-        ...(d.coinBalances || {}),
-        [myId]: bal - item.coinCost,
-      };
-
-      const spendEntry = {
-        id: `redeem:${redemptionId}`,
-        memberId: myId,
-        delta: -item.coinCost,
-        reason: 'redeem' as const,
-        label: isGift ? `${item.label} → ${forName}` : item.label,
-        refId: redemptionId,
-        byId: me.id,
-        at,
-        weekId,
-      };
-
-      const isFlair = item.kind === 'avatar_flair' || item.kind === 'name_flair';
-      const isPictureFrame = item.kind === 'picture_frame';
-      const isPictureFrame2 = item.kind === 'picture_frame_2';
-      const isThemeStudio = item.kind === 'theme_studio';
-      const isThemeSlot = item.kind === 'theme_slot';
-      const isThemeAccents = item.kind === 'theme_accents';
-      const isThemeWallpapers = item.kind === 'theme_wallpapers';
-      const isThemeFonts = item.kind === 'theme_fonts';
-      const autoDone = isScreen || isFlair || isPictureFrame || isPictureFrame2 || isThemeStudio || isThemeSlot || isThemeAccents || isThemeWallpapers || isThemeFonts;
-
-      const record: RedemptionRecord = {
-        id: redemptionId,
-        memberId: myId,
-        forMemberId: isScreen ? forId : undefined,
-        rewardItemId: item.id,
-        label: item.label,
-        kind: item.kind,
-        coinCost: item.coinCost,
-        screenMinutes: item.screenMinutes,
-        status: autoDone ? 'fulfilled' : 'pending',
-        requestedAt: at,
-        fulfilledAt: autoDone ? at : undefined,
-        fulfilledById: autoDone ? me.id : undefined,
-      };
-
-      let nextScreen = d.screenTime || {};
-      let nextLog = d.screenTimeLog || [];
-      if (isScreen) {
-        const mins = item.screenMinutes || 0;
-        const beneficiary = forId;
-        nextScreen = {
-          ...nextScreen,
-          [beneficiary]: (nextScreen[beneficiary] || 0) + mins,
-        };
-        nextLog = [
-          {
-            id: newId(),
-            memberId: beneficiary,
-            delta: mins,
-            reason: isGift
-              ? `Gift from ${me.name}: ${item.label}`
-              : `Redeemed: ${item.label}`,
-            byId: me.id,
-            at,
-          },
-          ...nextLog,
-        ].slice(0, 100);
-      }
-
-      let nextAppearance = d.appearance || {};
-      if (isFlair || isPictureFrame || isPictureFrame2 || isThemeStudio || isThemeSlot || isThemeAccents || isThemeWallpapers || isThemeFonts) {
-        const prev = nextAppearance[myId] || {};
-        let homescreenRows = prev.homescreenRows;
-        if (isPictureFrame || isPictureFrame2) {
-          // Pin the frame card onto this member's homescreen if missing
-          const docs = Array.isArray(homescreenRows) ? [...homescreenRows] : [];
-          const wid = isPictureFrame2 ? 'pictureframe2' : 'pictureframe';
-          const has = docs.some(
-            (row) => Array.isArray(row?.ids) && row.ids.includes(wid),
-          );
-          if (!has) {
-            docs.push({ ids: [wid] });
-            homescreenRows = docs;
-          }
-        }
-        nextAppearance = {
-          ...nextAppearance,
-          [myId]: {
-            ...prev,
-            ...(item.kind === 'avatar_flair' ? { unlockAvatarFlair: true } : {}),
-            ...(item.kind === 'name_flair' ? { unlockNameFlair: true } : {}),
-            ...(isPictureFrame ? { unlockPictureFrame: true } : {}),
-            ...(isPictureFrame2 ? { unlockPictureFrame2: true } : {}),
-            ...(isThemeStudio ? { unlockThemeStudio: true } : {}),
-            ...(isThemeSlot
-              ? {
-                  extraThemeSlots: Math.min(
-                    5,
-                    (typeof prev.extraThemeSlots === 'number' ? prev.extraThemeSlots : 0) + 1,
-                  ),
-                }
-              : {}),
-            ...(isThemeAccents ? { unlockAccentPacks: true } : {}),
-            ...(isThemeWallpapers ? { unlockWallpapers: true } : {}),
-            ...(isThemeFonts ? { unlockFontPacks: true } : {}),
-            ...(homescreenRows ? { homescreenRows } : {}),
-          },
-        };
-      }
-
-      return {
-        ...d,
-        coinBalances: nextBalances,
-        coinLedger: [spendEntry, ...(d.coinLedger || [])].slice(0, 200),
-        redemptions: [record, ...(d.redemptions || [])].slice(0, 100),
-        screenTime: nextScreen,
-        screenTimeLog: nextLog,
-        appearance: nextAppearance,
-        rewardCatalog: ensureRewardCatalog(d.rewardCatalog),
-      };
-    });
-
-    // Flair is customized on the Your Look card (homescreen)
-    if (item.kind === 'avatar_flair' || item.kind === 'name_flair') {
-      setView('dashboard');
-    }
-    if (item.kind === 'theme_studio') {
-      markThemeStudioUnlockedLocally(myId);
-      setView('themestudio');
-    } else if (
-      item.kind === 'theme_slot' ||
-      item.kind === 'theme_accents' ||
-      item.kind === 'theme_wallpapers' ||
-      item.kind === 'theme_fonts'
-    ) {
-      setView('themestudio');
-    }
-  };
-
-  const fulfillRedemption = (r: RedemptionRecord) => {
-    if (!isParent || !me) return;
-    update((d) => ({
-      ...d,
-      redemptions: (d.redemptions || []).map((x) =>
-        x.id === r.id
-          ? {
-              ...x,
-              status: 'fulfilled' as const,
-              fulfilledAt: new Date().toISOString(),
-              fulfilledById: me.id,
-            }
-          : x,
-      ),
-    }));
-  };
-
-  const cancelRedemption = (r: RedemptionRecord) => {
-    if (!isParent || !me) return;
-    if (!confirm(`Cancel “${r.label}” and refund ${r.coinCost} coins?`)) return;
-    const at = new Date().toISOString();
-    const weekId = isoWeekId();
-
-    update((d) => {
-      if (r.status !== 'pending') return d;
-      const bal = d.coinBalances?.[r.memberId] ?? 0;
-      return {
-        ...d,
-        coinBalances: {
-          ...(d.coinBalances || {}),
-          [r.memberId]: bal + r.coinCost,
-        },
-        coinLedger: [
-          {
-            id: `refund:${r.id}`,
-            memberId: r.memberId,
-            delta: r.coinCost,
-            reason: 'adjust' as const,
-            label: `Refund: ${r.label}`,
-            refId: r.id,
-            byId: me.id,
-            at,
-            weekId,
-          },
-          ...(d.coinLedger || []),
-        ].slice(0, 200),
-        redemptions: (d.redemptions || []).map((x) =>
-          x.id === r.id ? { ...x, status: 'cancelled' as const, fulfilledAt: at, fulfilledById: me.id } : x,
-        ),
-      };
-    });
-  };
-
-  const openShopCreate = () => {
-    setShopForm({
-      label: '',
-      icon: '🎁',
-      kind: 'custom',
-      coinCost: 20,
-      screenMinutes: 0,
-      featured: false,
-    });
-    setShopEditOpen(true);
-  };
-
-  const openShopEdit = (item: RewardItem) => {
-    setShopForm({
-      id: item.id,
-      label: item.label,
-      icon: item.icon,
-      kind: item.kind,
-      coinCost: item.coinCost,
-      screenMinutes: item.screenMinutes || 0,
-      featured: !!item.featured,
-    });
-    setShopEditOpen(true);
-  };
-
-  const saveShopItem = () => {
-    if (!shopForm.label.trim() || !isParent) return;
-    update((d) => {
-      const list = ensureRewardCatalog(d.rewardCatalog);
-      if (shopForm.id) {
-        return {
-          ...d,
-          rewardCatalog: list.map((r) =>
-            r.id === shopForm.id
-              ? {
-                  ...r,
-                  label: shopForm.label.trim(),
-                  icon: shopForm.icon || '🎁',
-                  kind: shopForm.kind,
-                  coinCost: Math.max(1, Math.floor(shopForm.coinCost) || 1),
-                  screenMinutes:
-                    shopForm.kind === 'screen_time'
-                      ? Math.max(0, Math.floor(shopForm.screenMinutes) || 0)
-                      : undefined,
-                  featured: shopForm.featured,
-                }
-              : r,
-          ),
-        };
-      }
-      const item: RewardItem = {
-        id: newId(),
-        label: shopForm.label.trim(),
-        icon: shopForm.icon || '🎁',
-        kind: shopForm.kind,
-        coinCost: Math.max(1, Math.floor(shopForm.coinCost) || 1),
-        screenMinutes:
-          shopForm.kind === 'screen_time'
-            ? Math.max(0, Math.floor(shopForm.screenMinutes) || 0)
-            : undefined,
-        featured: shopForm.featured,
-        active: true,
-        sort: list.length * 10 + 10,
-      };
-      return { ...d, rewardCatalog: [...list, item] };
-    });
-    setShopEditOpen(false);
-  };
-
-  const deactivateShopItem = (item: RewardItem) => {
-    if (!isParent) return;
-    if (!confirm(`Remove “${item.label}” from the shop?`)) return;
-    update((d) => ({
-      ...d,
-      rewardCatalog: ensureRewardCatalog(d.rewardCatalog).map((r) =>
-        r.id === item.id ? { ...r, active: false } : r,
-      ),
-    }));
-  };
 
 
   /** Spend accrued screen-time minutes (TV / games). */
@@ -762,37 +281,23 @@ export function ChoresPage() {
     });
   };
 
-  const claimChest = () => {
-    if (!me) return;
-    update((d) => {
-      const res = claimStreakChest(d, myId, me.id);
-      if (!res.ok) {
-        queueMicrotask(() => setChestMsg(res.error || 'Could not open chest'));
-        return d;
-      }
-      queueMicrotask(() =>
-        setChestMsg(`Weekend Chest opened! +${cq.streakCoins} coins · +${cq.streakXp} XP`),
-      );
-      return res.data;
-    });
-  };
 
-  const onHouseInspection = () => {
-    if (!isParent || !me) return;
-    if (!confirm('Mark the house as passed inspection? Every kid gets a bonus.')) return;
-    update((d) => markHouseInspection(d, me.id));
-  };
+
+  const catalogCount = (questCatalog || []).filter((t) => !t.archived).length;
+  const vaultCount = (redemptions || []).filter((r) =>
+    r.status === 'pending' && (isParent || r.memberId === myId),
+  ).length;
 
   const tabs: { id: TabId; label: string; count?: number }[] = [
     { id: 'quests', label: 'Quests' },
     ...(isParent
-      ? [{ id: 'catalog' as const, label: 'Catalog', count: activeTemplates.length }]
+      ? [{ id: 'catalog' as const, label: 'Catalog', count: catalogCount }]
       : []),
     { id: 'shop', label: 'Shop' },
     {
       id: 'vault',
       label: 'Vault',
-      count: isParent ? pendingRedemptions.length : myPendingRedemptions.length,
+      count: vaultCount || undefined,
     },
     { id: 'board', label: 'Board' },
     ...(isParent ? [{ id: 'rates' as const, label: 'Rates' }] : []),
@@ -845,12 +350,6 @@ export function ChoresPage() {
           <Button onClick={catalogActions.openCatalogCreate}>
             <Plus className="w-4 h-4 mr-1.5" />
             Add template
-          </Button>
-        )}
-        {isParent && tab === 'shop' && (
-          <Button onClick={openShopCreate}>
-            <Plus className="w-4 h-4 mr-1.5" />
-            Add reward
           </Button>
         )}
       </div>
@@ -1203,547 +702,38 @@ export function ChoresPage() {
 
       {/* ── QUESTS TAB ─────────────────────────────────────── */}
       {tab === 'quests' && (
-        <>
-          {!isParent && kids.length > 0 && (
-            <Card className="!p-4">
-              <h2 className="text-sm font-semibold text-fg mb-3 flex items-center gap-2">
-                <Trophy className="w-4 h-4 text-accent" />
-                Party levels
-              </h2>
-              <div className="flex flex-wrap gap-3">
-                {kids.map((k) => {
-                  const look = getMember(k.id) || k;
-                  const prog = ensureProgress(progressMap[k.id]);
-                  const bar = progressTowardNextLevel(prog.xp);
-                  const coins = coinBalances[k.id] ?? 0;
-                  return (
-                    <div
-                      key={k.id}
-                      className="flex items-center gap-2 px-2.5 py-1.5 rounded-2xl bg-inset border border-border"
-                    >
-                      <Avatar {...look} size="sm" />
-                      <div>
-                        <p className="text-sm font-medium text-fg leading-tight">{k.name}</p>
-                        <p className="text-[11px] text-muted">
-                          Lv {bar.level} · {coins}c · {(screenTimeMap[k.id] ?? 0)}m
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </Card>
-          )}
-
-          {pendingQuests.length > 0 && (
-            <section className="space-y-3">
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
-                {isParent ? 'Awaiting approval' : 'Pending'}
-              </h2>
-              <div className="grid sm:grid-cols-2 gap-3">
-                {pendingQuests.map((q) => (
-                  <QuestCard key={q.id} quest={q} mode="pending" onEdit={openEdit} onLevelUp={setLevelUp} />
-                ))}
-              </div>
-            </section>
-          )}
-
-          <section className="space-y-3">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Open quests</h2>
-            {openQuests.length === 0 ? (
-              <Card className="!p-8 text-center">
-                <p className="text-muted text-sm">
-                  {isParent
-                    ? 'No open quests. Post one to get the party moving.'
-                    : 'No open quests right now — check back soon.'}
-                </p>
-                {isParent && (
-                  <Button className="mt-4" onClick={openCreate}>
-                    <Plus className="w-4 h-4 mr-1.5" />
-                    New quest
-                  </Button>
-                )}
-              </Card>
-            ) : (
-              <div className="grid sm:grid-cols-2 gap-3">
-                {openQuests.map((q) => (
-                  <QuestCard key={q.id} quest={q} mode="open" onEdit={openEdit} onLevelUp={setLevelUp} />
-                ))}
-              </div>
-            )}
-          </section>
-
-          {doneQuests.length > 0 && (
-            <section className="space-y-3">
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
-                Recently completed
-              </h2>
-              <p className="text-xs text-muted -mt-1">
-                Daily or weekly chores? Use <span className="font-medium text-fg">Post again</span> to put them back on the board.
-              </p>
-              <div className="grid sm:grid-cols-2 gap-3">
-                {doneQuests.map((q) => (
-                  <QuestCard key={q.id} quest={q} mode="done" onEdit={openEdit} onLevelUp={setLevelUp} />
-                ))}
-              </div>
-            </section>
-          )}
-        </>
+        <QuestsTab onCreate={openCreate} onEdit={openEdit} onLevelUp={setLevelUp} />
       )}
 
       {/* ── CATALOG TAB (parents) ───────────────────────────── */}
       {tab === 'catalog' && isParent && (
-        <section className="space-y-4">
-          <div>
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted mb-1 flex items-center gap-2">
-              <BookMarked className="w-4 h-4" />
-              Quest catalog
-            </h2>
-            <p className="text-xs text-muted">
-              Your master chore list. Templates stay here until you post them to the live board.
-              Archive to hide without deleting.
-            </p>
-          </div>
-
-          {activeTemplates.length === 0 ? (
-            <Card className="!p-6 text-center">
-              <p className="text-muted text-sm">No templates yet. Build your master list once, post when needed.</p>
-              <Button className="mt-4" onClick={catalogActions.openCatalogCreate}>
-                <Plus className="w-4 h-4 mr-1.5" />
-                Add template
-              </Button>
-            </Card>
-          ) : (
-            <div className="grid sm:grid-cols-2 gap-3">
-              {activeTemplates.map((t) => {
-                const meta = rewardsForDifficultyWithConfig(t.difficulty, cq);
-                const xp = t.xp ?? meta.xp;
-                const coins = t.coins ?? meta.coins;
-                return (
-                  <Card key={t.id} className="!p-4 space-y-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="font-semibold text-fg leading-snug">{t.title}</p>
-                        <p className="text-xs text-muted mt-1">
-                          {meta.emoji} {meta.label} · +{xp} XP · +{coins}c
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <Button size="sm" onClick={() => catalogActions.postTemplate(t)}>
-                        <Plus className="w-3.5 h-3.5 mr-1" />
-                        Post to board
-                      </Button>
-                      <Button size="sm" variant="secondary" onClick={() => catalogActions.openCatalogEdit(t)}>
-                        <Pencil className="w-3.5 h-3.5 mr-1" />
-                        Edit
-                      </Button>
-                      <Button size="sm" variant="ghost" onClick={() => catalogActions.archiveTemplate(t)}>
-                        Archive
-                      </Button>
-                    </div>
-                  </Card>
-                );
-              })}
-            </div>
-          )}
-
-          {archivedTemplates.length > 0 && (
-            <div className="pt-2">
-              <button
-                type="button"
-                className="text-xs text-muted hover:text-fg underline-offset-2 hover:underline"
-                onClick={() => setShowArchivedTemplates((v) => !v)}
-              >
-                {showArchivedTemplates ? 'Hide' : 'Show'} archived ({archivedTemplates.length})
-              </button>
-              {showArchivedTemplates && (
-                <div className="mt-3 grid sm:grid-cols-2 gap-3">
-                  {archivedTemplates.map((t) => {
-                    const meta = rewardsForDifficultyWithConfig(t.difficulty, cq);
-                    return (
-                      <Card key={t.id} className="!p-4 opacity-80 space-y-2">
-                        <p className="font-medium text-fg text-sm">{t.title}</p>
-                        <p className="text-[11px] text-muted">
-                          {meta.emoji} {meta.label} · archived
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          <Button size="sm" variant="secondary" onClick={() => catalogActions.restoreTemplate(t)}>
-                            Restore
-                          </Button>
-                          <Button size="sm" variant="ghost" onClick={() => catalogActions.deleteTemplateForever(t)}>
-                            <Trash2 className="w-3.5 h-3.5 mr-1" />
-                            Delete
-                          </Button>
-                        </div>
-                      </Card>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
-        </section>
+        <CatalogTab catalogActions={catalogActions} />
       )}
 
       {/* ── SHOP TAB ───────────────────────────────────────── */}
       {tab === 'shop' && (
-        <section className="space-y-3">
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted flex items-center gap-2">
-              <ShoppingBag className="w-4 h-4" />
-              Reward shop
-            </h2>
-            <p className="text-sm font-semibold text-amber-600 flex items-center gap-1">
-              <Coins className="w-4 h-4" />
-              {myCoins} coins
-            </p>
-          </div>
-
-          {activeShop.length === 0 ? (
-            <Card className="!p-8 text-center">
-              <p className="text-muted text-sm">Shop is empty.</p>
-              {isParent && (
-                <Button className="mt-4" onClick={openShopCreate}>
-                  Add reward
-                </Button>
-              )}
-            </Card>
-          ) : (
-            <div className="grid sm:grid-cols-2 gap-3">
-              {activeShop.map((item) => {
-                const canAfford = myCoins >= item.coinCost;
-                return (
-                  <Card
-                    key={item.id}
-                    className={cn('!p-4 flex flex-col gap-3', item.featured && 'border-accent/40')}
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="text-2xl w-10 h-10 rounded-xl bg-inset flex items-center justify-center shrink-0">
-                        {item.icon}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="font-semibold text-fg leading-tight">
-                          {item.label}
-                          {item.featured && (
-                            <span className="ml-1.5 text-[10px] uppercase tracking-wide text-accent font-bold">
-                              Featured
-                            </span>
-                          )}
-                        </p>
-                        <p className="text-xs text-muted mt-0.5">{KIND_LABEL[item.kind]}</p>
-                        <p className="text-sm font-semibold text-amber-600 mt-1 flex items-center gap-1">
-                          <Coins className="w-3.5 h-3.5" />
-                          {item.coinCost}
-                          {item.kind === 'screen_time' && item.screenMinutes
-                            ? ` · ${item.screenMinutes}m`
-                            : ''}
-                        </p>
-                      </div>
-                      {item.kind === 'screen_time' && me && me.role !== 'media' && (
-                        <select
-                          className="shrink-0 max-w-[8rem] rounded-lg border border-border bg-inset px-1.5 py-1 text-xs text-fg outline-none focus:border-accent"
-                          value={screenGiftFor[item.id] || myId}
-                          onChange={(e) =>
-                            setScreenGiftFor((prev) => ({ ...prev, [item.id]: e.target.value }))
-                          }
-                          title="Give screen time to"
-                        >
-                          {shopRecipients.map((m) => {
-                            const look = getMember(m.id) || m;
-                            return (
-                              <option key={m.id} value={m.id}>
-                                {(look.emoji ? `${look.emoji} ` : '') + look.name}
-                                {m.id === myId ? ' (me)' : ''}
-                              </option>
-                            );
-                          })}
-                        </select>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 mt-auto">
-                      {me && me.role !== 'media' && (() => {
-                        const unlockedAvatar =
-                          item.kind === 'avatar_flair' &&
-                          !!data.appearance?.[myId]?.unlockAvatarFlair;
-                        const unlockedName =
-                          item.kind === 'name_flair' &&
-                          !!data.appearance?.[myId]?.unlockNameFlair;
-                        const unlockedFrame =
-                          item.kind === 'picture_frame' &&
-                          !!data.appearance?.[myId]?.unlockPictureFrame;
-                        const unlockedFrame2 =
-                          item.kind === 'picture_frame_2' &&
-                          !!data.appearance?.[myId]?.unlockPictureFrame2;
-                        const unlockedStudio =
-                          item.kind === 'theme_studio' &&
-                          !!data.appearance?.[myId]?.unlockThemeStudio;
-                        const unlockedAccents =
-                          item.kind === 'theme_accents' &&
-                          !!data.appearance?.[myId]?.unlockAccentPacks;
-                        const unlockedWalls =
-                          item.kind === 'theme_wallpapers' &&
-                          !!data.appearance?.[myId]?.unlockWallpapers;
-                        const unlockedFonts =
-                          item.kind === 'theme_fonts' &&
-                          !!data.appearance?.[myId]?.unlockFontPacks;
-                        if (unlockedAvatar || unlockedName) {
-                          return (
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              className="flex-1"
-                              onClick={() => setView('dashboard')}
-                            >
-                              Customize in Your Look
-                            </Button>
-                          );
-                        }
-                        if (unlockedFrame || unlockedFrame2) {
-                          return (
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              className="flex-1"
-                              onClick={() => setView('dashboard')}
-                            >
-                              Open on Home
-                            </Button>
-                          );
-                        }
-                        if (unlockedStudio || unlockedAccents || unlockedWalls || unlockedFonts) {
-                          return (
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              className="flex-1"
-                              onClick={() => setView('themestudio')}
-                            >
-                              Open Studio
-                            </Button>
-                          );
-                        }
-                        return (
-                          <Button
-                            size="sm"
-                            disabled={!canAfford}
-                            onClick={() => redeem(item)}
-                            className="flex-1"
-                          >
-                            {canAfford
-                              ? item.kind === 'screen_time' &&
-                                (screenGiftFor[item.id] || myId) !== myId
-                                ? 'Gift'
-                                : 'Redeem'
-                              : 'Need more coins'}
-                          </Button>
-                        );
-                      })()}
-                      {isParent && (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => openShopEdit(item)}
-                            className="p-2 rounded-lg text-muted hover:text-fg hover:bg-nav-hover"
-                            title="Edit"
-                          >
-                            <Pencil className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => deactivateShopItem(item)}
-                            className="p-2 rounded-lg text-muted hover:text-red-500 hover:bg-nav-hover"
-                            title="Remove"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </Card>
-                );
-              })}
-            </div>
-          )}
-
-          <p className="text-xs text-muted text-center pt-2">
-            Screen-time items add minutes to your bank instantly. Spend them above when you watch or play.
-            Other rewards wait in the Vault for a parent.
-          </p>
-        </section>
+        <ShopTab />
       )}
 
       {/* ── VAULT TAB ──────────────────────────────────────── */}
       {tab === 'vault' && (
-        <section className="space-y-4">
-          <div>
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted mb-3">
-              {isParent ? 'Pending fulfillment' : 'Your pending rewards'}
-            </h2>
-            {(isParent ? pendingRedemptions : myPendingRedemptions).length === 0 ? (
-              <Card className="!p-6 text-center">
-                <p className="text-sm text-muted">Nothing waiting — vault is clear.</p>
-              </Card>
-            ) : (
-              <div className="space-y-2">
-                {(isParent ? pendingRedemptions : myPendingRedemptions).map((r) => {
-                  const who = getMember(r.memberId);
-                  return (
-                    <Card key={r.id} className="!p-4 flex flex-col sm:flex-row sm:items-center gap-3">
-                      <div className="flex items-center gap-3 flex-1 min-w-0">
-                        {who && <Avatar {...who} size="sm" />}
-                        <div className="min-w-0">
-                          <p className="font-medium text-fg truncate">{r.label}</p>
-                          <p className="text-xs text-muted">
-                            {who?.name || 'Someone'}
-                            {r.forMemberId && r.forMemberId !== r.memberId
-                              ? ` → ${getMember(r.forMemberId)?.name || 'someone'}`
-                              : ''}{' '}
-                            · {r.coinCost} coins ·{' '}
-                            {new Date(r.requestedAt).toLocaleDateString(undefined, {
-                              month: 'short',
-                              day: 'numeric',
-                            })}
-                          </p>
-                        </div>
-                      </div>
-                      {isParent && (
-                        <div className="flex gap-2 shrink-0">
-                          <Button size="sm" onClick={() => fulfillRedemption(r)}>
-                            <Check className="w-3.5 h-3.5 mr-1" />
-                            Fulfilled
-                          </Button>
-                          <Button size="sm" variant="ghost" onClick={() => cancelRedemption(r)}>
-                            Cancel
-                          </Button>
-                        </div>
-                      )}
-                    </Card>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {recentRedemptions.length > 0 && (
-            <div>
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-muted mb-3">
-                Recent history
-              </h2>
-              <div className="space-y-2">
-                {recentRedemptions
-                  .filter((r) => isParent || r.memberId === myId)
-                  .map((r) => {
-                    const who = getMember(r.memberId);
-                    return (
-                      <div
-                        key={r.id}
-                        className="flex items-center gap-3 px-3 py-2 rounded-xl bg-inset border border-border text-sm"
-                      >
-                        <span className="text-lg">{r.kind === 'screen_time' ? '📱' : '🎁'}</span>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-fg truncate">
-                            {r.label}
-                            <span className="text-muted">
-                              {' '}
-                              · {who?.name}
-                              {r.forMemberId && r.forMemberId !== r.memberId
-                                ? ` → ${getMember(r.forMemberId)?.name || 'someone'}`
-                                : ''}
-                            </span>
-                          </p>
-                        </div>
-                        <span
-                          className={cn(
-                            'text-xs font-medium shrink-0',
-                            r.status === 'fulfilled' ? 'text-emerald-600' : 'text-muted',
-                          )}
-                        >
-                          {r.status === 'fulfilled' ? 'Done' : 'Cancelled'}
-                        </span>
-                      </div>
-                    );
-                  })}
-              </div>
-            </div>
-          )}
-        </section>
+        <VaultTab />
       )}
 
       {/* ── LEADERBOARD TAB ────────────────────────────────── */}
       {tab === 'board' && (
-        <section className="space-y-3">
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted flex items-center gap-2">
-              <Trophy className="w-4 h-4 text-accent" />
-              Leaderboard
-            </h2>
-            <p className="text-xs text-muted">Ranked by level &amp; XP</p>
-          </div>
-
-          {leaderboard.length === 0 ? (
-            <Card className="!p-8 text-center">
-              <p className="text-sm text-muted">No kids on the party yet.</p>
-            </Card>
-          ) : (
-            <div className="space-y-2">
-              {leaderboard.map((row, i) => {
-                const look = getMember(row.member.id) || row.member;
-                const rank = i + 1;
-                const medal =
-                  rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : null;
-                const isMe = row.member.id === myId;
-                return (
-                  <Card
-                    key={row.member.id}
-                    className={cn(
-                      '!p-3 sm:!p-4 flex items-center gap-3',
-                      isMe && 'border-accent/40 bg-accent/5',
-                    )}
-                  >
-                    <div className="w-8 text-center shrink-0">
-                      {medal ? (
-                        <span className="text-xl">{medal}</span>
-                      ) : (
-                        <span className="text-sm font-bold text-muted">#{rank}</span>
-                      )}
-                    </div>
-                    <Avatar {...look} size="sm" />
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-fg truncate">
-                        {row.member.name}
-                        {isMe ? <span className="text-muted font-normal"> · you</span> : null}
-                      </p>
-                      <p className="text-xs text-muted">
-                        Level {row.level} · {row.xp} XP
-                        {row.weekQuests > 0
-                          ? ` · ${row.weekQuests} quest${row.weekQuests === 1 ? '' : 's'} this week`
-                          : ''}
-                        {row.chestClaimed ? ' · chest ✓' : ''}
-                      </p>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <p className="text-sm font-bold text-fg">Lv {row.level}</p>
-                      <p className="text-[11px] text-amber-600 flex items-center gap-0.5 justify-end">
-                        <Coins className="w-3 h-3" />
-                        {row.coins}
-                      </p>
-                    </div>
-                  </Card>
-                );
-              })}
-            </div>
-          )}
-
-          <p className="text-xs text-muted text-center pt-1">
-            Rankings use level and XP — spending coins does not drop your place.
-          </p>
-        </section>
+        <BoardTab />
       )}
 
 
       {/* ── RATES TAB (parents) ─────────────────────────────── */}
       {tab === 'rates' && isParent && <RatesTab cq={cq} />}
+
+      <TemplateFormModal
+        open={catalogActions.catalogEditOpen}
+        onClose={catalogActions.closeCatalogModal}
+        editTemplate={catalogActions.editTemplate}
+      />
 
       <QuestFormModal
         open={createOpen}
@@ -1754,96 +744,7 @@ export function ChoresPage() {
         editQuest={editQuest}
         cq={cq}
       />
-      <TemplateFormModal
-        open={catalogActions.catalogEditOpen}
-        onClose={catalogActions.closeCatalogModal}
-        editTemplate={catalogActions.editTemplate}
-        cq={cq}
-      />
-
       {/* Shop item modal */}
-      <Modal open={shopEditOpen} onClose={() => setShopEditOpen(false)} title={shopForm.id ? 'Edit reward' : 'Add reward'}>
-        <div className="space-y-3">
-          <div>
-            <label className="text-xs text-muted mb-1 block">Label</label>
-            <input
-              className="w-full rounded-xl border border-border bg-inset px-3 py-2 text-fg text-sm outline-none focus:border-accent"
-              value={shopForm.label}
-              onChange={(e) => setShopForm((f) => ({ ...f, label: e.target.value }))}
-              placeholder="e.g. Pick the movie"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-muted mb-1 block">Icon (emoji)</label>
-              <input
-                className="w-full rounded-xl border border-border bg-inset px-3 py-2 text-fg text-sm outline-none focus:border-accent"
-                value={shopForm.icon}
-                onChange={(e) => setShopForm((f) => ({ ...f, icon: e.target.value }))}
-              />
-            </div>
-            <div>
-              <label className="text-xs text-muted mb-1 block">Coin cost</label>
-              <input
-                type="number"
-                min={1}
-                className="w-full rounded-xl border border-border bg-inset px-3 py-2 text-fg text-sm outline-none focus:border-accent"
-                value={shopForm.coinCost}
-                onChange={(e) =>
-                  setShopForm((f) => ({ ...f, coinCost: Number(e.target.value) || 0 }))
-                }
-              />
-            </div>
-          </div>
-          <div>
-            <label className="text-xs text-muted mb-1 block">Kind</label>
-            <select
-              className="w-full rounded-xl border border-border bg-inset px-3 py-2 text-fg text-sm outline-none focus:border-accent"
-              value={shopForm.kind}
-              onChange={(e) =>
-                setShopForm((f) => ({ ...f, kind: e.target.value as RewardKind }))
-              }
-            >
-              {(Object.keys(KIND_LABEL) as RewardKind[]).map((k) => (
-                <option key={k} value={k}>
-                  {KIND_LABEL[k]}
-                </option>
-              ))}
-            </select>
-          </div>
-          {shopForm.kind === 'screen_time' && (
-            <div>
-              <label className="text-xs text-muted mb-1 block">Screen minutes</label>
-              <input
-                type="number"
-                min={0}
-                className="w-full rounded-xl border border-border bg-inset px-3 py-2 text-fg text-sm outline-none focus:border-accent"
-                value={shopForm.screenMinutes}
-                onChange={(e) =>
-                  setShopForm((f) => ({ ...f, screenMinutes: Number(e.target.value) || 0 }))
-                }
-              />
-            </div>
-          )}
-          <label className="flex items-center gap-2 text-sm text-fg">
-            <input
-              type="checkbox"
-              checked={shopForm.featured}
-              onChange={(e) => setShopForm((f) => ({ ...f, featured: e.target.checked }))}
-            />
-            Featured (highlight as aspirational, e.g. Weekend Pass)
-          </label>
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="ghost" onClick={() => setShopEditOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={saveShopItem} disabled={!shopForm.label.trim()}>
-              {shopForm.id ? 'Save' : 'Add to shop'}
-            </Button>
-          </div>
-        </div>
-      </Modal>
-
       {/* Spend screen time */}
       <Modal open={spendOpen} onClose={() => setSpendOpen(false)} title="Use Screen Time">
         <div className="space-y-4">

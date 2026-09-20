@@ -99,3 +99,5 @@ export function useQuestCatalogActions(cq: ChoreQuestConfig, setTab: (t: 'quests
     postTemplate,
   };
 }
+
+export type CatalogActions = ReturnType<typeof useQuestCatalogActions>;
