@@ -14,8 +14,7 @@ import {
 import {
   albumArtistLine,
   displayTitle,
-  embyAudioStreamUrl,
-  embyAudioTranscodeUrl,
+  embyAudioPlayAttempts,
   embyPlaybackInfo,
   embyPosterUrl,
   embyReportProgress,
@@ -58,7 +57,8 @@ export function AlbumPlayer({
   const playSessionId = useRef<string | undefined>(undefined);
   const startedRef = useRef(false);
   const progressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const modeRef = useRef<'static' | 'transcode'>('static');
+  const attemptRef = useRef(0);
+  const attemptsRef = useRef<string[]>([]);
 
   const [index, setIndex] = useState(() =>
     Math.min(Math.max(0, startIndex), Math.max(0, tracks.length - 1)),
@@ -107,19 +107,25 @@ export function AlbumPlayer({
       startedRef.current = false;
       mediaSourceId.current = undefined;
       playSessionId.current = undefined;
-      modeRef.current = 'static';
+      attemptRef.current = 0;
       try {
-        const info = await embyPlaybackInfo(userId, item.Id);
-        const ms = info.MediaSources?.[0];
-        mediaSourceId.current = ms?.Id;
-        playSessionId.current = info.PlaySessionId || ms?.Id;
-        const url = embyAudioStreamUrl({
+        // PlaybackInfo is nice-to-have (session ids); do not block play if it fails
+        try {
+          const info = await embyPlaybackInfo(userId, item.Id);
+          const ms = info.MediaSources?.[0];
+          mediaSourceId.current = ms?.Id;
+          playSessionId.current = info.PlaySessionId || ms?.Id;
+        } catch {
+          /* continue without session ids */
+        }
+        const attempts = embyAudioPlayAttempts({
           itemId: item.Id,
           userId,
           mediaSourceId: mediaSourceId.current,
           playSessionId: playSessionId.current,
         });
-        setSrc(url);
+        attemptsRef.current = attempts;
+        setSrc(attempts[0] || null);
         setLoading(false);
       } catch (e) {
         setLoading(false);
@@ -129,6 +135,21 @@ export function AlbumPlayer({
     },
     [userId],
   );
+
+  const tryNextAttempt = useCallback(() => {
+    const next = attemptRef.current + 1;
+    const list = attemptsRef.current;
+    if (next >= list.length) {
+      setError('Could not play this track in the browser (tried MP3 transcode + direct). FLAC needs Emby transcoding enabled.');
+      setPlaying(false);
+      setLoading(false);
+      return;
+    }
+    attemptRef.current = next;
+    setError(null);
+    setLoading(true);
+    setSrc(list[next] || null);
+  }, []);
 
   // Load when track index changes
   useEffect(() => {
@@ -149,33 +170,24 @@ export function AlbumPlayer({
     if (!el || !src) return;
     el.src = src;
     el.load();
+    setLoading(false);
     if (playing) {
       void el.play().catch(() => {
-        // try transcode
-        const item = tracks[index];
-        if (!item || modeRef.current === 'transcode') {
-          setError('Playback failed');
-          setPlaying(false);
-          return;
-        }
-        modeRef.current = 'transcode';
-        const url = embyAudioTranscodeUrl({
-          itemId: item.Id,
-          userId,
-          mediaSourceId: mediaSourceId.current,
-          playSessionId: playSessionId.current,
-        });
-        setSrc(url);
+        // NotDecoded / NotSupported → next stream strategy
+        tryNextAttempt();
       });
     }
-  }, [src, playing, index, tracks, userId]);
+  }, [src, playing, tryNextAttempt]);
 
   useEffect(() => {
     const el = audioRef.current;
     if (!el) return;
-    if (playing) void el.play().catch(() => setPlaying(false));
-    else el.pause();
-  }, [playing]);
+    if (playing && src) {
+      void el.play().catch(() => tryNextAttempt());
+    } else if (!playing) {
+      el.pause();
+    }
+  }, [playing, src, tryNextAttempt]);
 
   const onTimeUpdate = () => {
     const el = audioRef.current;
@@ -387,12 +399,24 @@ export function AlbumPlayer({
         onTimeUpdate={onTimeUpdate}
         onLoadedMetadata={() => {
           const el = audioRef.current;
-          if (el) setDuration(el.duration || 0);
+          if (el) {
+            setDuration(el.duration || 0);
+            setLoading(false);
+          }
         }}
         onEnded={onEnded}
-        onPlay={() => setPlaying(true)}
+        onPlay={() => {
+          setPlaying(true);
+          setLoading(false);
+          setError(null);
+        }}
         onPause={() => setPlaying(false)}
+        onError={() => {
+          // MEDIA_ERR_* — FLAC static streams land here; advance strategy
+          tryNextAttempt();
+        }}
         playsInline
+        preload="auto"
       />
     </div>
   );

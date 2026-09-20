@@ -613,44 +613,88 @@ export function embyStreamUrl(opts: {
 }
 
 
-/** Progressive audio stream via proxy (Emby Audio endpoint). */
-export function embyAudioStreamUrl(opts: {
+type AudioStreamOpts = {
   itemId: string;
   userId: string;
   mediaSourceId?: string;
   playSessionId?: string;
   startTicks?: number;
-}): string {
+};
+
+function audioQuery(opts: AudioStreamOpts, extra?: Record<string, string>): URLSearchParams {
   const q = new URLSearchParams();
   q.set('UserId', opts.userId);
   q.set('DeviceId', embyDeviceId());
-  q.set('Static', 'true');
   if (opts.mediaSourceId) q.set('MediaSourceId', opts.mediaSourceId);
   if (opts.playSessionId) q.set('PlaySessionId', opts.playSessionId);
   if (opts.startTicks && opts.startTicks > 0) q.set('StartTimeTicks', String(Math.floor(opts.startTicks)));
+  if (extra) {
+    for (const [k, v] of Object.entries(extra)) q.set(k, v);
+  }
+  return q;
+}
+
+/**
+ * Browser-safe audio: ask Emby to transcode/remux to MP3.
+ * Required for FLAC (and other formats browsers cannot decode).
+ * Do NOT set Static=true — that serves the original file and fails in Chrome/Safari for FLAC.
+ */
+export function embyAudioTranscodeUrl(opts: AudioStreamOpts): string {
+  const q = audioQuery(opts, {
+    MaxStreamingBitrate: '320000',
+    AudioCodec: 'mp3',
+    AudioBitrate: '320000',
+    Container: 'mp3',
+    TranscodingContainer: 'mp3',
+    TranscodingProtocol: 'http',
+  });
+  // Extension hints content-type for some clients; Emby still selects codec from params
+  return `${PROXY}/Audio/${encodeURIComponent(opts.itemId)}/stream.mp3?${q.toString()}`;
+}
+
+/** Same idea without .mp3 path suffix (some Emby builds prefer plain /stream). */
+export function embyAudioTranscodeStreamUrl(opts: AudioStreamOpts): string {
+  const q = audioQuery(opts, {
+    MaxStreamingBitrate: '320000',
+    AudioCodec: 'mp3',
+    AudioBitrate: '320000',
+    Container: 'mp3',
+    TranscodingContainer: 'mp3',
+    TranscodingProtocol: 'http',
+  });
   return `${PROXY}/Audio/${encodeURIComponent(opts.itemId)}/stream?${q.toString()}`;
 }
 
-/** AAC transcode fallback when static audio fails in-browser. */
-export function embyAudioTranscodeUrl(opts: {
-  itemId: string;
-  userId: string;
-  mediaSourceId?: string;
-  playSessionId?: string;
-  startTicks?: number;
-}): string {
-  const q = new URLSearchParams();
-  q.set('UserId', opts.userId);
-  q.set('DeviceId', embyDeviceId());
-  q.set('AudioCodec', 'aac');
-  q.set('AudioBitrate', '256000');
-  q.set('Container', 'mp3');
-  q.set('TranscodingContainer', 'mp3');
-  q.set('TranscodingProtocol', 'http');
-  if (opts.mediaSourceId) q.set('MediaSourceId', opts.mediaSourceId);
-  if (opts.playSessionId) q.set('PlaySessionId', opts.playSessionId);
-  if (opts.startTicks && opts.startTicks > 0) q.set('StartTimeTicks', String(Math.floor(opts.startTicks)));
-  return `${PROXY}/Audio/${encodeURIComponent(opts.itemId)}/stream.mp3?${q.toString()}`;
+/**
+ * Emby "universal" audio endpoint — same family as official clients.
+ * Tries direct play when the file is already browser-friendly, else transcodes.
+ */
+export function embyAudioUniversalUrl(opts: AudioStreamOpts): string {
+  const q = audioQuery(opts, {
+    MaxStreamingBitrate: '140000000',
+    // Prefer containers browsers can play; FLAC listed so Emby may direct-play where supported
+    Container: 'mp3,aac,m4a,opus,ogg,wav,flac',
+    TranscodingContainer: 'mp3',
+    TranscodingProtocol: 'http',
+    AudioCodec: 'mp3',
+  });
+  return `${PROXY}/Audio/${encodeURIComponent(opts.itemId)}/universal?${q.toString()}`;
+}
+
+/** Direct/static original file — only works for browser-native formats (e.g. some MP3s). */
+export function embyAudioStreamUrl(opts: AudioStreamOpts): string {
+  const q = audioQuery(opts, { Static: 'true' });
+  return `${PROXY}/Audio/${encodeURIComponent(opts.itemId)}/stream?${q.toString()}`;
+}
+
+/** Ordered attempts for in-browser album playback. */
+export function embyAudioPlayAttempts(opts: AudioStreamOpts): string[] {
+  return [
+    embyAudioTranscodeUrl(opts),
+    embyAudioTranscodeStreamUrl(opts),
+    embyAudioUniversalUrl(opts),
+    embyAudioStreamUrl(opts),
+  ];
 }
 
 export function embyHlsUrl(opts: {
