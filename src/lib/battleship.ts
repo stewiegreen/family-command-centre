@@ -57,6 +57,37 @@ export function shipCells(
   return cells;
 }
 
+/**
+ * Hover preview while placing: every in-bounds cell the ship would cover.
+ * valid=false when the ship runs off the board or overlaps an existing ship.
+ */
+export function placementPreview(
+  start: number,
+  length: number,
+  horizontal: boolean,
+  occupied: Set<number>,
+): { cells: number[]; valid: boolean } {
+  const { row, col } = cellRC(start);
+  const cells: number[] = [];
+  let fits = true;
+  for (let i = 0; i < length; i++) {
+    const r = horizontal ? row : row + i;
+    const c = horizontal ? col + i : col;
+    if (r < 0 || r >= BS_SIZE || c < 0 || c >= BS_SIZE) {
+      fits = false;
+      break;
+    }
+    cells.push(cellIndex(r, c));
+  }
+  if (!fits || cells.length !== length) {
+    return { cells, valid: false };
+  }
+  if (cells.some((c) => occupied.has(c))) {
+    return { cells, valid: false };
+  }
+  return { cells, valid: true };
+}
+
 export function isValidPlacement(ships: Fleet['ships']): boolean {
   if (ships.length !== SHIP_ORDER.length) return false;
   const seen = new Set<number>();

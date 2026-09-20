@@ -42,6 +42,7 @@ import {
   randomFleet,
   resolveShotFull,
   shipCells,
+  placementPreview,
 } from '../lib/battleship';
 import { fireConfetti } from '../lib/confetti';
 import {
@@ -893,6 +894,7 @@ function BsBoard({
   const [ships, setShips] = useState<Fleet['ships']>([]);
   const [placingType, setPlacingType] = useState<ShipType | null>('carrier');
   const [horizontal, setHorizontal] = useState(true);
+  const [hoverCell, setHoverCell] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [fleetLoaded, setFleetLoaded] = useState(false);
   /** Keep fleet in memory so every shot does not wait on a Firestore getDoc. */
@@ -1040,6 +1042,13 @@ function BsBoard({
       fireConfetti({ count: 160, power: 16, origin: { x: 0.5, y: 0.35 } });
     }
   }, [game.status, game.winner, role]);
+
+  const othersForPreview = ships.filter((s) => s.type !== placingType);
+  const occForPreview = occupiedSet(othersForPreview);
+  const preview =
+    hoverCell != null && placingType && !myReady
+      ? placementPreview(hoverCell, SHIP_SIZES[placingType], horizontal, occForPreview)
+      : null;
 
   const placeAt = (cell: number) => {
     if (myReady) return;
@@ -1221,12 +1230,24 @@ function BsBoard({
           </div>
           <BsGrid
             size={BS_SIZE}
-            onCell={(i) => placeAt(i)}
+            onCell={(i) => {
+              placeAt(i);
+              setHoverCell(null);
+            }}
+            onCellEnter={(i) => {
+              if (!myReady && placingType) setHoverCell(i);
+            }}
+            onCellLeave={() => setHoverCell(null)}
             cellClass={(i) => {
               const hasShip = myOcc.has(i);
-              return hasShip
-                ? 'bg-cyan-400 border-cyan-200 shadow-sm'
-                : 'bg-slate-700/80 border-slate-500 hover:bg-accent/40 hover:border-accent';
+              if (hasShip) return 'bg-cyan-400 border-cyan-200 shadow-sm';
+              const inPreview = preview?.cells.includes(i);
+              if (inPreview && preview) {
+                return preview.valid
+                  ? 'bg-accent/80 border-accent shadow-md ring-1 ring-accent/80'
+                  : 'bg-red-500/75 border-red-400 shadow-md ring-1 ring-red-400/80';
+              }
+              return 'bg-slate-700/80 border-slate-500';
             }}
           />
           <div className="flex justify-center gap-2">
@@ -1313,10 +1334,14 @@ function BsBoard({
 function BsGrid({
   size,
   onCell,
+  onCellEnter,
+  onCellLeave,
   cellClass,
 }: {
   size: number;
   onCell?: (index: number) => void;
+  onCellEnter?: (index: number) => void;
+  onCellLeave?: () => void;
   cellClass: (index: number) => string;
 }) {
   return (
@@ -1328,6 +1353,7 @@ function BsGrid({
         gridAutoRows: '1fr',
         aspectRatio: `1 / 1`,
       }}
+      onPointerLeave={() => onCellLeave?.()}
     >
       {Array.from({ length: size * size }, (_, i) => (
         <button
@@ -1338,8 +1364,9 @@ function BsGrid({
             e.stopPropagation();
             onCell?.(i);
           }}
+          onPointerEnter={() => onCellEnter?.(i)}
           className={cn(
-            'min-h-0 min-w-0 w-full h-full rounded-sm border-2 touch-manipulation',
+            'min-h-0 min-w-0 w-full h-full rounded-sm border-2 touch-manipulation transition-colors',
             cellClass(i),
           )}
         />
