@@ -734,113 +734,151 @@ export function Dashboard() {
         </div>
       </Card>
     ),
-    digest: (
++    digest: (
       <Card className="!p-5 lg:!p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="font-semibold text-fg flex items-center gap-2 text-lg">
-            <Newspaper className="w-4 h-4 text-accent" />
-            This week
-            <span className="text-xs font-normal text-muted">({weekLabel})</span>
-          </h2>
-        </div>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">Events</p>
-            {weekEvents.length === 0 ? (
-              <p className="text-muted">None scheduled</p>
-            ) : (
-              <ul className="space-y-1.5">
-                {weekEvents.slice(0, 5).map((ev) => (
-                  <li key={`${ev.masterId}-${ev.instanceStart}`}>
-                    <button
-                      type="button"
-                      onClick={() => openEventEdit(ev)}
-                      className="text-left w-full hover:text-accent transition-colors"
-                    >
-                      <span className="text-muted">
-                        {new Date(ev.instanceStart).toLocaleDateString(undefined, {
-                          weekday: 'short',
-                          month: 'short',
-                          day: 'numeric',
-                        })}
-                      </span>{' '}
-                      <span className="text-fg underline-offset-2 hover:underline">{ev.title}</span>
-                      {ev.recurrence && ev.recurrence !== 'none' ? ' ↻' : ''}
-                    </button>
-                  </li>
+        {(() => {
+          const weekDays = Array.from({ length: 7 }, (_, i) =>
+            new Date(weekStart.getTime() + i * 86400000),
+          );
+          const eventsByDay = weekDays.map((day) => ({
+            day,
+            events: weekEvents.filter((ev) => {
+              const d = new Date(ev.instanceStart);
+              return d.getFullYear() === day.getFullYear() && d.getMonth() === day.getMonth() && d.getDate() === day.getDate();
+            }),
+          }));
+
+          return (
+            <>
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <h2 className="font-semibold text-fg flex items-center gap-2 text-lg">
+                  <Newspaper className="w-4 h-4 text-accent" />
+                  This week
+                  <span className="text-xs font-normal text-muted">({weekLabel})</span>
+                </h2>
+              </div>
+
+              <div className="grid grid-cols-7 gap-1.5 sm:gap-2 mb-5">
+                {eventsByDay.map(({ day, events }) => (
+                  <div key={day.toISOString()} className="rounded-xl bg-inset border border-border px-1.5 py-2 text-center">
+                    <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wide text-muted">
+                      {day.toLocaleDateString(undefined, { weekday: 'short' })}
+                    </p>
+                    <p className="text-sm sm:text-base font-semibold text-fg mt-0.5">{day.getDate()}</p>
+                    <div className="flex justify-center gap-0.5 mt-1.5 min-h-1.5">
+                      {events.slice(0, 3).map((ev) => (
+                        <span key={`${ev.masterId}-${ev.instanceStart}`} className="w-1.5 h-1.5 rounded-full bg-accent" aria-hidden="true" />
+                      ))}
+                    </div>
+                  </div>
                 ))}
-              </ul>
-            )}
-          </div>
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">Overdue tasks</p>
-            {overdueTodos.length === 0 ? (
-              <p className="text-muted">None — nice</p>
-            ) : (
-              <ul className="space-y-1.5">
-                {overdueTodos.slice(0, 5).map((td) => (
-                  <li key={td.id}>
-                    <button
-                      type="button"
-                      onClick={() => toggleTodo(td.id)}
-                      className="text-left w-full text-fg hover:text-accent"
-                      title="Mark done"
-                    >
-                      {td.text}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">
-              {isParent ? 'Chores to approve' : 'Chores'}
-            </p>
-            {myChores.length === 0 ? (
-              <p className="text-muted">{isParent ? 'None waiting' : 'None open'}</p>
-            ) : (
-              <ul className="space-y-2">
-                {myChores.slice(0, 4).map((c) => (
-                  <li key={c.id} className="text-fg">
-                    <p className="text-sm">{c.title}{c.status === 'pending' ? ' · pending' : ''}</p>
-                    {isParent && c.status === 'pending' && (
-                      <div className="flex gap-1.5 mt-1">
-                        <Button size="sm" className="!px-2 !py-1 text-xs" onClick={() => approveQuestHome(c)}>
-                          Approve
-                        </Button>
-                        <Button size="sm" variant="ghost" className="!px-2 !py-1 text-xs" onClick={() => rejectQuestHome(c)}>
-                          Reject
-                        </Button>
-                      </div>
+              </div>
+
+              <div className="grid lg:grid-cols-[minmax(0,1.7fr)_minmax(260px,0.8fr)] gap-5">
+                <section className="min-w-0">
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted">Events</p>
+                    <span className="text-xs text-muted">{weekEvents.length} scheduled</span>
+                  </div>
+                  {weekEvents.length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-border px-4 py-5 text-sm text-muted">
+                      Nothing scheduled this week.
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {eventsByDay.filter(({ events }) => events.length > 0).map(({ day, events }) => (
+                        <div key={day.toISOString()} className="flex gap-3">
+                          <div className="w-12 shrink-0 pt-1">
+                            <p className="text-xs font-semibold text-fg">
+                              {day.toLocaleDateString(undefined, { weekday: 'short' })}
+                            </p>
+                            <p className="text-xs text-muted">{day.getDate()}</p>
+                          </div>
+                          <div className="flex-1 min-w-0 space-y-1.5">
+                            {events.slice(0, 5).map((ev) => (
+                              <button
+                                key={`${ev.masterId}-${ev.instanceStart}`}
+                                type="button"
+                                onClick={() => openEventEdit(ev)}
+                                className="w-full text-left rounded-lg border border-border bg-inset/60 px-3 py-2 hover:border-accent/50 hover:bg-accent/5 transition-colors"
+                              >
+                                <span className="text-sm font-medium text-fg underline-offset-2 hover:underline">{ev.title}</span>
+                                {ev.recurrence && ev.recurrence !== 'none' && (
+                                  <span className="ml-1.5 text-xs text-muted">↻</span>
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </section>
+
+                <aside className="grid sm:grid-cols-2 lg:grid-cols-1 gap-3 content-start">
+                  <div className="rounded-xl border border-border bg-inset/50 p-3">
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted">Overdue</p>
+                      {overdueTodos.length > 0 && <span className="text-xs font-semibold text-accent">{overdueTodos.length}</span>}
+                    </div>
+                    {overdueTodos.length === 0 ? (
+                      <p className="text-sm text-muted">Nothing overdue.</p>
+                    ) : (
+                      <ul className="space-y-1.5">
+                        {overdueTodos.slice(0, 4).map((td) => (
+                          <li key={td.id}>
+                            <button type="button" onClick={() => toggleTodo(td.id)} className="text-left w-full text-sm text-fg hover:text-accent" title="Mark done">
+                              {td.text}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
                     )}
-                    {!isParent && (c.status === 'open' || !c.status) && (
-                      <Button size="sm" variant="secondary" className="!px-2 !py-1 text-xs mt-1" onClick={() => submitQuestHome(c)}>
-                        Done
-                      </Button>
+                  </div>
+
+                  <div className="rounded-xl border border-border bg-inset/50 p-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">
+                      {isParent ? 'Chores to approve' : 'Chores'}
+                    </p>
+                    {myChores.length === 0 ? (
+                      <p className="text-sm text-muted">{isParent ? 'None waiting.' : 'None open.'}</p>
+                    ) : (
+                      <ul className="space-y-2">
+                        {myChores.slice(0, 3).map((c) => (
+                          <li key={c.id} className="text-fg">
+                            <p className="text-sm">{c.title}{c.status === 'pending' ? <span className="text-muted"> · pending</span> : ''}</p>
+                            {isParent && c.status === 'pending' && (
+                              <div className="flex gap-1.5 mt-1">
+                                <Button size="sm" className="!px-2 !py-1 text-xs" onClick={() => approveQuestHome(c)}>Approve</Button>
+                                <Button size="sm" variant="ghost" className="!px-2 !py-1 text-xs" onClick={() => rejectQuestHome(c)}>Reject</Button>
+                              </div>
+                            )}
+                            {!isParent && (c.status === 'open' || !c.status) && (
+                              <Button size="sm" variant="secondary" className="!px-2 !py-1 text-xs mt-1" onClick={() => submitQuestHome(c)}>Done</Button>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
                     )}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">Also</p>
-            <ul className="space-y-1.5 text-fg">
-              <li>
-                <button type="button" className="hover:text-accent" onClick={() => setView('messages')}>
-                  {unread} unread message{unread === 1 ? '' : 's'}
-                </button>
-              </li>
-              <li>
-                <button type="button" className="hover:text-accent" onClick={() => setView('shopping')}>
-                  {shopOpen} shopping item{shopOpen === 1 ? '' : 's'}
-                </button>
-              </li>
-              {announcement && <li className="text-muted line-clamp-2">📌 {announcement}</li>}
-            </ul>
-          </div>
-        </div>
+                  </div>
+
+                  <div className="rounded-xl border border-border bg-inset/50 p-3 sm:col-span-2 lg:col-span-1">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">Also</p>
+                    <div className="grid grid-cols-2 lg:grid-cols-1 gap-2 text-sm">
+                      <button type="button" className="flex items-center justify-between gap-2 text-left text-fg hover:text-accent" onClick={() => setView('messages')}>
+                        <span>💬 Messages</span><span className="text-muted">{unread}</span>
+                      </button>
+                      <button type="button" className="flex items-center justify-between gap-2 text-left text-fg hover:text-accent" onClick={() => setView('shopping')}>
+                        <span>🛒 Shopping</span><span className="text-muted">{shopOpen}</span>
+                      </button>
+                    </div>
+                    {announcement && <p className="text-sm text-muted line-clamp-2 mt-3">📌 {announcement}</p>}
+                  </div>
+                </aside>
+              </div>
+            </>
+          );
+        })()}
       </Card>
     ),
     events: (
