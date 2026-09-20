@@ -9,7 +9,7 @@ export type FsValue =
   | { mapValue: { fields?: Record<string, FsValue> } }
   | { arrayValue: { values?: FsValue[] } };
 
-export type FsDoc = { name?: string; fields?: Record<string, FsValue> };
+export type FsDoc = { name?: string; fields?: Record<string, FsValue>; updateTime?: string };
 
 function str(v: FsValue | undefined): string | undefined {
   if (!v) return undefined;
@@ -325,30 +325,53 @@ function eventToFsValue(ev: {
   return { mapValue: { fields } };
 }
 
-/** Replace the entire events array on the family doc (service account). */
+/** Thrown when a conditional write loses the race — caller should re-fetch and retry. */
+export class PreconditionFailedError extends Error {
+  constructor() {
+    super('Family doc changed since it was read');
+    this.name = 'PreconditionFailedError';
+  }
+}
+
+export type PatchableEvent = {
+  id: string;
+  title: string;
+  start: string;
+  end: string;
+  allDay: boolean;
+  memberId?: string;
+  memberIds: string[];
+  recurrence?: string;
+  recurrenceUntil?: string;
+  exceptionDates?: string[];
+  location?: string;
+  notes?: string;
+  category?: string;
+};
+
+/**
+ * Replace the entire events array on the family doc (service account).
+ * When expectedUpdateTime is given, the write is conditional on the doc not
+ * having changed since it was read (Firestore's currentDocument.updateTime
+ * precondition) — throws PreconditionFailedError on a lost race instead of
+ * silently overwriting a concurrent change (another device's CalDAV write,
+ * or the web app's own persist()). Pass undefined for an unconditional
+ * write — only mutateFamilyEvents below should do that, and only because
+ * it re-reads fresh on every attempt anyway.
+ */
 export async function patchFamilyEvents(
   projectId: string,
   familyId: string,
   token: string,
-  events: {
-    id: string;
-    title: string;
-    start: string;
-    end: string;
-    allDay: boolean;
-    memberId?: string;
-    memberIds: string[];
-    recurrence?: string;
-    recurrenceUntil?: string;
-    exceptionDates?: string[];
-    location?: string;
-    notes?: string;
-    category?: string;
-  }[],
+  events: PatchableEvent[],
+  expectedUpdateTime?: string,
 ): Promise<void> {
-  const url =
+  let url =
     `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/families/${encodeURIComponent(familyId)}` +
     `?updateMask.fieldPaths=events&updateMask.fieldPaths=updatedAt`;
+  if (expectedUpdateTime) {
+    url += `&currentDocument.updateTime=${encodeURIComponent(expectedUpdateTime)}`;
+  }
 
   const body = {
     fields: {
@@ -365,7 +388,57 @@ export async function patchFamilyEvents(
     },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`Firestore PATCH events ${res.status}: ${await res.text()}`);
+  if (!res.ok) {
+    const text = await res.text();
+    if (text.includes('FAILED_PRECONDITION')) throw new PreconditionFailedError();
+    throw new Error(`Firestore PATCH events ${res.status}: ${text}`);
+  }
+}
+
+/**
+ * Safely apply a mutation to the family's events array: read the current
+ * doc, run `mutate` over the current events, write back conditionally on
+ * the doc not having changed since the read. If another writer wins the
+ * race, re-fetch and retry rather than clobbering it.
+ */
+export async function mutateFamilyEvents(
+  projectId: string,
+  familyId: string,
+  token: string,
+  mutate: (current: PatchableEvent[]) => PatchableEvent[],
+  maxAttempts = 4,
+): Promise<PatchableEvent[]> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const doc = await getFamilyDoc(projectId, familyId, token);
+    const current: PatchableEvent[] = readEvents(doc).map((ev) => ({
+      id: ev.id,
+      title: ev.title,
+      start: ev.start,
+      end: ev.end,
+      allDay: ev.allDay,
+      memberId: ev.memberIds?.[0],
+      memberIds: ev.memberIds || [],
+      recurrence: ev.recurrence,
+      recurrenceUntil: ev.recurrenceUntil,
+      exceptionDates: ev.exceptionDates,
+      location: ev.location,
+      notes: ev.notes,
+      category: ev.category,
+    }));
+    const next = mutate(current);
+    try {
+      await patchFamilyEvents(projectId, familyId, token, next, doc.updateTime);
+      return next;
+    } catch (e) {
+      if (e instanceof PreconditionFailedError) {
+        lastErr = e;
+        continue;
+      }
+      throw e;
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error('Could not save event — too much concurrent activity, try again');
 }
 
 
@@ -434,10 +507,14 @@ export async function patchFamilyTodos(
   familyId: string,
   token: string,
   todos: FeedTodo[],
+  expectedUpdateTime?: string,
 ): Promise<void> {
-  const url =
+  let url =
     `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/families/${encodeURIComponent(familyId)}` +
     `?updateMask.fieldPaths=todos&updateMask.fieldPaths=updatedAt`;
+  if (expectedUpdateTime) {
+    url += `&currentDocument.updateTime=${encodeURIComponent(expectedUpdateTime)}`;
+  }
 
   const body = {
     fields: {
@@ -454,7 +531,38 @@ export async function patchFamilyTodos(
     },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`Firestore PATCH todos ${res.status}: ${await res.text()}`);
+  if (!res.ok) {
+    const text = await res.text();
+    if (text.includes('FAILED_PRECONDITION')) throw new PreconditionFailedError();
+    throw new Error(`Firestore PATCH todos ${res.status}: ${text}`);
+  }
+}
+
+/** Same race-safe pattern as mutateFamilyEvents, for the todos array. */
+export async function mutateFamilyTodos(
+  projectId: string,
+  familyId: string,
+  token: string,
+  mutate: (current: FeedTodo[]) => FeedTodo[],
+  maxAttempts = 4,
+): Promise<FeedTodo[]> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const doc = await getFamilyDoc(projectId, familyId, token);
+    const current = readTodos(doc);
+    const next = mutate(current);
+    try {
+      await patchFamilyTodos(projectId, familyId, token, next, doc.updateTime);
+      return next;
+    } catch (e) {
+      if (e instanceof PreconditionFailedError) {
+        lastErr = e;
+        continue;
+      }
+      throw e;
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error('Could not save task — too much concurrent activity, try again');
 }
 
 /** settings.calendarMemberTokens map: memberId → token */

@@ -9,8 +9,8 @@
 import { getGoogleAccessToken, parseServiceAccount } from '../../lib/googleSa';
 import {
   getFamilyDoc,
-  patchFamilyEvents,
-  patchFamilyTodos,
+  mutateFamilyEvents,
+  mutateFamilyTodos,
   readCalendarMemberTokens,
   readEvents,
   readMembers,
@@ -116,14 +116,14 @@ async function authorize(req: Request, env: Env): Promise<AuthOk | Response> {
   const user = basic.user.trim();
   const pass = basic.pass;
 
-  // Family-wide token (full access)
-  if (familyToken && pass === familyToken) {
-    if (!user || user === 'family' || user === 'all') {
-      return { user: 'family', memberIdsFilter: null };
-    }
-    const m = members.find((x) => x.id === user || x.name === user);
-    if (!m) return unauthorized();
-    return { user: m.id, memberIdsFilter: [m.id] };
+  // Family-wide token: only grants the combined "family" identity, never a
+  // specific member. calendarFeedToken is shared with every member anyway
+  // (it's also the read-only .ics feed's secret) — if it also unlocked
+  // writing as a *named* member, anyone holding it could authenticate as
+  // "dad" or a sibling and edit their calendar. A named member must use
+  // their own per-member token (below) for that.
+  if (familyToken && pass === familyToken && (!user || user === 'family' || user === 'all')) {
+    return { user: 'family', memberIdsFilter: null };
   }
 
   // Per-member token: password matches that member's token; username must be their id/name
@@ -459,16 +459,23 @@ ${responses}
               if (!parsed) return new Response('Invalid VTODO', { status: 400, headers: davHeaders() });
               if (decodedUid) parsed.id = decodedUid;
               parsed.memberId = taskMemberId;
-              const next = allTodos.map((x) => ({ ...x }));
-              const idx = next.findIndex((x) => x.id === parsed.id);
-              const created = idx < 0;
-              if (idx >= 0) next[idx] = { ...next[idx], ...parsed, memberId: taskMemberId };
-              else next.push(parsed);
-              await patchFamilyTodos(sa.project_id, familyId, accessToken, next);
+              let created = false;
+              const committed = await mutateFamilyTodos(sa.project_id, familyId, accessToken, (current) => {
+                const next = current.map((x) => ({ ...x }));
+                const idx = next.findIndex((x) => x.id === parsed.id);
+                created = idx < 0;
+                if (idx >= 0) next[idx] = { ...next[idx], ...parsed, memberId: taskMemberId };
+                else next.push(parsed);
+                return next;
+              });
               const location = `${calHref}/${encodeURIComponent(parsed.id)}.ics`;
               return new Response(null, {
                 status: created ? 201 : 204,
-                headers: { ETag: todoEtag(parsed), Location: location, ...davHeaders() },
+                headers: {
+                  ETag: todoEtag(committed.find((x) => x.id === parsed.id) || parsed),
+                  Location: location,
+                  ...davHeaders(),
+                },
               });
             } catch (e) {
               console.error('[caldav] PUT todo failed', e);
@@ -477,9 +484,13 @@ ${responses}
           }
 
           if (method === 'DELETE') {
-            const next = allTodos.filter((x) => x.id !== decodedUid);
-            if (next.length === allTodos.length) return new Response('Not found', { status: 404, headers: davHeaders() });
-            await patchFamilyTodos(sa.project_id, familyId, accessToken, next);
+            let found = false;
+            await mutateFamilyTodos(sa.project_id, familyId, accessToken, (current) => {
+              const next = current.filter((x) => x.id !== decodedUid);
+              found = next.length !== current.length;
+              return next;
+            });
+            if (!found) return new Response('Not found', { status: 404, headers: davHeaders() });
             return new Response(null, { status: 204, headers: davHeaders() });
           }
         }
@@ -633,26 +644,29 @@ ${responses}
               parsed.memberId = defaultMembers[0];
             }
 
-            const asGh = allEvents.map(feedToGh);
-            const idx = asGh.findIndex((e) => e.id === parsed.id);
-            const created = idx < 0;
-            if (idx >= 0) {
-              asGh[idx] = {
-                ...asGh[idx],
-                ...parsed,
-                memberIds: parsed.memberIds.length ? parsed.memberIds : asGh[idx]!.memberIds,
-              };
-            } else {
-              asGh.push(parsed);
-            }
+            let created = false;
+            const committed = await mutateFamilyEvents(sa.project_id, familyId, accessToken, (current) => {
+              const next = current.slice();
+              const idx = next.findIndex((e) => e.id === parsed.id);
+              created = idx < 0;
+              if (idx >= 0) {
+                next[idx] = {
+                  ...next[idx]!,
+                  ...parsed,
+                  memberIds: parsed.memberIds.length ? parsed.memberIds : next[idx]!.memberIds,
+                };
+              } else {
+                next.push(parsed);
+              }
+              return next;
+            });
 
-            await patchFamilyEvents(sa.project_id, familyId, accessToken, asGh);
             const location = `${calHref}/${encodeURIComponent(parsed.id)}.ics`;
             console.log('[caldav] PUT ok', created ? 'created' : 'updated', parsed.id);
             return new Response(null, {
               status: created ? 201 : 204,
               headers: {
-                ETag: eventEtag(parsed),
+                ETag: eventEtag(committed.find((e) => e.id === parsed.id) || parsed),
                 Location: location,
                 'Content-Location': location,
                 ...davHeaders(),
@@ -665,11 +679,15 @@ ${responses}
         }
 
         if (method === 'DELETE') {
-          const asGh = allEvents.map(feedToGh).filter((e) => e.id !== decodedUid);
-          if (asGh.length === allEvents.length) {
+          let found = false;
+          await mutateFamilyEvents(sa.project_id, familyId, accessToken, (current) => {
+            const next = current.filter((e) => e.id !== decodedUid);
+            found = next.length !== current.length;
+            return next;
+          });
+          if (!found) {
             return new Response('Not found', { status: 404, headers: davHeaders() });
           }
-          await patchFamilyEvents(sa.project_id, familyId, accessToken, asGh);
           console.log('[caldav] DELETE', decodedUid);
           return new Response(null, { status: 204, headers: davHeaders() });
         }
