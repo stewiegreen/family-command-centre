@@ -1525,7 +1525,7 @@ export type WordleDaily = {
    * In-progress daily games by memberId (guesses only — answer is derived from seed).
    * Closing the tab no longer wipes the board.
    */
-  inProgress?: Record<string, { guesses: string[] }>;
+  inProgress?: Record<string, { guesses: string[]; seed?: string }>;
 };
 
 export function evaluateStatus(guesses: string[], answer: string): WordleStatus {
@@ -1649,6 +1649,13 @@ export function loadWordleLocal(key: string): WordleState | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as WordleState;
     if (!parsed || !Array.isArray(parsed.guesses) || typeof parsed.answer !== 'string') return null;
+    // Daily boards must match the seed embedded in the key / payload
+    if (parsed.mode === 'daily') {
+      const today = todaySeed();
+      if (parsed.seed && parsed.seed !== today) return null;
+      // Never trust a stored answer from another day — rebuild from seed
+      return restoreDailyFromGuesses(parsed.guesses, parsed.seed || today);
+    }
     const status = evaluateStatus(parsed.guesses, parsed.answer);
     return { ...parsed, status };
   } catch {
@@ -1694,33 +1701,54 @@ export function initialWordleState(
   const key = wordleStorageKey(mode, opts.memberId, seed);
 
   if (mode === 'daily') {
+    // Family doc still on another calendar day → never resume that progress as "today"
+    if (opts.daily?.seed && opts.daily.seed !== seed) {
+      clearWordleLocal(key);
+      return newWordleGame('daily');
+    }
+
     const finished = new Set(opts.daily?.finishedMemberIds || []);
     if (opts.memberId && opts.daily?.seed === seed && finished.has(opts.memberId)) {
-      // Show a completed empty board state — they already used today's attempt
       const answer = pickAnswer(seed);
       return {
         answer,
         guesses: [],
-        status: 'lost', // locked; UI treats finished separately
+        status: 'lost',
         mode: 'daily',
         seed,
       };
     }
-    // Prefer cloud in-progress (survives device switches / cleared cache less often than hope)
-    const cloudGuesses =
+
+    const cloudEntry =
       opts.memberId && opts.daily?.seed === seed
-        ? opts.daily.inProgress?.[opts.memberId]?.guesses
+        ? opts.daily.inProgress?.[opts.memberId]
         : undefined;
-    if (cloudGuesses && cloudGuesses.length > 0) {
+    const cloudGuesses = cloudEntry?.guesses;
+    const cloudSeed = cloudEntry?.seed;
+    if (
+      cloudGuesses &&
+      cloudGuesses.length > 0 &&
+      (!cloudSeed || cloudSeed === seed)
+    ) {
       const restored = restoreDailyFromGuesses(cloudGuesses, seed);
       if (restored.status === 'playing') {
         saveWordleLocal(key, restored);
         return restored;
       }
     }
+
     const local = loadWordleLocal(key);
-    if (local && local.mode === 'daily' && local.seed === seed && local.status === 'playing') {
-      return local;
+    if (
+      local &&
+      local.mode === 'daily' &&
+      local.seed === seed &&
+      local.status === 'playing' &&
+      Array.isArray(local.guesses)
+    ) {
+      return restoreDailyFromGuesses(local.guesses, seed);
+    }
+    if (local && local.seed && local.seed !== seed) {
+      clearWordleLocal(key);
     }
     return newWordleGame('daily');
   }

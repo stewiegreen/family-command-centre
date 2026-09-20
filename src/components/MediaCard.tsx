@@ -170,15 +170,25 @@ export function MediaCard({
   className,
 }: Props) {
   const pct = playedPercent(item);
-  const isEpisode = item.Type === 'Episode';
-  const album = isSquareItem(item, forceSquare);
-  // Albums / music folders stay square even from continue-style rows
-  const landscape = !album && (variant === 'continue' || isEpisode);
-  const shape: 'poster' | 'landscape' | 'square' = album
-    ? 'square'
-    : landscape
-      ? 'landscape'
-      : 'poster';
+  // Episodes only — never poster/square, even inside a poster grid or music-style square force
+  const isEpisode =
+    item.Type === 'Episode' ||
+    (item.Type !== 'Series' &&
+      item.Type !== 'Season' &&
+      item.Type !== 'Movie' &&
+      item.Type !== 'Folder' &&
+      item.Type !== 'BoxSet' &&
+      !!item.SeriesName &&
+      item.IndexNumber != null);
+  const album = !isEpisode && isSquareItem(item, forceSquare);
+  const landscape = isEpisode || (!album && variant === 'continue');
+  const shape: 'poster' | 'landscape' | 'square' = isEpisode
+    ? 'landscape'
+    : album
+      ? 'square'
+      : landscape
+        ? 'landscape'
+        : 'poster';
   const title = primaryTitle(item, landscape);
   const sub = secondaryLine(item, landscape);
   const left = landscape ? remainingLabel(item) : null;

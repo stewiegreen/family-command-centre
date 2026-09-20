@@ -447,7 +447,9 @@ export function PlayPage() {
             me
               ? (state) => {
                   if (state.mode !== 'daily' || state.status !== 'playing') return;
-                  const seed = state.seed || todaySeed();
+                  const seed = todaySeed();
+                  // Never persist a board from another calendar day onto "today"
+                  if (state.seed && state.seed !== seed) return;
                   update((prev) => {
                     const base =
                       prev.wordleDaily && prev.wordleDaily.seed === seed
@@ -460,7 +462,7 @@ export function PlayPage() {
                         seed,
                         inProgress: {
                           ...(base.inProgress || {}),
-                          [me.id]: { guesses: state.guesses },
+                          [me.id]: { guesses: state.guesses, seed },
                         },
                       },
                     };
@@ -1453,6 +1455,32 @@ function WordleBoard({
   const onProgressRef = useRef(onProgress);
   onProgressRef.current = onProgress;
   const dailyReportedRef = useRef(alreadyFinished);
+
+  // If the calendar day rolls over while Wordle is open (or stale state was loaded), hard-reset.
+  useEffect(() => {
+    if (mode !== 'daily') return;
+    const tick = () => {
+      const today = todaySeed();
+      if (gameRef.current.seed && gameRef.current.seed !== today) {
+        const next = initialWordleState('daily', { memberId: me?.id, daily });
+        setGame(next);
+        setCurrent('');
+        setMsg(null);
+        dailyReportedRef.current =
+          !!me &&
+          !!daily &&
+          daily.seed === today &&
+          (daily.finishedMemberIds || []).includes(me.id);
+      }
+    };
+    tick();
+    window.addEventListener('focus', tick);
+    const id = window.setInterval(tick, 60_000);
+    return () => {
+      window.removeEventListener('focus', tick);
+      window.clearInterval(id);
+    };
+  }, [mode, me?.id, daily]);
 
   // Physical keyboard
   useEffect(() => {

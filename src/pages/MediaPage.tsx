@@ -809,12 +809,19 @@ export function MediaPage() {
                 </div>
               ) : (
                 <>
-                  <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3 sm:gap-4">
+                  <div
+                    className={
+                      // TV episodes → wider landscape cells (not 6-up posters)
+                      detailItems.some((i) => i.Type === 'Episode')
+                        ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4'
+                        : 'grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3 sm:gap-4'
+                    }
+                  >
                     {detailItems.map((item) => (
                       <MediaCard
                         key={item.Id}
                         item={item}
-                        square={inMusicContext}
+                        square={inMusicContext && item.Type !== 'Episode'}
                         layout="grid"
                         onOpen={() => void openFocus(item)}
                       />
