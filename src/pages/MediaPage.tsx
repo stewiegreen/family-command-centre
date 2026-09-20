@@ -147,10 +147,11 @@ export function MediaPage() {
   const webUrl = resolveEmbyWebUrl(data.settings);
 
   const [tab, setTab] = useState<Tab>('home');
+  /** Where the user started this browse path — Back at root returns here (not always Libraries). */
+  const [browseOrigin, setBrowseOrigin] = useState<Tab>('home');
   const [browseStack, setBrowseStack] = useState<Browse[]>([{ kind: 'root' }]);
   const browse = browseStack[browseStack.length - 1] || { kind: 'root' as const };
   const pushBrowse = (b: Browse) => setBrowseStack((s) => [...s, b]);
-  const goBack = () => setBrowseStack((s) => (s.length > 1 ? s.slice(0, -1) : s));
   const goRoot = () => setBrowseStack([{ kind: 'root' }]);
 
   const [loading, setLoading] = useState(true);
@@ -267,25 +268,89 @@ export function MediaPage() {
     void loadHome();
   }, [loadHome]);
 
-  const openFocus = async (item: EmbyItem) => {
-    if (item.Type === 'Series' || item.Type === 'Season' || item.Type === 'Folder' || item.Type === 'BoxSet') {
-      pushBrowse({ kind: 'folder', item, title: item.Name || 'Folder' });
-      setTab('libraries');
+  /** Load the grid for a stack frame (series → seasons, season → episodes, library → titles). */
+  const loadBrowseLevel = useCallback(
+    async (level: Browse) => {
+      if (!embyUserId) return;
+      if (level.kind === 'root') {
+        setDetailItems([]);
+        setDetailTotal(0);
+        setDetailStart(0);
+        return;
+      }
       setDetailLoading(true);
       setDetailItems([]);
       setDetailStart(0);
       try {
-        const { items, total } = await embyChildren(embyUserId, item.Id, {
-          limit: 48,
-          parentType: item.Type,
-        });
-        setDetailItems(sortMediaItems(items));
-        setDetailTotal(total);
+        if (level.kind === 'library') {
+          const sortBy = embySortByForParent({ collectionType: level.view.CollectionType });
+          const { items, total } = await embyItems(embyUserId, {
+            parentId: level.view.Id,
+            recursive: false,
+            sortBy,
+            sortOrder: 'Ascending',
+            limit: 48,
+            startIndex: 0,
+          });
+          setDetailItems(sortMediaItems(items));
+          setDetailTotal(total);
+        } else {
+          const { items, total } = await embyChildren(embyUserId, level.item.Id, {
+            limit: 48,
+            parentType: level.item.Type,
+          });
+          setDetailItems(sortMediaItems(items));
+          setDetailTotal(total);
+        }
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));
       } finally {
         setDetailLoading(false);
       }
+    },
+    [embyUserId],
+  );
+
+
+  // Whenever the top of the stack changes, show that level’s content
+  useEffect(() => {
+    if (tab !== 'libraries') return;
+    void loadBrowseLevel(browse);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-load when stack identity changes
+  }, [
+    tab,
+    browse.kind,
+    browse.kind === 'library' ? browse.view.Id : '',
+    browse.kind === 'folder' ? browse.item.Id : '',
+    loadBrowseLevel,
+  ]);
+
+
+  const handleBackToOrigin = useCallback(() => {
+    setBrowseStack((s) => {
+      // At root already → leave browse, return to Home (or prior tab)
+      if (s.length <= 1) {
+        queueMicrotask(() => setTab(browseOrigin));
+        return [{ kind: 'root' }];
+      }
+      // One level deep (e.g. Home → Series, or Home → Movies library):
+      // skip the empty Libraries root and return to where the user started.
+      if (s.length === 2 && browseOrigin !== 'libraries') {
+        queueMicrotask(() => setTab(browseOrigin));
+        return [{ kind: 'root' }];
+      }
+      // Deeper (e.g. Library → Series → Season): pop to parent so seasons reappear
+      return s.slice(0, -1);
+    });
+  }, [browseOrigin]);
+
+  const openFocus = async (item: EmbyItem) => {
+    if (item.Type === 'Series' || item.Type === 'Season' || item.Type === 'Folder' || item.Type === 'BoxSet') {
+      // Remember Home vs Libraries so Back can leave browse correctly
+      setBrowseOrigin(tab === 'search' ? 'home' : tab);
+      setTab('libraries');
+      pushBrowse({ kind: 'folder', item, title: item.Name || 'Folder' });
+      // loadBrowseLevel runs via useEffect when stack updates
       return;
     }
     setFocusLoading(true);
@@ -301,28 +366,9 @@ export function MediaPage() {
   };
 
   const openLibrary = async (view: EmbyView) => {
-    pushBrowse({ kind: 'library', view });
+    setBrowseOrigin(tab === 'libraries' ? 'libraries' : tab);
     setTab('libraries');
-    setDetailLoading(true);
-    setDetailItems([]);
-    setDetailStart(0);
-    try {
-      const sortBy = embySortByForParent({ collectionType: view.CollectionType });
-      const { items, total } = await embyItems(embyUserId, {
-        parentId: view.Id,
-        recursive: false,
-        sortBy,
-        sortOrder: 'Ascending',
-        limit: 48,
-        startIndex: 0,
-      });
-      setDetailItems(sortMediaItems(items));
-      setDetailTotal(total);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setDetailLoading(false);
-    }
+    pushBrowse({ kind: 'library', view });
   };
 
   const loadMoreDetail = useCallback(async () => {
@@ -689,14 +735,14 @@ export function MediaPage() {
       {/* ── LIBRARIES / BROWSE ── */}
       {tab === 'libraries' && (
         <div className="space-y-4">
-          {browse.kind !== 'root' && (
+          {(browse.kind !== 'root' || browseOrigin === 'home') && (
             <button
               type="button"
-              onClick={() => (browseStack.length > 1 ? goBack() : goRoot())}
+              onClick={handleBackToOrigin}
               className="inline-flex items-center gap-1.5 text-sm font-semibold text-accent hover:underline"
             >
               <ArrowLeft className="w-4 h-4" />
-              Back
+              {browse.kind === 'root' ? 'Home' : 'Back'}
             </button>
           )}
 
