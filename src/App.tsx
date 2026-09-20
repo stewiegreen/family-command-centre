@@ -15,7 +15,8 @@ import { JournalPage } from './pages/JournalPage';
 import { MessagesPage } from './pages/MessagesPage';
 import { MediaPage } from './pages/MediaPage';
 import { ComicsPage } from './pages/ComicsPage';
-import { SettingsPage } from './pages/SettingsPage';
+import { SettingsPage } from './pages/SettingsPage'
+import { CoinMathPage } from './pages/CoinMathPage';
 import { ChangeEmailPage } from './pages/ChangeEmailPage';
 import { ThemeStudioPage } from './pages/ThemeStudioPage';
 import { PlayPage } from './pages/PlayPage';
@@ -104,6 +105,7 @@ function AppShell() {
             {view === 'themestudio' && <ThemeStudioPage />}
             {view === 'play' && <PlayPage />}
             {view === 'settings' && isParent && <SettingsPage />}
+            {view === 'coinmath' && isParent && <CoinMathPage />}
           </>
         )}
         <QuickAddFab />

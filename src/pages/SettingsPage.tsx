@@ -38,6 +38,7 @@ export function SettingsPage() {
     lockParentPin,
     getMember,
     isParent,
+    setView,
   } = useApp();
   const [s, setS] = useState(data.settings);
   const [members, setMembers] = useState(data.members);
@@ -1097,6 +1098,19 @@ export function SettingsPage() {
       <p className="text-xs text-muted text-center">
         {familyId ? 'Data syncs live to all devices in this family.' : 'Local-only until cloud is connected.'}
       </p>
-    </div>
+    
+      {isParent && (
+        <Card className="p-4 space-y-2 border-dashed border-amber-500/40">
+          <h2 className="text-sm font-bold text-fg">Coin math (temporary debug)</h2>
+          <p className="text-xs text-muted leading-relaxed">
+            See stored Treasure balances vs the coin ledger, totals by reason, and drift when numbers look wrong.
+          </p>
+          <Button type="button" size="sm" onClick={() => setView('coinmath')}>
+            Open coin math
+          </Button>
+        </Card>
+      )}
+
+</div>
   );
 }
