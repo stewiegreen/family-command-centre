@@ -910,7 +910,7 @@ export function Dashboard() {
         coinBalances: nextBalances,
         coinLedger: [ledgerEntry, ...(d.coinLedger || [])].slice(0, 200),
       };
-      result = recordWeekdayCompletion(result, forId, new Date(at));
+      result = recordWeekdayCompletion(result, forId, new Date(at), quest.submittedAt);
       return result;
     });
   };

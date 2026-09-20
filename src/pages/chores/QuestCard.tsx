@@ -162,7 +162,7 @@ export function QuestCard({
         coinLedger: nextLedger,
       };
       // Count toward weekday streak (Mon–Fri only; no-op on weekends)
-      result = recordWeekdayCompletion(result, forId, new Date(at));
+      result = recordWeekdayCompletion(result, forId, new Date(at), quest.submittedAt);
       return result;
     });
   };

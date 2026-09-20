@@ -17,6 +17,7 @@ export type EmbyItem = {
   Id: string;
   Name: string;
   Type?: string;
+  MediaType?: string;
   SeriesName?: string;
   SeasonName?: string;
   ProductionYear?: number;
@@ -50,10 +51,7 @@ export type EmbyItem = {
   AlbumArtist?: string;
   Album?: string;
   AlbumId?: string;
-  ParentIndexNumber?: number;
 };
-
-
 
 export type EmbyItemsResponse = {
   Items?: EmbyItem[];
@@ -64,14 +62,7 @@ export type EmbyView = {
   Id: string;
   Name: string;
   CollectionType?: string;
-  Artists?: string[];
-  AlbumArtist?: string;
-  Album?: string;
-  AlbumId?: string;
-  ParentIndexNumber?: number;
 };
-
-
 
 export type EmbyViewsResponse = {
   Items?: EmbyView[];

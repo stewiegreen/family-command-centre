@@ -24,7 +24,6 @@ import {
   formatTicksDuration,
   isAudioItem,
   secondsToTicks,
-  ticksToSeconds,
   type EmbyItem,
 } from '../lib/emby';
 import { Button } from './ui/Button';
@@ -55,8 +54,8 @@ export function AlbumPlayer({
 }: Props) {
   const tracks = rawTracks.filter(isAudioItem);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const mediaSourceId = useRef<string | undefined>();
-  const playSessionId = useRef<string | undefined>();
+  const mediaSourceId = useRef<string | undefined>(undefined);
+  const playSessionId = useRef<string | undefined>(undefined);
   const startedRef = useRef(false);
   const progressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const modeRef = useRef<'static' | 'transcode'>('static');
@@ -265,7 +264,7 @@ export function AlbumPlayer({
               onClick={() => {
                 if (playing) setPlaying(false);
                 else {
-                  if (!src) void loadTrack(tracks[index]!, true);
+                  if (!src) void loadTrack(tracks[index]!);
                   setPlaying(true);
                 }
               }}

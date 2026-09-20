@@ -232,14 +232,22 @@ export function ensureWeekRollover(data: FamilyData, byId: string): FamilyData {
   return next;
 }
 
-/** Record an approved quest toward this week's weekday streak (Mon–Fri only). */
+/**
+ * Record an approved quest toward this week's chest progress.
+ *
+ * Bug fix: progress used to require approval on Mon–Fri only. Parents often approve
+ * on the weekend, so the bar stopped moving and kids could not reach the chest.
+ * Now every approval counts toward the *current* ISO week (Mon–Sun).
+ */
 export function recordWeekdayCompletion(
   data: FamilyData,
   memberId: string,
   approvedAt = new Date(),
+  _submittedAt?: Date | string | null,
 ): FamilyData {
-  if (!isWeekday(approvedAt)) return data;
-  const current = isoWeekId(approvedAt);
+  const approved = approvedAt instanceof Date ? approvedAt : new Date(approvedAt);
+  const current = isoWeekId(approved);
+
   let ws = data.weekState;
   if (!ws || ws.weekId !== current) {
     // Rollover should have run; if not, start current week without closing here.
