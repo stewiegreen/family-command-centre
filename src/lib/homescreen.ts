@@ -30,6 +30,7 @@ export const HOMESCREEN_WIDGETS = [
   'pictureframe2',
   'lights',
   'books',
+  'recs',
 ] as const;
 
 export type HomescreenWidgetId = (typeof HOMESCREEN_WIDGETS)[number];

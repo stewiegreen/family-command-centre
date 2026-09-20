@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import type { MediaRecommendation } from '../types';
+import { takeRecOpen } from '../lib/familyRecs';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
@@ -642,6 +643,14 @@ export function MediaPage() {
       );
     }
   };
+
+  useEffect(() => {
+    const pending = takeRecOpen('emby');
+    if (!pending) return;
+    const rec = (data.mediaRecommendations || []).find((r) => r.id === pending.id);
+    if (rec && rec.status !== 'dismissed') void openMediaRecommendation(rec);
+  }, [data.mediaRecommendations, memberId]);
+
 
   const continueItems = useMemo(() => {
     const seen = new Set<string>();

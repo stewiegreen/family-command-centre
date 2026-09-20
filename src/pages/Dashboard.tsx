@@ -48,6 +48,7 @@ import { Modal } from '../components/ui/Modal';
 import { ProfileLookCard } from '../components/ProfileLookEditor';
 import { LightsCard } from '../components/LightsCard';
 import { ContinueReadingCard } from '../components/ContinueReadingCard';
+import { RecommendationsCard } from '../components/RecommendationsCard';
 import { PictureFrameCard } from '../components/PictureFrameCard';
 import type { CalendarEvent, ExpandedEvent, FamilyData, JournalVisibility, Note, PresenceStatus, Quest, ViewId } from '../types';
 import { applyTodoStatus, creditMemberForQuest } from '../lib/todoQuest';
@@ -128,6 +129,7 @@ const SECTION_LABELS: Record<SectionId, string> = {
   pictureframe2: 'Picture frame 2',
   lights: 'Lights',
   books: 'On Deck',
+  recs: 'Recommended',
 };
 
 const HOME_JOURNAL_MOODS = ['😊', '😌', '😐', '😔', '😤', '🤩', '😴', '🙏'] as const;
@@ -2004,6 +2006,7 @@ export function Dashboard() {
     ),
     lights: isParent ? <LightsCard /> : <Card className="!p-4 text-sm text-muted">Parents only.</Card>,
     books: <ContinueReadingCard />,
+    recs: <RecommendationsCard />,
   };
 
   return (

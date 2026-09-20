@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import type { ComicRecommendation } from '../types';
+import { takeRecOpen } from '../lib/familyRecs';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Modal } from '../components/ui/Modal';
@@ -535,6 +536,14 @@ export function ComicsPage() {
       setError(e instanceof Error ? e.message : 'Could not open recommended comic');
     }
   };
+
+  useEffect(() => {
+    const pending = takeRecOpen('comic');
+    if (!pending) return;
+    const rec = (data.comicRecommendations || []).find((r) => r.id === pending.id);
+    if (rec && rec.status !== 'dismissed') void openRecommendation(rec);
+  }, [data.comicRecommendations, memberId]);
+
 
   const openSeries = async (s: KomgaSeries) => {
     pushBrowse({ kind: 'series', series: s });
