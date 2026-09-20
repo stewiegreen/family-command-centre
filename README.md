@@ -1,3 +1,5 @@
+This is 100% pure vibe-coded AI slop.  It was made purely for my family to use - that said it's gone beyond anything I expected it to be.  So feel free to use it for your family.
+
 # Family Command Centre
 
 **An invite-only, multi-device operating system for one family.**
