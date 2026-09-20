@@ -1,6 +1,4 @@
 import { ScreenTimerCard } from '../components/ScreenTimerCard';
-import { FlipCard } from '../components/FlipCard';
-import { EventsDotCalendar } from '../components/EventsDotCalendar';
 import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import {
   Calendar,
@@ -8,24 +6,16 @@ import {
   CheckSquare,
   StickyNote,
   MessageCircle,
-  Coins,
-  MonitorPlay,
   Plus,
   ShoppingCart,
   Newspaper,
   Sword,
-  Trophy,
-  Package,
   X,
   Eye,
   EyeOff,
   LayoutGrid,
   Megaphone,
   Home,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  Users,
   BookOpen,
   Lock,
   GraduationCap,
@@ -96,6 +86,9 @@ import {
   type SectionId,
 } from './dashboard/constants';
 import { SectionChrome } from './dashboard/SectionChrome';
+import { EventsHomeCard } from './dashboard/EventsHomeCard';
+import { TodosHomeCard } from './dashboard/TodosHomeCard';
+import { ChoreQuestHomeCard } from './dashboard/ChoreQuestHomeCard';
 
 export function Dashboard() {
   const {
@@ -190,8 +183,6 @@ export function Dashboard() {
   };
 
   const [eventsFilterMemberId, setEventsFilterMemberIdState] = useState(loadHomeEventsFilter);
-  const [eventsFilterOpen, setEventsFilterOpen] = useState(false);
-  const eventsFilterRef = useRef<HTMLDivElement>(null);
   const setEventsFilterMemberId = (id: string) => {
     setEventsFilterMemberIdState(id);
     try {
@@ -200,17 +191,6 @@ export function Dashboard() {
       /* ignore */
     }
   };
-
-  useEffect(() => {
-    if (!eventsFilterOpen) return;
-    const onDoc = (e: MouseEvent) => {
-      if (eventsFilterRef.current && !eventsFilterRef.current.contains(e.target as Node)) {
-        setEventsFilterOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', onDoc);
-    return () => document.removeEventListener('mousedown', onDoc);
-  }, [eventsFilterOpen]);
 
   // Per-user layout: rows of 1 (full width) or 2 (shared) card ids.
   const rows = myHomescreenRows;
@@ -391,9 +371,6 @@ export function Dashboard() {
   });
 
   const [shopDraft, setShopDraft] = useState('');
-  const [todoDraft, setTodoDraft] = useState('');
-  const [tasksDayOffset, setTasksDayOffset] = useState(0);
-  const [eventDraft, setEventDraft] = useState('');
   const [editEvent, setEditEvent] = useState<CalendarEvent | null>(null);
   const [evTitle, setEvTitle] = useState('');
   const [evLocation, setEvLocation] = useState('');
@@ -472,58 +449,6 @@ export function Dashboard() {
     [shopping],
   );
 
-  /** To-dos for the active profile (+ shared family list). */
-  const tasksFocusDate = useMemo(() => {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    d.setDate(d.getDate() + tasksDayOffset);
-    return d;
-  }, [tasksDayOffset]);
-
-  const tasksFocusLabel = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    if (tasksFocusDate.getTime() === today.getTime()) return "Today's Tasks";
-    const tmr = new Date(today);
-    tmr.setDate(tmr.getDate() + 1);
-    if (tasksFocusDate.getTime() === tmr.getTime()) return "Tomorrow's Tasks";
-    const yest = new Date(today);
-    yest.setDate(yest.getDate() - 1);
-    if (tasksFocusDate.getTime() === yest.getTime()) return "Yesterday's Tasks";
-    return tasksFocusDate.toLocaleDateString(undefined, {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-    });
-  }, [tasksFocusDate]);
-
-  /** Only *my* tasks due on the focus day (or my undated open tasks when viewing today). */
-  const dayTasks = useMemo(() => {
-    const start = tasksFocusDate.getTime();
-    const end = start + 86400000;
-    const isToday = tasksDayOffset === 0;
-    const list = todos.filter((t) => {
-      if (t.memberId !== myId) return false;
-      if (t.dueAt) {
-        const ts = new Date(t.dueAt).getTime();
-        if (Number.isNaN(ts)) return false;
-        return ts >= start && ts < end;
-      }
-      // No due date: only on "today" view, open items assigned to me
-      if (!isToday) return false;
-      if (t.completed || t.status === 'done') return false;
-      return true;
-    });
-    // Open first, then done; high priority first within each
-    const rank = (p: string) => (p === 'high' ? 0 : p === 'medium' ? 1 : 2);
-    return [...list].sort((a, b) => {
-      const ac = a.completed || a.status === 'done' ? 1 : 0;
-      const bc = b.completed || b.status === 'done' ? 1 : 0;
-      if (ac !== bc) return ac - bc;
-      return rank(a.priority) - rank(b.priority);
-    });
-  }, [todos, myId, tasksFocusDate, tasksDayOffset]);
-
 
   const addShopItem = () => {
     const text = shopDraft.trim();
@@ -565,15 +490,15 @@ export function Dashboard() {
     });
   };
 
-  const addMyTodo = () => {
-    const text = todoDraft.trim();
-    if (!text) return;
+  const addMyTodo = (text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
     update((d) => ({
       ...d,
       todos: [
         {
           id: crypto.randomUUID(),
-          text,
+          text: trimmed,
           memberId: myId,
           createdById: myId,
           completed: false,
@@ -584,12 +509,11 @@ export function Dashboard() {
         ...d.todos,
       ],
     }));
-    setTodoDraft('');
   };
 
   /** Quick all-day event for today from the home card. */
-  const addQuickEvent = () => {
-    const title = eventDraft.trim();
+  const addQuickEvent = (titleArg: string) => {
+    const title = titleArg.trim();
     if (!title) return;
     const startLocal = new Date();
     startLocal.setHours(12, 0, 0, 0);
@@ -611,7 +535,6 @@ export function Dashboard() {
         },
       ],
     }));
-    setEventDraft('');
   };
 
   const openEventEdit = (ev: ExpandedEvent | CalendarEvent) => {
@@ -926,580 +849,47 @@ export function Dashboard() {
       </Card>
     ),
     events: (
-      <FlipCard
-        storageKey="events-dotcal"
-        frontLabel="List"
-        backLabel="Calendar"
-        front={
-<Card className="h-full flex flex-col">
-        <div className="flex items-center justify-between gap-2 mb-3">
-          <div className="flex items-center gap-2 min-w-0">
-            <h2 className="font-semibold text-fg shrink-0 text-lg">Upcoming Events</h2>
-            <div className="relative" ref={eventsFilterRef}>
-              <button
-                type="button"
-                onClick={() => setEventsFilterOpen((o) => !o)}
-                className="flex items-center gap-1.5 rounded-xl border border-border-strong bg-surface-2 pl-1 pr-2 py-1 text-sm text-fg hover:bg-surface-3 focus:outline-none focus:ring-2 focus:ring-accent/40 max-w-[10.5rem] sm:max-w-[12rem]"
-                title="Whose events to show"
-                aria-haspopup="listbox"
-                aria-expanded={eventsFilterOpen}
-              >
-                {eventsFilterMemberId === 'all' ? (
-                  <span className="w-7 h-7 rounded-full bg-surface-3 flex items-center justify-center shrink-0">
-                    <Users className="w-3.5 h-3.5 text-muted" />
-                  </span>
-                ) : (
-                  <Avatar
-                    size="sm"
-                    className="!w-7 !h-7 !text-sm"
-                    {...(getMember(eventsFilterMemberId) || { name: 'Member' })}
-                  />
-                )}
-                <span className="truncate font-medium">
-                  {eventsFilterMemberId === 'all'
-                    ? 'Everyone'
-                    : getMember(eventsFilterMemberId)?.name || 'Member'}
-                </span>
-                <ChevronDown className="w-3.5 h-3.5 text-muted shrink-0" />
-              </button>
-              {eventsFilterOpen && (
-                <div
-                  role="listbox"
-                  className="absolute left-0 top-full z-40 mt-1 min-w-[12rem] max-h-72 overflow-auto rounded-xl border border-border-strong bg-surface-1 shadow-lg py-1"
-                >
-                  <button
-                    type="button"
-                    role="option"
-                    aria-selected={eventsFilterMemberId === 'all'}
-                    className={cn(
-                      'w-full flex items-center gap-2 px-2 py-1.5 text-left text-sm hover:bg-surface-2',
-                      eventsFilterMemberId === 'all' && 'bg-accent/15 text-accent',
-                    )}
-                    onClick={() => {
-                      setEventsFilterMemberId('all');
-                      setEventsFilterOpen(false);
-                    }}
-                  >
-                    <span className="w-7 h-7 rounded-full bg-surface-3 flex items-center justify-center shrink-0">
-                      <Users className="w-3.5 h-3.5 text-muted" />
-                    </span>
-                    Everyone
-                  </button>
-                  {household.map((m) => {
-                    const look = getMember(m.id) || m;
-                    return (
-                      <button
-                        key={m.id}
-                        type="button"
-                        role="option"
-                        aria-selected={eventsFilterMemberId === m.id}
-                        className={cn(
-                          'w-full flex items-center gap-2 px-2 py-1.5 text-left text-sm hover:bg-surface-2',
-                          eventsFilterMemberId === m.id && 'bg-accent/15 text-accent',
-                        )}
-                        onClick={() => {
-                          setEventsFilterMemberId(m.id);
-                          setEventsFilterOpen(false);
-                        }}
-                      >
-                        <Avatar size="sm" className="!w-7 !h-7 !text-sm" {...look} />
-                        <span className="truncate">{look.name}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-          <button type="button" onClick={() => setView('calendar')} className="text-xs text-accent shrink-0 mr-1">
-            Calendar →
-          </button>
-        </div>
-        <div className="flex gap-2 mb-3">
-          <input
-            className="flex-1 rounded-xl border border-border bg-inset px-3 py-2 text-sm text-fg outline-none focus:border-accent"
-            placeholder="Add an event for today…"
-            value={eventDraft}
-            onChange={(e) => setEventDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') addQuickEvent();
-            }}
-          />
-          <Button size="sm" onClick={addQuickEvent} disabled={!eventDraft.trim()}>
-            <Plus className="w-4 h-4" />
-          </Button>
-        </div>
-        <p className="text-[11px] text-faint mb-2">Quick add creates an all-day event for today. Open Calendar for times.</p>
-        {upcoming.length === 0 ? (
-          <p className="text-sm text-muted py-4 text-center">No upcoming events. Enjoy the calm! ☀️</p>
-        ) : (
-          <div className="max-h-64 overflow-y-auto space-y-2 pr-0.5">
-            {upcoming.map((ev) => {
-              const ids = eventAssigneeIds(ev);
-              const primary = getMember(ids[0] || ev.memberId);
-              const who = ids
-                .map((id) => getMember(id)?.name)
-                .filter(Boolean)
-                .join(', ');
-              const when = new Date(ev.instanceStart || ev.start);
-              return (
-                <button
-                  key={`${ev.masterId || ev.id}-${ev.instanceStart || ev.start}`}
-                  type="button"
-                  onClick={() => openEventEdit(ev)}
-                  className="w-full text-left flex items-start gap-3 p-3 rounded-xl border border-border hover:border-accent/40 hover:bg-nav-hover/40 transition-colors"
-                  style={{
-                    backgroundColor: (primary?.color || '#6366f1') + '14',
-                    borderLeftWidth: 4,
-                    borderLeftColor: primary?.color || '#6366f1',
-                  }}
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium text-sm text-fg truncate">{ev.title}</p>
-                    <p className="text-xs text-muted mt-0.5">
-                      {when.toLocaleString(undefined, {
-                        weekday: 'short',
-                        month: 'short',
-                        day: 'numeric',
-                        hour: ev.allDay ? undefined : 'numeric',
-                        minute: ev.allDay ? undefined : '2-digit',
-                      })}
-                      {who ? ` · ${who}` : ''}
-                      {ev.location ? ` · ${ev.location}` : ''}
-                    </p>
-                  </div>
-                  <span className="text-[11px] text-accent shrink-0 mt-0.5">Edit</span>
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </Card>
-        }
-        back={<EventsDotCalendar filterMemberId={eventsFilterMemberId} />}
+      <EventsHomeCard
+        upcoming={upcoming}
+        household={household}
+        getMember={getMember}
+        filterMemberId={eventsFilterMemberId}
+        onFilterMemberId={setEventsFilterMemberId}
+        onQuickAdd={addQuickEvent}
+        onOpenEvent={openEventEdit}
+        onOpenCalendar={() => setView('calendar')}
       />
     ),
-
     todos: (
-      <Card>
-        <div className="flex items-center justify-between gap-2 mb-3">
-          <div className="flex items-center gap-1.5 min-w-0">
-            <h2 className="font-semibold text-fg flex items-center gap-2 shrink-0 text-lg">
-              <CheckSquare className="w-4 h-4 text-accent" />
-              {tasksFocusLabel}
-            </h2>
-            <div className="flex items-center gap-0.5 shrink-0">
-              <button
-                type="button"
-                className="p-1 rounded-lg border border-border text-muted hover:text-fg hover:bg-nav-hover"
-                aria-label="Previous day"
-                onClick={() => setTasksDayOffset((n) => n - 1)}
-              >
-                <ChevronLeft className="w-3.5 h-3.5" />
-              </button>
-              <button
-                type="button"
-                className="p-1 rounded-lg border border-border text-muted hover:text-fg hover:bg-nav-hover"
-                aria-label="Jump to today"
-                onClick={() => setTasksDayOffset(0)}
-                title="Today"
-              >
-                <Calendar className="w-3.5 h-3.5" />
-              </button>
-              <button
-                type="button"
-                className="p-1 rounded-lg border border-border text-muted hover:text-fg hover:bg-nav-hover"
-                aria-label="Next day"
-                onClick={() => setTasksDayOffset((n) => n + 1)}
-              >
-                <ChevronRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => setView('todos')}
-            className="text-xs font-medium text-accent hover:underline shrink-0 flex items-center gap-0.5"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            Add Task
-          </button>
-        </div>
-        <div className="flex gap-2 mb-3">
-          <input
-            className="flex-1 rounded-xl border border-border bg-inset px-3 py-2 text-sm text-fg outline-none focus:border-accent"
-            placeholder="Quick add a task for me…"
-            value={todoDraft}
-            onChange={(e) => setTodoDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') addMyTodo();
-            }}
-          />
-          <Button size="sm" onClick={addMyTodo} disabled={!todoDraft.trim()}>
-            <Plus className="w-4 h-4" />
-          </Button>
-        </div>
-        {dayTasks.length === 0 ? (
-          <p className="text-sm text-muted py-3 text-center">No tasks for this day.</p>
-        ) : (
-          <div className="max-h-72 overflow-y-auto space-y-2">
-            {dayTasks.slice(0, 14).map((td) => {
-              const done = !!(td.completed || td.status === 'done');
-              const assignee =
-                td.memberId === FAMILY_LIST_ID
-                  ? 'Everyone'
-                  : getMember(td.memberId)?.name || 'Someone';
-              const dueLabel = td.dueAt
-                ? new Date(td.dueAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-                : null;
-              const pri = td.priority || 'medium';
-              const priClass =
-                pri === 'high'
-                  ? 'text-red-500 border-red-500/30 bg-red-500/10'
-                  : pri === 'low'
-                    ? 'text-slate-500 border-border bg-surface-2'
-                    : 'text-amber-600 border-amber-500/30 bg-amber-500/10';
-              return (
-                <button
-                  key={td.id}
-                  type="button"
-                  onClick={() => toggleTodo(td.id)}
-                  className={cn(
-                    'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border text-left transition-colors',
-                    done
-                      ? 'bg-emerald-500/10 border-emerald-500/20'
-                      : 'border-border hover:bg-nav-hover/50 bg-elevated/40',
-                  )}
-                >
-                  <span
-                    className={cn(
-                      'w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0',
-                      done ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-border-strong',
-                    )}
-                  >
-                    {done ? <Check className="w-3 h-3" /> : null}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <div
-                      className={cn(
-                        'text-sm font-medium truncate',
-                        done ? 'text-muted line-through' : 'text-fg',
-                      )}
-                    >
-                      {td.text}
-                    </div>
-                    <div className="text-[11px] text-muted truncate mt-0.5">
-                      Assigned to {assignee}
-                      {dueLabel ? ` · Due ${dueLabel}` : ''}
-                    </div>
-                  </div>
-                  <span
-                    className={cn(
-                      'text-[10px] font-medium px-2 py-0.5 rounded-full border shrink-0 capitalize',
-                      priClass,
-                    )}
-                  >
-                    {pri}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </Card>
-    ),
-
-    chorequest: (
-      <FlipCard
-        storageKey="chorequest-timer"
-        frontLabel="Quests"
-        backLabel="Timer"
-        frontBadge={
-          isParent && pendingForParents.length > 0
-            ? `${pendingForParents.length} to approve`
-            : undefined
-        }
-        front={isParent ? (
-      <Card className="!p-4 lg:!p-5 space-y-4 h-full flex flex-col">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="font-semibold text-fg flex items-center gap-2 text-lg">
-            <Sword className="w-4 h-4 text-accent" />
-            ChoreQuest
-            <span className="text-sm font-normal text-muted">· kids overview</span>
-          </h2>
-          <button type="button" onClick={() => setView('chores')} className="text-xs text-accent shrink-0">
-            Open board →
-          </button>
-        </div>
-
-        {/* Snapshot totals */}
-        <div className="grid grid-cols-3 gap-2">
-          <div className="rounded-xl bg-inset border border-border px-3 py-2">
-            <p className="text-lg font-bold text-fg">{pendingForParents.length}</p>
-            <p className="text-[11px] text-muted">To approve</p>
-          </div>
-          <div className="rounded-xl bg-inset border border-border px-3 py-2">
-            <p className="text-lg font-bold text-fg">{openCount}</p>
-            <p className="text-[11px] text-muted">Open quests</p>
-          </div>
-          <div className="rounded-xl bg-inset border border-border px-3 py-2">
-            <p className="text-lg font-bold text-amber-600">
-              {(data.redemptions || []).filter((r) => r.status === 'pending').length}
-            </p>
-            <p className="text-[11px] text-muted">Vault pending</p>
-          </div>
-        </div>
-
-        {/* Per-kid economy */}
-        {kids.length === 0 ? (
-          <p className="text-sm text-muted">No kid profiles yet.</p>
-        ) : (
-          <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted flex items-center gap-1">
-              <Trophy className="w-3.5 h-3.5" />
-              Party progress
-            </p>
-            {kids.map((k) => {
-              const look = getMember(k.id) || k;
-              const prog = ensureProgress(progressMap[k.id]);
-              const bar = progressTowardNextLevel(prog.xp);
-              const coins = coinBalances[k.id] ?? 0;
-              const screen = screenTimeMap[k.id] ?? 0;
-              const streak = streakStatus(data.weekState, k.id, cq);
-              const kidPending = chores.filter(
-                (c) => c.status === 'pending' && c.submittedById === k.id,
-              ).length;
-              return (
-                <div
-                  key={k.id}
-                  className="rounded-2xl border border-border bg-inset/60 px-3 py-2.5 space-y-2"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="relative shrink-0">
-                      <Avatar {...look} size="sm" />
-                      <span className="absolute -bottom-1 -right-1 min-w-[1.1rem] h-4 px-0.5 rounded-full bg-accent text-white text-[9px] font-bold flex items-center justify-center border-2 border-surface">
-                        {bar.level}
-                      </span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-sm font-semibold text-fg truncate">{look.name}</p>
-                        <div className="flex items-center gap-2 shrink-0 text-[11px] font-medium">
-                          <span className="text-amber-600 flex items-center gap-0.5">
-                            <Coins className="w-3 h-3" />
-                            {coins}
-                          </span>
-                          <span className="text-sky-600 flex items-center gap-0.5">
-                            <MonitorPlay className="w-3 h-3" />
-                            {screen}m
-                          </span>
-                        </div>
-                      </div>
-                      <div className="h-1.5 mt-1 rounded-full bg-surface-3 overflow-hidden">
-                        <div
-                          className="h-full rounded-full bg-accent transition-all"
-                          style={{ width: `${bar.pct}%` }}
-                        />
-                      </div>
-                      <p className="text-[11px] text-muted mt-0.5">
-                        {prog.xp} XP · {bar.intoLevel}/{bar.needed} to Lv {bar.level + 1}
-                        {streak.ready ? ' · weekend chest ready' : streak.claimed ? ' · chest claimed' : ''}
-                        {kidPending > 0 ? ` · ${kidPending} awaiting approval` : ''}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Vault — pending redemptions by kid */}
-        {(() => {
-          const pendingVault = (data.redemptions || []).filter((r) => r.status === 'pending');
-          if (pendingVault.length === 0) {
-            return (
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-1.5 flex items-center gap-1">
-                  <Package className="w-3.5 h-3.5" />
-                  Vault
-                </p>
-                <p className="text-sm text-muted">No pending vault items.</p>
-              </div>
-            );
-          }
-          return (
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2 flex items-center gap-1">
-                <Package className="w-3.5 h-3.5" />
-                Vault · pending
-              </p>
-              <ul className="space-y-1.5">
-                {pendingVault.slice(0, 8).map((r) => {
-                  const who = getMember(r.memberId);
-                  return (
-                    <li
-                      key={r.id}
-                      className="flex items-center gap-2 rounded-xl border border-border bg-inset px-2.5 py-2"
-                    >
-                      {who ? <Avatar {...who} size="sm" className="!w-7 !h-7 !text-sm" /> : null}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-fg truncate">
-                          <span className="font-medium">{who?.name || 'Kid'}</span>
-                          <span className="text-muted"> · {r.label}</span>
-                        </p>
-                        <p className="text-[11px] text-muted">
-                          {r.coinCost}c
-                          {r.screenMinutes ? ` · ${r.screenMinutes}m screen` : ''}
-                          {' · '}
-                          {new Date(r.requestedAt).toLocaleDateString(undefined, {
-                            month: 'short',
-                            day: 'numeric',
-                          })}
-                        </p>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-              {pendingVault.length > 8 && (
-                <button
-                  type="button"
-                  onClick={() => setView('chores')}
-                  className="text-xs text-accent mt-2"
-                >
-                  +{pendingVault.length - 8} more on the board →
-                </button>
-              )}
-            </div>
-          );
-        })()}
-
-        {/* Approve queue teaser */}
-        {pendingForParents.length > 0 && (
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">
-              Needs approval
-            </p>
-            <ul className="space-y-1.5">
-              {pendingForParents.slice(0, 4).map((c) => {
-                const submitter = c.submittedById ? getMember(c.submittedById) : undefined;
-                return (
-                  <li
-                    key={c.id}
-                    className="flex items-center gap-2 rounded-xl border border-border px-2.5 py-2"
-                  >
-                    {submitter && <Avatar {...submitter} size="sm" className="!w-7 !h-7 !text-sm" />}
-                    <span className="text-sm text-fg flex-1 min-w-0 truncate">{c.title}</span>
-                    <Button
-                      size="sm"
-                      className="!px-2 !py-1 text-xs shrink-0"
-                      onClick={() => approveQuestHome(c)}
-                    >
-                      Approve
-                    </Button>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        )}
-      </Card>
-    ) : (
-      <Card className="!p-4 lg:!p-5 h-full flex flex-col">
-        <div className="flex items-center justify-between gap-3 mb-4">
-          <h2 className="font-semibold text-fg flex items-center gap-2 text-lg">
-            <Sword className="w-4 h-4 text-accent" />
-            ChoreQuest
-            {currentUser?.role === 'kid' ? (
-              <span className="text-xs font-normal text-muted">· for you</span>
-            ) : null}
-          </h2>
-          <button type="button" onClick={() => setView('chores')} className="text-xs text-accent">
-            Open board →
-          </button>
-        </div>
-
-        {currentUser && currentUser.role !== 'media' && (
-          <div className="flex items-center gap-3 mb-4">
-            <div className="relative shrink-0">
-              <Avatar {...(getMember(myId) || currentUser)} size="md" />
-              <span className="absolute -bottom-1 -right-1 min-w-[1.25rem] h-5 px-1 rounded-full bg-accent text-white text-[10px] font-bold flex items-center justify-center border-2 border-surface">
-                {myBar.level}
-              </span>
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-fg truncate">
-                {currentUser.name}
-                <span className="text-muted font-normal"> · Level {myBar.level}</span>
-              </p>
-              <div className="h-2 mt-1 rounded-full bg-surface-3 overflow-hidden">
-                <div
-                  className="h-full rounded-full bg-accent transition-all"
-                  style={{ width: `${myBar.pct}%` }}
-                />
-              </div>
-              <p className="text-[11px] text-muted mt-0.5">
-                {myBar.intoLevel}/{myBar.needed} XP to next level
-              </p>
-            </div>
-            <div className="flex flex-col items-end gap-1 shrink-0">
-              <span className="text-sm font-semibold text-amber-600 flex items-center gap-1">
-                <Coins className="w-3.5 h-3.5" />
-                {myCoins}
-              </span>
-              <span className="text-sm font-semibold text-sky-600 flex items-center gap-1">
-                <MonitorPlay className="w-3.5 h-3.5" />
-                {myScreen}m
-              </span>
-            </div>
-          </div>
-        )}
-
-        {currentUser?.role === 'kid' && (
-          <div className="grid grid-cols-3 gap-2 mb-4">
-            <div className="rounded-xl bg-inset border border-border px-3 py-2">
-              <p className="text-lg font-bold text-fg">{openCount}</p>
-              <p className="text-[11px] text-muted">Open</p>
-            </div>
-            <div className="rounded-xl bg-inset border border-border px-3 py-2">
-              <p className="text-lg font-bold text-fg">{myPending.length}</p>
-              <p className="text-[11px] text-muted">Pending</p>
-            </div>
-            <div className="rounded-xl bg-inset border border-border px-3 py-2">
-              <p className="text-lg font-bold text-sky-600">{myScreen}m</p>
-              <p className="text-[11px] text-muted">Screen bank</p>
-            </div>
-          </div>
-        )}
-
-        {currentUser?.role === 'kid' && (
-          <div>
-            {chores.filter((c) => c.status === 'open' || !c.status).slice(0, 3).length === 0 ? (
-              <p className="text-sm text-muted">No open quests right now.</p>
-            ) : (
-              <ul className="space-y-1.5">
-                {chores
-                  .filter((c) => c.status === 'open' || !c.status)
-                  .slice(0, 3)
-                  .map((c) => (
-                    <li key={c.id} className="text-sm text-fg flex items-center justify-between gap-2">
-                      <span className="truncate">{c.title}</span>
-                      <span className="text-xs text-muted shrink-0">
-                        +{c.xp ?? 0} XP · +{c.coins ?? 0}c
-                      </span>
-                    </li>
-                  ))}
-              </ul>
-            )}
-          </div>
-        )}
-      </Card>
-        )}
-        back={<ScreenTimerCard />}
+      <TodosHomeCard
+        todos={todos}
+        myId={myId}
+        onToggleTodo={toggleTodo}
+        onAddTodo={addMyTodo}
+        onOpenTodos={() => setView('todos')}
       />
     ),
-
+    chorequest: (
+      <ChoreQuestHomeCard
+        isParent={isParent}
+        currentUser={currentUser}
+        myId={myId}
+        chores={chores}
+        kids={kids}
+        pendingForParents={pendingForParents}
+        myPending={myPending}
+        openCount={openCount}
+        progressMap={progressMap}
+        coinBalances={coinBalances}
+        screenTimeMap={screenTimeMap}
+        redemptions={data.redemptions}
+        weekState={data.weekState}
+        cq={cq}
+        getMember={getMember}
+        onOpenChores={() => setView('chores')}
+        onApprove={approveQuestHome}
+      />
+    ),
     chores: (
       <Card className="h-full flex flex-col">
         <div className="flex items-center justify-between mb-3">
