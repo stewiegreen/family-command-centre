@@ -6,6 +6,7 @@
 import { Check, Film, Play } from 'lucide-react';
 import {
   displayTitle,
+  embyBestLogoUrl,
   embyEpisodeArtUrl,
   embyPosterUrl,
   embyThumbUrl,
@@ -186,6 +187,11 @@ export function MediaCard({
     : landscape
       ? embyThumbUrl(item, 720)
       : embyPosterUrl(item, 400);
+  // TV shows: prefer Emby Logo in the title slot under the poster
+  const seriesLogo =
+    !landscape && (item.Type === 'Series' || item.Type === 'Season')
+      ? embyBestLogoUrl(item, 64)
+      : null;
 
   return (
     <button
@@ -229,7 +235,30 @@ export function MediaCard({
           ) : undefined
         }
       />
-      <p className="mt-2 text-sm font-semibold text-fg line-clamp-2 leading-snug">{title}</p>
+      {seriesLogo ? (
+        <div className="mt-2 h-9 flex items-center">
+          <img
+            src={seriesLogo}
+            alt={title}
+            className="max-h-9 max-w-full w-auto object-contain object-left drop-shadow-sm"
+            loading="lazy"
+            onError={(e) => {
+              (e.currentTarget as HTMLImageElement).style.display = 'none';
+              const fallback = e.currentTarget.parentElement?.querySelector('[data-title-fallback]');
+              if (fallback instanceof HTMLElement) fallback.style.display = 'block';
+            }}
+          />
+          <p
+            data-title-fallback
+            className="text-sm font-semibold text-fg line-clamp-2 leading-snug"
+            style={{ display: 'none' }}
+          >
+            {title}
+          </p>
+        </div>
+      ) : (
+        <p className="mt-2 text-sm font-semibold text-fg line-clamp-2 leading-snug">{title}</p>
+      )}
       <div className="mt-0.5 flex items-center justify-between gap-1">
         {sub ? <p className="text-[11px] text-muted line-clamp-1 min-w-0">{sub}</p> : <span />}
         {landscape && pct > 0 && pct < 100 ? (

@@ -784,9 +784,19 @@ export function MediaPage() {
                         ? 'Season'
                         : browse.item.Type || 'Folder'}
                 </p>
-                <h2 className="text-2xl font-bold text-fg tracking-tight mt-0.5">
-                  {browse.kind === 'library' ? browse.view.Name : browse.title}
-                </h2>
+                {browse.kind === 'folder' &&
+                (browse.item.Type === 'Series' || browse.item.Type === 'Season') &&
+                embyBestLogoUrl(browse.item, 80) ? (
+                  <img
+                    src={embyBestLogoUrl(browse.item, 80)!}
+                    alt={browse.title}
+                    className="mt-1 max-h-12 sm:max-h-14 w-auto max-w-[min(100%,20rem)] object-contain object-left"
+                  />
+                ) : (
+                  <h2 className="text-2xl font-bold text-fg tracking-tight mt-0.5">
+                    {browse.kind === 'library' ? browse.view.Name : browse.title}
+                  </h2>
+                )}
                 {detailTotal > 0 && (
                   <p className="text-sm text-muted mt-1">
                     {detailTotal} {detailTotal === 1 ? 'title' : 'titles'}
