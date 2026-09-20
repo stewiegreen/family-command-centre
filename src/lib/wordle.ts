@@ -1462,11 +1462,17 @@ export function pickAnswer(seed?: string): string {
   return WORDLE_ANSWERS[h % WORDLE_ANSWERS.length]!;
 }
 
+/**
+ * Canonical calendar day for the shared family Daily Wordle.
+ * Uses UTC so every device (any timezone / clock skew within a day) gets the
+ * same seed. Local `getFullYear`/`getDate` would give different words when
+ * family members are in different zones or a phone has the wrong timezone.
+ */
 export function todaySeed(): string {
   const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(d.getUTCDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
 }
 
