@@ -46,7 +46,14 @@ export type EmbyItem = {
   ParentBackdropItemId?: string;
   ParentBackdropImageTags?: string[];
   CollectionType?: string;
+  Artists?: string[];
+  AlbumArtist?: string;
+  Album?: string;
+  AlbumId?: string;
+  ParentIndexNumber?: number;
 };
+
+
 
 export type EmbyItemsResponse = {
   Items?: EmbyItem[];
@@ -57,7 +64,14 @@ export type EmbyView = {
   Id: string;
   Name: string;
   CollectionType?: string;
+  Artists?: string[];
+  AlbumArtist?: string;
+  Album?: string;
+  AlbumId?: string;
+  ParentIndexNumber?: number;
 };
+
+
 
 export type EmbyViewsResponse = {
   Items?: EmbyView[];
@@ -608,6 +622,46 @@ export function embyStreamUrl(opts: {
 }
 
 
+/** Progressive audio stream via proxy (Emby Audio endpoint). */
+export function embyAudioStreamUrl(opts: {
+  itemId: string;
+  userId: string;
+  mediaSourceId?: string;
+  playSessionId?: string;
+  startTicks?: number;
+}): string {
+  const q = new URLSearchParams();
+  q.set('UserId', opts.userId);
+  q.set('DeviceId', embyDeviceId());
+  q.set('Static', 'true');
+  if (opts.mediaSourceId) q.set('MediaSourceId', opts.mediaSourceId);
+  if (opts.playSessionId) q.set('PlaySessionId', opts.playSessionId);
+  if (opts.startTicks && opts.startTicks > 0) q.set('StartTimeTicks', String(Math.floor(opts.startTicks)));
+  return `${PROXY}/Audio/${encodeURIComponent(opts.itemId)}/stream?${q.toString()}`;
+}
+
+/** AAC transcode fallback when static audio fails in-browser. */
+export function embyAudioTranscodeUrl(opts: {
+  itemId: string;
+  userId: string;
+  mediaSourceId?: string;
+  playSessionId?: string;
+  startTicks?: number;
+}): string {
+  const q = new URLSearchParams();
+  q.set('UserId', opts.userId);
+  q.set('DeviceId', embyDeviceId());
+  q.set('AudioCodec', 'aac');
+  q.set('AudioBitrate', '256000');
+  q.set('Container', 'mp3');
+  q.set('TranscodingContainer', 'mp3');
+  q.set('TranscodingProtocol', 'http');
+  if (opts.mediaSourceId) q.set('MediaSourceId', opts.mediaSourceId);
+  if (opts.playSessionId) q.set('PlaySessionId', opts.playSessionId);
+  if (opts.startTicks && opts.startTicks > 0) q.set('StartTimeTicks', String(Math.floor(opts.startTicks)));
+  return `${PROXY}/Audio/${encodeURIComponent(opts.itemId)}/stream.mp3?${q.toString()}`;
+}
+
 export function embyHlsUrl(opts: {
   itemId: string;
   userId: string;
@@ -731,4 +785,25 @@ export function ticksToSeconds(ticks?: number): number {
 
 export function secondsToTicks(seconds: number): number {
   return Math.floor(Math.max(0, seconds) * 10_000_000);
+}
+
+export function formatTicksDuration(ticks?: number): string {
+  const sec = Math.max(0, Math.floor(ticksToSeconds(ticks)));
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+export function albumArtistLine(item: EmbyItem): string {
+  if (item.AlbumArtist) return item.AlbumArtist;
+  if (item.Artists?.length) return item.Artists.join(', ');
+  return '';
+}
+
+export function isAudioItem(item: EmbyItem): boolean {
+  return item.Type === 'Audio' || item.MediaType === 'Audio';
+}
+
+export function isAlbumItem(item: EmbyItem): boolean {
+  return item.Type === 'MusicAlbum';
 }

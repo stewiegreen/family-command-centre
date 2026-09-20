@@ -28,6 +28,7 @@ import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
 import { Modal } from '../components/ui/Modal';
 import { VideoPlayer } from '../components/VideoPlayer';
+import { AlbumPlayer } from '../components/AlbumPlayer';
 import {
   displayTitle,
   embyBackdropUrl,
@@ -38,6 +39,8 @@ import {
   embyLatest,
   embyNextUp,
   embyPosterUrl,
+  isAlbumItem,
+  isAudioItem,
   embyPublicInfo,
   embyResume,
   embySearch,
@@ -194,6 +197,45 @@ export function MediaPage() {
   const [focus, setFocus] = useState<EmbyItem | null>(null);
   const [focusLoading, setFocusLoading] = useState(false);
   const [watching, setWatching] = useState<EmbyItem | null>(null);
+  const [albumSession, setAlbumSession] = useState<{
+    album: EmbyItem;
+    tracks: EmbyItem[];
+    startIndex: number;
+    autoplay: boolean;
+  } | null>(null);
+
+  const openAlbum = useCallback(
+    async (album: EmbyItem, opts?: { startIndex?: number; autoplay?: boolean }) => {
+      if (!embyUserId) return;
+      try {
+        const full = await embyItem(embyUserId, album.Id).catch(() => album);
+        const { items } = await embyItems(embyUserId, {
+          parentId: album.Id,
+          recursive: false,
+          sortBy: 'IndexNumber,SortName',
+          sortOrder: 'Ascending',
+          limit: 500,
+        });
+        const tracks = sortMediaItems(items).filter(isAudioItem);
+        if (!tracks.length) {
+          // Fall back to folder browse if no audio children
+          setBrowseOrigin('home');
+          setTab('libraries');
+          pushBrowse({ kind: 'folder', item: full, title: full.Name || 'Album' });
+          return;
+        }
+        setAlbumSession({
+          album: full,
+          tracks,
+          startIndex: opts?.startIndex ?? 0,
+          autoplay: opts?.autoplay ?? false,
+        });
+      } catch (e) {
+        console.warn('openAlbum failed', e);
+      }
+    },
+    [embyUserId],
+  );
 
   const [recommendTarget, setRecommendTarget] = useState<EmbyItem | null>(null);
   const [recommendToId, setRecommendToId] = useState('');
@@ -207,15 +249,54 @@ export function MediaPage() {
 
   const play = useCallback(
     (item: EmbyItem) => {
-      if (embyUserId && (item.Type === 'Movie' || item.Type === 'Episode' || !item.Type)) {
+      if (!embyUserId) return;
+      if (isAlbumItem(item) || item.Type === 'MusicAlbum') {
+        setFocus(null);
+        void openAlbum(item, { autoplay: true });
+        return;
+      }
+      if (isAudioItem(item)) {
+        setFocus(null);
+        if (item.AlbumId) {
+          void (async () => {
+            try {
+              const album = await embyItem(embyUserId, item.AlbumId!);
+              const { items } = await embyItems(embyUserId, {
+                parentId: album.Id,
+                recursive: false,
+                sortBy: 'IndexNumber,SortName',
+                sortOrder: 'Ascending',
+                limit: 500,
+              });
+              const tracks = sortMediaItems(items).filter(isAudioItem);
+              const startIndex = Math.max(0, tracks.findIndex((x) => x.Id === item.Id));
+              if (tracks.length) {
+                setAlbumSession({
+                  album,
+                  tracks,
+                  startIndex: startIndex < 0 ? 0 : startIndex,
+                  autoplay: true,
+                });
+                return;
+              }
+            } catch {
+              /* fall through */
+            }
+            setWatching(item);
+          })();
+          return;
+        }
+        setWatching(item);
+        return;
+      }
+      if (item.Type === 'Movie' || item.Type === 'Episode' || !item.Type) {
         setFocus(null);
         setWatching(item);
         return;
       }
-      if (!webUrl || !serverId) return;
-      openEmbyItem({ webUrl, serverId, itemId: item.Id });
+      void openFocus(item);
     },
-    [webUrl, serverId, embyUserId],
+    [embyUserId, openAlbum],
   );
 
   const playExternal = useCallback(
@@ -280,6 +361,7 @@ export function MediaPage() {
       setLoading(false);
     }
   }, [embyUserId]);
+
 
   useEffect(() => {
     void loadHome();
@@ -362,7 +444,36 @@ export function MediaPage() {
   }, [browseOrigin]);
 
   const openFocus = async (item: EmbyItem) => {
-    if (item.Type === 'Series' || item.Type === 'Season' || item.Type === 'Folder' || item.Type === 'BoxSet' || item.Type === 'MusicArtist' || item.Type === 'MusicAlbum') {
+    if (isAlbumItem(item) || item.Type === 'MusicAlbum') {
+      void openAlbum(item, { autoplay: false });
+      return;
+    }
+    if (isAudioItem(item)) {
+      // Single track: if we can resolve parent album, open album player on that track
+      if (item.AlbumId && embyUserId) {
+        try {
+          const album = await embyItem(embyUserId, item.AlbumId);
+          const { items } = await embyItems(embyUserId, {
+            parentId: album.Id,
+            recursive: false,
+            sortBy: 'IndexNumber,SortName',
+            sortOrder: 'Ascending',
+            limit: 500,
+          });
+          const tracks = sortMediaItems(items).filter(isAudioItem);
+          const startIndex = Math.max(0, tracks.findIndex((t) => t.Id === item.Id));
+          if (tracks.length) {
+            setAlbumSession({ album, tracks, startIndex: startIndex < 0 ? 0 : startIndex, autoplay: true });
+            return;
+          }
+        } catch {
+          /* fall through to video-style play */
+        }
+      }
+      setWatching(item);
+      return;
+    }
+    if (item.Type === 'Series' || item.Type === 'Season' || item.Type === 'Folder' || item.Type === 'BoxSet' || item.Type === 'MusicArtist') {
       // Remember Home vs Libraries so Back can leave browse correctly
       setBrowseOrigin(tab === 'search' ? 'home' : tab);
       setTab('libraries');
@@ -802,6 +913,24 @@ export function MediaPage() {
                     {detailTotal} {detailTotal === 1 ? 'title' : 'titles'}
                   </p>
                 )}
+                {browse.kind === 'folder' &&
+                  (isAlbumItem(browse.item) ||
+                    browse.item.Type === 'MusicAlbum' ||
+                    detailItems.some(isAudioItem)) &&
+                  detailItems.some(isAudioItem) && (
+                    <div className="mt-3">
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() =>
+                          void openAlbum(browse.item, { autoplay: true })
+                        }
+                      >
+                        <Play className="w-4 h-4 mr-1.5 fill-current" />
+                        Play album
+                      </Button>
+                    </div>
+                  )}
               </div>
               {detailLoading && !detailItems.length ? (
                 <div className="flex justify-center py-12 text-muted">
@@ -898,6 +1027,17 @@ export function MediaPage() {
             setWatching(null);
             void loadHome();
           }}
+        />
+      )}
+
+      {albumSession && embyUserId && (
+        <AlbumPlayer
+          album={albumSession.album}
+          tracks={albumSession.tracks}
+          userId={embyUserId}
+          startIndex={albumSession.startIndex}
+          autoplay={albumSession.autoplay}
+          onClose={() => setAlbumSession(null)}
         />
       )}
 
