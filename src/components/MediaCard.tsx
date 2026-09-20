@@ -23,6 +23,8 @@ type Props = {
   variant?: MediaCardVariant;
   /** Force square art (music libraries / folders that Emby types as Folder). */
   square?: boolean;
+  /** scroll = fixed card width (home rows); grid = fill cell (library pages, 6 across). */
+  layout?: 'scroll' | 'grid';
   className?: string;
 };
 
@@ -158,7 +160,14 @@ function CoverFrame({
   );
 }
 
-export function MediaCard({ item, onOpen, variant = 'poster', square: forceSquare, className }: Props) {
+export function MediaCard({
+  item,
+  onOpen,
+  variant = 'poster',
+  square: forceSquare,
+  layout = 'scroll',
+  className,
+}: Props) {
   const pct = playedPercent(item);
   const isEpisode = item.Type === 'Episode';
   const album = isSquareItem(item, forceSquare);
@@ -184,8 +193,14 @@ export function MediaCard({ item, onOpen, variant = 'poster', square: forceSquar
       onClick={onOpen}
       aria-label={displayTitle(item)}
       className={cn(
-        'shrink-0 text-left group',
-        shape === 'landscape' ? COVER_LANDSCAPE : shape === 'square' ? COVER_SQUARE : COVER_POSTER,
+        'text-left group',
+        layout === 'grid' ? 'w-full min-w-0' : 'shrink-0',
+        layout === 'scroll' &&
+          (shape === 'landscape'
+            ? COVER_LANDSCAPE
+            : shape === 'square'
+              ? COVER_SQUARE
+              : COVER_POSTER),
         className,
       )}
     >

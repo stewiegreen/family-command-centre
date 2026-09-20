@@ -569,7 +569,7 @@ export function MediaPage() {
   }
 
   return (
-    <div className="p-4 lg:p-6 max-w-6xl mx-auto space-y-5">
+    <div className="p-4 lg:p-6 max-w-7xl mx-auto space-y-5">
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-fg flex items-center gap-2 tracking-tight">
@@ -799,9 +799,15 @@ export function MediaPage() {
                 </div>
               ) : (
                 <>
-                  <div className="flex flex-wrap gap-4">
+                  <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3 sm:gap-4">
                     {detailItems.map((item) => (
-                      <MediaCard key={item.Id} item={item} square={inMusicContext} onOpen={() => void openFocus(item)} />
+                      <MediaCard
+                        key={item.Id}
+                        item={item}
+                        square={inMusicContext}
+                        layout="grid"
+                        onOpen={() => void openFocus(item)}
+                      />
                     ))}
                   </div>
                   {!detailItems.length && (
@@ -841,9 +847,15 @@ export function MediaPage() {
           {!searchLoading && search.trim() && !searchResults.length && (
             <p className="text-sm text-muted text-center py-8">No titles match “{search.trim()}”.</p>
           )}
-          <div className="flex flex-wrap gap-4">
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3 sm:gap-4">
             {searchResults.map((item) => (
-              <MediaCard key={item.Id} item={item} square={inMusicContext} onOpen={() => void openFocus(item)} />
+              <MediaCard
+                key={item.Id}
+                item={item}
+                square={inMusicContext}
+                layout="grid"
+                onOpen={() => void openFocus(item)}
+              />
             ))}
           </div>
         </div>
