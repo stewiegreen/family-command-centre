@@ -734,7 +734,7 @@ export function Dashboard() {
         </div>
       </Card>
     ),
-+    digest: (
+    digest: (
       <Card className="!p-5 lg:!p-6">
         {(() => {
           const weekDays = Array.from({ length: 7 }, (_, i) =>
