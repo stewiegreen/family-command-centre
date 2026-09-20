@@ -69,7 +69,6 @@ import {
 } from '../lib/quest';
 import {
   recordWeekdayCompletion,
-  streakStatus,
 } from '../lib/weekCycle';
 import { cn } from '../lib/cn';
 
@@ -315,10 +314,6 @@ export function Dashboard() {
   const coinBalances = data.coinBalances || {};
   const screenTimeMap = data.screenTime || {};
   const cq = getChoreQuestConfig(data);
-  const myProgress = ensureProgress(progressMap[myId]);
-  const myBar = progressTowardNextLevel(myProgress.xp);
-  const myCoins = coinBalances[myId] ?? 0;
-  const myScreen = screenTimeMap[myId] ?? 0;
   const openCount = chores.filter((c) => c.status === 'open' || !c.status).length;
   const kids = members.filter((m) => m.role === 'kid');
 
