@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, ChevronLeft, ChevronRight, Download, Plus, Square, Upload, Users } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, Download, Plus, Upload, Users } from 'lucide-react';
 import {
   addDays,
   addMonths,
@@ -17,7 +17,6 @@ import {
 import { useApp } from '../context/AppContext';
 import { Avatar } from '../components/ui/Avatar';
 import { Button } from '../components/ui/Button';
-import { Card } from '../components/ui/Card';
 import { Input, Textarea } from '../components/ui/Input';
 import { Modal } from '../components/ui/Modal';
 import { uid } from '../lib/uid';
@@ -28,7 +27,6 @@ import {
   EVENT_CATEGORY_IDS,
   EVENT_CATEGORY_META,
   eventCategoryOf,
-  type EventCategory,
 } from '../lib/eventCategories';
 import { applyTodoStatus } from '../lib/todoQuest';
 import { cn } from '../lib/cn';
@@ -38,17 +36,15 @@ import {
   VIEW_KEY,
   MEMBER_FILTER_KEY,
   TASKS_KEY,
+  SNAP_MIN,
   loadView,
   loadShowTasks,
   loadMemberFilter,
   localDateStr,
   localTimeStr,
   buildTimes,
-  formatEventTimeLabel,
   eventMemberIds,
-  eventChipStyle,
   emptyForm,
-  eventTitleLabel,
 } from './calendar/calendarUtils';
 import { MonthView } from './calendar/MonthView';
 import { TimeGridView } from './calendar/TimeGridView';

@@ -1,7 +1,7 @@
 /**
  * Month grid for the family calendar.
  */
-import { differenceInCalendarDays, format, isSameDay, isSameMonth } from 'date-fns';
+import { addDays, differenceInCalendarDays, format, isSameDay, isSameMonth, startOfDay } from 'date-fns';
 import { Square } from 'lucide-react';
 import { Card } from '../../components/ui/Card';
 import { eventOverlapsDay } from '../../lib/recurrence';

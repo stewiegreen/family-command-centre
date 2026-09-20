@@ -20,7 +20,6 @@ import {
   Eye,
   EyeOff,
   LayoutGrid,
-  Columns2,
   Megaphone,
   Home,
   ChevronDown,
@@ -70,7 +69,6 @@ import {
   cardColSpanClass,
   visibleHomescreenRows,
   HOMESCREEN_WIDGETS,
-  type HomescreenWidgetId,
   type HomescreenDropPlacement,
 } from '../lib/homescreen';
 import {
@@ -91,7 +89,6 @@ import {
   COLOR_ICON,
   DISMISS_ANN_KEY,
   HOME_JOURNAL_MOODS,
-  HOME_JOURNAL_PROMPTS,
   homeJournalPrompt,
   startOfWeekMonday,
   eventAssigneeIds,

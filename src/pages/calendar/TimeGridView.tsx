@@ -4,6 +4,7 @@
 import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { differenceInCalendarDays, format, isSameDay } from 'date-fns';
 import { Square } from 'lucide-react';
+import { Card } from '../../components/ui/Card';
 import { eventOverlapsDay, packOverlapping } from '../../lib/recurrence';
 import type { ExpandedEvent, Todo } from '../../types';
 import { cn } from '../../lib/cn';
@@ -15,7 +16,6 @@ import {
   eventChipStyle,
   eventMemberIds,
   eventTitleLabel,
-  formatEventTimeLabel,
   snapMins,
   yToMins,
 } from './calendarUtils';

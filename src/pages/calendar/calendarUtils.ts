@@ -2,6 +2,7 @@
  * Calendar page pure helpers and constants.
  * Extracted from CalendarPage so view components and the page can share them.
  */
+import { format } from 'date-fns';
 import type { ExpandedEvent } from '../../types';
 import {
   EVENT_CATEGORY_META,
