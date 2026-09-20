@@ -345,7 +345,7 @@ export function MediaPage() {
   }, [browseOrigin]);
 
   const openFocus = async (item: EmbyItem) => {
-    if (item.Type === 'Series' || item.Type === 'Season' || item.Type === 'Folder' || item.Type === 'BoxSet') {
+    if (item.Type === 'Series' || item.Type === 'Season' || item.Type === 'Folder' || item.Type === 'BoxSet' || item.Type === 'MusicArtist' || item.Type === 'MusicAlbum') {
       // Remember Home vs Libraries so Back can leave browse correctly
       setBrowseOrigin(tab === 'search' ? 'home' : tab);
       setTab('libraries');
@@ -552,7 +552,7 @@ export function MediaPage() {
   }
 
   return (
-    <div className="p-4 lg:p-6 max-w-6xl mx-auto space-y-5">
+    <div className="p-4 lg:p-6 max-w-7xl mx-auto space-y-5">
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-fg flex items-center gap-2 tracking-tight">

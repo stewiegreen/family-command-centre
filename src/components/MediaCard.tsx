@@ -1,6 +1,7 @@
 /**
  * GreenHQ media card — visual language matched to Comics CoverFrame / BookCard.
  * Artwork is primary; captions stay short; no Emby chrome.
+ * Music albums are always square; episodes / Continue Watching are landscape.
  */
 import { Check, Film, Play } from 'lucide-react';
 import {
@@ -24,7 +25,13 @@ type Props = {
 };
 
 const COVER_POSTER = 'w-[9.5rem] sm:w-[10.75rem]';
+const COVER_SQUARE = 'w-[9.5rem] sm:w-[10.75rem]';
 const COVER_LANDSCAPE = 'w-[16.5rem] sm:w-[19.5rem]';
+
+function isMusicAlbum(item: EmbyItem): boolean {
+  const t = item.Type || '';
+  return t === 'MusicAlbum' || t === 'Album';
+}
 
 function ProgressBar({ pct, className }: { pct: number; className?: string }) {
   if (pct <= 0 || pct >= 100) return null;
@@ -61,6 +68,14 @@ function secondaryLine(item: EmbyItem, landscape: boolean): string | null {
     if (pct > 0 && pct < 100) return `${Math.round(pct)}% watched`;
     return item.ProductionYear ? String(item.ProductionYear) : null;
   }
+  if (isMusicAlbum(item)) {
+    // AlbumArtist is common on Emby albums; fall back to year
+    const artist =
+      (item as EmbyItem & { AlbumArtist?: string }).AlbumArtist ||
+      (item as EmbyItem & { Artists?: string[] }).Artists?.[0];
+    if (artist) return artist;
+    return item.ProductionYear ? String(item.ProductionYear) : 'Album';
+  }
   if (item.Type === 'Series') {
     if (item.ChildCount && item.ChildCount > 0) {
       return `${item.ChildCount} ${item.ChildCount === 1 ? 'season' : 'seasons'}`;
@@ -81,12 +96,12 @@ function secondaryLine(item: EmbyItem, landscape: boolean): string | null {
 
 function CoverFrame({
   src,
-  landscape,
+  shape,
   footer,
   badge,
 }: {
   src: string;
-  landscape: boolean;
+  shape: 'poster' | 'landscape' | 'square';
   footer?: React.ReactNode;
   badge?: React.ReactNode;
 }) {
@@ -95,7 +110,9 @@ function CoverFrame({
       className={cn(
         'relative overflow-hidden bg-surface-2 border border-border shadow-md',
         'rounded-2xl',
-        landscape ? 'aspect-video' : 'aspect-[2/3]',
+        shape === 'landscape' && 'aspect-video',
+        shape === 'square' && 'aspect-square',
+        shape === 'poster' && 'aspect-[2/3]',
       )}
       style={{ boxShadow: 'var(--app-shadow-card)' }}
     >
@@ -113,7 +130,7 @@ function CoverFrame({
       </div>
       <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/25">
         <span className="rounded-full bg-accent text-accent-ink p-2.5 shadow-lg">
-          <Play className={cn('fill-current', landscape ? 'w-5 h-5' : 'w-4 h-4')} />
+          <Play className={cn('fill-current', shape === 'landscape' ? 'w-5 h-5' : 'w-4 h-4')} />
         </span>
       </div>
       {footer}
@@ -125,7 +142,14 @@ function CoverFrame({
 export function MediaCard({ item, onOpen, variant = 'poster', className }: Props) {
   const pct = playedPercent(item);
   const isEpisode = item.Type === 'Episode';
-  const landscape = variant === 'continue' || isEpisode;
+  const album = isMusicAlbum(item);
+  // Albums stay square even if someone opens them from a continue-style row
+  const landscape = !album && (variant === 'continue' || isEpisode);
+  const shape: 'poster' | 'landscape' | 'square' = album
+    ? 'square'
+    : landscape
+      ? 'landscape'
+      : 'poster';
   const title = primaryTitle(item, landscape);
   const sub = secondaryLine(item, landscape);
   const left = landscape ? remainingLabel(item) : null;
@@ -142,13 +166,13 @@ export function MediaCard({ item, onOpen, variant = 'poster', className }: Props
       aria-label={displayTitle(item)}
       className={cn(
         'shrink-0 text-left group',
-        landscape ? COVER_LANDSCAPE : COVER_POSTER,
+        shape === 'landscape' ? COVER_LANDSCAPE : shape === 'square' ? COVER_SQUARE : COVER_POSTER,
         className,
       )}
     >
       <CoverFrame
         src={img}
-        landscape={landscape}
+        shape={shape}
         footer={
           landscape && pct > 0 && pct < 100 ? (
             <div className="absolute inset-x-0 bottom-0 p-2.5 bg-gradient-to-t from-black/80 to-transparent space-y-1">
