@@ -23,8 +23,7 @@ export function QuestsTab({
   onEdit: (q: Quest) => void;
   onLevelUp: (info: { name: string; level: number } | null) => void;
 }) {
-  const { data, currentUser, isParent, getMember } = useApp();
-  const me = currentUser;
+  const { data, isParent, getMember } = useApp();
   const chores = data.chores || [];
   const progressMap = data.memberProgress || {};
   const coinBalances = data.coinBalances || {};

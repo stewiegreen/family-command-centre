@@ -2,19 +2,18 @@
  * Shop tab — redeem rewards + parent catalog management.
  */
 import { useMemo, useState } from 'react';
-import { Pencil, Plus, ShoppingBag, Trash2 } from 'lucide-react';
+import { Coins, Pencil, ShoppingBag, Trash2 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { Modal } from '../../components/ui/Modal';
 import {
   ensureRewardCatalog,
-  getChoreQuestConfig,
   isoWeekId,
 } from '../../lib/quest';
 import { markThemeStudioUnlockedLocally } from '../../lib/themeStudioUnlock';
-import { nameFlairLabel } from '../../lib/flair';
-import type { RewardItem, RewardKind } from '../../types';
+import { cn } from '../../lib/cn';
+import type { RedemptionRecord, RewardItem, RewardKind } from '../../types';
 
 function newId() {
   return crypto.randomUUID();
@@ -43,9 +42,9 @@ export function ShopTab() {
   const { data, update, currentUser, isParent, getMember, setView } = useApp();
   const me = currentUser;
   const myId = me?.id || data.settings.currentUserId;
-  const cq = getChoreQuestConfig(data);
   const catalog = ensureRewardCatalog(data.rewardCatalog);
   const coinBalances = data.coinBalances || {};
+  const myCoins = coinBalances[myId] ?? 0;
   const shopRecipients = useMemo(
     () => (data.members || []).filter((m) => m.role !== 'media'),
     [data.members],

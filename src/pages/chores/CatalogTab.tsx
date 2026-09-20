@@ -20,11 +20,11 @@ export function CatalogTab({ catalogActions }: { catalogActions: CatalogActions 
   const [showArchived, setShowArchived] = useState(false);
 
   const activeTemplates = useMemo(
-    () => questCatalog.filter((t) => !t.archived),
+    () => questCatalog.filter((t) => t.active !== false),
     [questCatalog],
   );
   const archivedTemplates = useMemo(
-    () => questCatalog.filter((t) => t.archived),
+    () => questCatalog.filter((t) => t.active === false),
     [questCatalog],
   );
 

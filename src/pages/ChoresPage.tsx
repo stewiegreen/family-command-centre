@@ -22,9 +22,7 @@ import {
   ensureQuestCatalog,
   ensureRewardCatalog,
   getChoreQuestConfig,
-  isoWeekId,
   progressTowardNextLevel,
-  rewardsForDifficultyWithConfig,
 } from '../lib/quest';
 import { nameFlairLabel } from '../lib/flair';
 import {
@@ -56,13 +54,11 @@ function newId() {
 const CHOREQUEST_UI_VERSION = 'picture-frame-1';
 
 export function ChoresPage() {
-  const { data, update, currentUser, isParent, getMember, setView } = useApp();
+  const { data, update, currentUser, isParent, getMember } = useApp();
   const me = currentUser;
   const myId = me?.id || data.settings.currentUserId;
-  const chores = data.chores || [];
   const progressMap = data.memberProgress || {};
   const coinBalances = data.coinBalances || {};
-  const catalog = ensureRewardCatalog(data.rewardCatalog);
   const questCatalog = ensureQuestCatalog(data.questCatalog);
   const redemptions = data.redemptions || [];
 
@@ -91,6 +87,7 @@ export function ChoresPage() {
   };
 
   const [levelUp, setLevelUp] = useState<{ name: string; level: number } | null>(null);
+  const [chestMsg, setChestMsg] = useState<string | null>(null);
 
   // Celebrate when the level-up modal opens (parent approve path, or self-detect below)
   useEffect(() => {
@@ -283,7 +280,29 @@ export function ChoresPage() {
 
 
 
-  const catalogCount = (questCatalog || []).filter((t) => !t.archived).length;
+
+  const claimChest = () => {
+    if (!me) return;
+    update((d) => {
+      const res = claimStreakChest(d, myId, me.id);
+      if (!res.ok) {
+        queueMicrotask(() => setChestMsg(res.error || 'Could not open chest'));
+        return d;
+      }
+      queueMicrotask(() =>
+        setChestMsg(`Weekend Chest opened! +${cq.streakCoins} coins · +${cq.streakXp} XP`),
+      );
+      return res.data;
+    });
+  };
+
+  const onHouseInspection = () => {
+    if (!isParent || !me) return;
+    if (!confirm('Mark the house as passed inspection? Every kid gets a bonus.')) return;
+    update((d) => markHouseInspection(d, me.id));
+  };
+
+  const catalogCount = (questCatalog || []).filter((t) => t.active !== false).length;
   const vaultCount = (redemptions || []).filter((r) =>
     r.status === 'pending' && (isParent || r.memberId === myId),
   ).length;
@@ -733,6 +752,7 @@ export function ChoresPage() {
         open={catalogActions.catalogEditOpen}
         onClose={catalogActions.closeCatalogModal}
         editTemplate={catalogActions.editTemplate}
+        cq={cq}
       />
 
       <QuestFormModal
