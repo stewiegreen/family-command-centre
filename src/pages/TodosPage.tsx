@@ -175,9 +175,12 @@ export function TodosPage() {
     const due = dueAt ? new Date(dueAt).toISOString() : undefined;
     const linkedQuestId = questId || undefined;
     update((d) => {
+      // Only attach todoId on the board quest if nothing else owns it yet.
+      // Multiple todos may link the same generic quest; applyTodoStatus forks
+      // extra pending instances when the shared row is already claimed.
       const chores = linkedQuestId
         ? (d.chores || []).map((q) =>
-            q.id === linkedQuestId ? { ...q, todoId } : q,
+            q.id === linkedQuestId && !q.todoId ? { ...q, todoId } : q,
           )
         : d.chores;
       return {
