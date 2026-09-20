@@ -43,7 +43,6 @@ import {
   embySearch,
   embySortByForParent,
   embyViews,
-  libraryKindLabel,
   showEmbyLatestRow,
   sortMediaItems,
   openEmbyItem,
@@ -122,19 +121,20 @@ function libraryIcon(view: EmbyView) {
 
 function LibraryEntryCard({ view, onOpen }: { view: EmbyView; onOpen: () => void }) {
   const Icon = libraryIcon(view);
-  const kind = libraryKindLabel(view);
   return (
     <button
       type="button"
       onClick={onOpen}
-      className="shrink-0 w-[9.5rem] sm:w-[11rem] rounded-2xl border border-border bg-elevated p-4 text-left hover:border-accent/50 hover:shadow-md transition-all group"
+      className="shrink-0 w-[9.5rem] sm:w-[11rem] h-[9.5rem] sm:h-[11rem] rounded-2xl border border-border bg-elevated p-3 flex flex-col items-center justify-between text-center hover:border-accent/50 hover:shadow-md transition-all group"
       style={{ boxShadow: 'var(--app-shadow-card)' }}
     >
-      <div className="w-11 h-11 rounded-2xl bg-accent/12 text-accent flex items-center justify-center mb-3 group-hover:scale-105 transition-transform">
-        <Icon className="w-5 h-5" />
+      <span className="block h-2 w-full" aria-hidden />
+      <div className="w-16 h-16 sm:w-[4.5rem] sm:h-[4.5rem] rounded-2xl bg-accent/12 text-accent flex items-center justify-center group-hover:scale-105 transition-transform">
+        <Icon className="w-8 h-8 sm:w-9 sm:h-9" strokeWidth={1.75} />
       </div>
-      <p className="text-sm font-bold text-fg line-clamp-2 leading-snug">{view.Name}</p>
-      <p className="text-[11px] text-muted mt-1">{kind}</p>
+      <p className="text-sm font-bold text-fg line-clamp-2 leading-snug w-full px-1 pb-0.5">
+        {view.Name}
+      </p>
     </button>
   );
 }
