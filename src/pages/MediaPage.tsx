@@ -58,6 +58,7 @@ import {
   type EmbyView,
 } from '../lib/emby';
 import { MediaCard } from '../components/MediaCard';
+import { ContinueHero } from '../components/ContinueHero';
 import { cn } from '../lib/cn';
 
 type Tab = 'home' | 'libraries' | 'search';
@@ -746,23 +747,38 @@ export function MediaPage() {
             </div>
           ) : (
             <>
-              <Section
-                title="Continue Watching"
-                subtitle={continueItems.length ? 'Pick up where you left off' : undefined}
-                empty={!continueItems.length}
-              >
-                <div className="flex gap-3.5 overflow-x-auto pb-2 -mx-1 px-1 snap-x scroll-smooth">
-                  {continueItems.map((item) => (
-                    <div key={item.Id} className="snap-start">
-                      <MediaCard
-                        item={item}
-                        variant="continue"
-                        onOpen={() => void openFocus(item)}
-                      />
+              {continueItems.length > 0 && (
+                <section className="space-y-3">
+                  <ContinueHero
+                    item={continueItems[0]}
+                    onPlay={() => play(continueItems[0])}
+                    onMore={() => void openFocus(continueItems[0])}
+                  />
+                  {continueItems.length > 1 && (
+                    <div>
+                      <div className="flex items-end justify-between gap-2 px-0.5 mb-2">
+                        <h2 className="text-sm font-semibold text-muted tracking-tight">
+                          Up next in your queue
+                        </h2>
+                        <p className="text-[11px] text-muted">
+                          {continueItems.length - 1} more
+                        </p>
+                      </div>
+                      <div className="flex gap-3.5 overflow-x-auto pb-2 -mx-1 px-1 snap-x scroll-smooth">
+                        {continueItems.slice(1).map((item) => (
+                          <div key={item.Id} className="snap-start">
+                            <MediaCard
+                              item={item}
+                              variant="continue"
+                              onOpen={() => void openFocus(item)}
+                            />
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  ))}
-                </div>
-              </Section>
+                  )}
+                </section>
+              )}
 
               <Section
                 title="Your Libraries"
