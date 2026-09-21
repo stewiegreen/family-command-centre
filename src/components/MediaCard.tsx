@@ -1,3 +1,4 @@
+import { useCallback, useRef } from 'react';
 /**
  * GreenHQ media card — visual language matched to Comics CoverFrame / BookCard.
  * Artwork is primary; captions stay short; no Emby chrome.
@@ -21,6 +22,8 @@ export type MediaCardVariant = 'poster' | 'continue';
 type Props = {
   item: EmbyItem;
   onOpen: () => void;
+  /** Desktop hover (~280ms) or touch long-press → in-rail preview (optional). */
+  onPreviewIntent?: () => void;
   variant?: MediaCardVariant;
   /** Force square art (music libraries / folders that Emby types as Folder). */
   square?: boolean;
@@ -164,11 +167,50 @@ function CoverFrame({
 export function MediaCard({
   item,
   onOpen,
+  onPreviewIntent,
   variant = 'poster',
   square: forceSquare,
   layout = 'scroll',
   className,
 }: Props) {
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressFired = useRef(false);
+
+  const clearHover = useCallback(() => {
+    if (hoverTimer.current) {
+      clearTimeout(hoverTimer.current);
+      hoverTimer.current = null;
+    }
+  }, []);
+
+  const clearLongPress = useCallback(() => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  }, []);
+
+  const startHoverPreview = () => {
+    if (!onPreviewIntent) return;
+    // Only use hover on devices that support fine pointer (skip sticky touch)
+    if (typeof window !== 'undefined' && window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
+      clearHover();
+      hoverTimer.current = setTimeout(() => {
+        onPreviewIntent();
+      }, 280);
+    }
+  };
+
+  const startLongPress = () => {
+    if (!onPreviewIntent) return;
+    longPressFired.current = false;
+    clearLongPress();
+    longPressTimer.current = setTimeout(() => {
+      longPressFired.current = true;
+      onPreviewIntent();
+    }, 420);
+  };
   const pct = playedPercent(item);
   // Episodes only — never poster/square, even inside a poster grid or music-style square force
   const isEpisode =
@@ -206,7 +248,29 @@ export function MediaCard({
   return (
     <button
       type="button"
-      onClick={onOpen}
+      onClick={() => {
+        if (longPressFired.current) {
+          longPressFired.current = false;
+          return;
+        }
+        onOpen();
+      }}
+      onPointerEnter={startHoverPreview}
+      onPointerLeave={() => {
+        clearHover();
+        clearLongPress();
+      }}
+      onPointerDown={(e) => {
+        if (e.pointerType === 'touch' || e.pointerType === 'pen') startLongPress();
+      }}
+      onPointerUp={clearLongPress}
+      onPointerCancel={clearLongPress}
+      onContextMenu={(e) => {
+        if (onPreviewIntent) {
+          e.preventDefault();
+          onPreviewIntent();
+        }
+      }}
       aria-label={displayTitle(item)}
       className={cn(
         'text-left group',
