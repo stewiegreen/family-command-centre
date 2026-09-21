@@ -142,16 +142,16 @@ function BookCard({
   memberId,
   onOpen,
   onResume,
+  onOpenSeries,
   hero,
   expandable = false,
 }: {
   book: KomgaBook;
   memberId?: string;
   onOpen: () => void;
-  /** Opens reader — required for expand panel Play/Resume. */
   onResume?: () => void;
+  onOpenSeries?: () => void;
   hero?: boolean;
-  /** Home rails only — expand-on-hover / long-press. */
   expandable?: boolean;
 }) {
   const pct = bookProgressPercent(book);
@@ -277,7 +277,40 @@ function BookCard({
             ) : undefined
           }
         />
-        <p className="mt-2 text-sm font-semibold text-fg line-clamp-2 leading-snug">{bookTitle(book)}</p>
+        {series && onOpenSeries ? (
+          <p className="mt-2 text-sm font-semibold text-fg line-clamp-2 leading-snug">
+            <span
+              role="link"
+              tabIndex={0}
+              className="hover:underline hover:text-accent decoration-accent/40 underline-offset-2 cursor-pointer"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onOpenSeries();
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onOpenSeries();
+                }
+              }}
+            >
+              {series}
+            </span>
+            {(book.metadata?.title || book.name) &&
+            (book.metadata?.title || book.name) !== series ? (
+              <span className="text-muted font-medium">
+                {' '}
+                · {book.number != null ? `#${book.number}` : book.metadata?.title || book.name}
+              </span>
+            ) : book.number != null ? (
+              <span className="text-muted font-medium"> · #{book.number}</span>
+            ) : null}
+          </p>
+        ) : (
+          <p className="mt-2 text-sm font-semibold text-fg line-clamp-2 leading-snug">{bookTitle(book)}</p>
+        )}
         <div className="mt-0.5 flex items-center justify-between gap-1">
           <StatusPill book={book} />
           {hero && pct > 0 && pct < 100 && (
@@ -359,7 +392,27 @@ function BookCard({
               expanded ? 'opacity-0 h-0 overflow-hidden pointer-events-none' : 'opacity-100',
             )}
           >
-            <p className="mt-2 text-sm font-semibold text-fg line-clamp-2 leading-snug">{bookTitle(book)}</p>
+            {series && onOpenSeries ? (
+              <p className="mt-2 text-sm font-semibold text-fg line-clamp-2 leading-snug">
+                <span
+                  role="link"
+                  tabIndex={0}
+                  className="hover:underline hover:text-accent decoration-accent/40 underline-offset-2 cursor-pointer"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onOpenSeries();
+                  }}
+                >
+                  {series}
+                </span>
+                {book.number != null ? (
+                  <span className="text-muted font-medium"> · #{book.number}</span>
+                ) : null}
+              </p>
+            ) : (
+              <p className="mt-2 text-sm font-semibold text-fg line-clamp-2 leading-snug">{bookTitle(book)}</p>
+            )}
             <div className="mt-0.5 flex items-center justify-between gap-1">
               <StatusPill book={book} />
               {hero && pct > 0 && pct < 100 && (
@@ -379,9 +432,23 @@ function BookCard({
         >
           <div className={cn('flex flex-col justify-between gap-2 p-3 sm:p-4 h-full', panelW)}>
             <div className="min-w-0 space-y-1.5">
-              <p className="text-base sm:text-lg font-bold text-fg leading-snug line-clamp-2">
-                {series || bookTitle(book)}
-              </p>
+              {series && onOpenSeries ? (
+                <button
+                  type="button"
+                  className="text-left text-base sm:text-lg font-bold text-fg leading-snug line-clamp-2 hover:underline hover:text-accent decoration-accent/40 underline-offset-2"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onOpenSeries();
+                    collapse();
+                  }}
+                >
+                  {series}
+                </button>
+              ) : (
+                <p className="text-base sm:text-lg font-bold text-fg leading-snug line-clamp-2">
+                  {series || bookTitle(book)}
+                </p>
+              )}
               {issue && series ? (
                 <p className="text-xs sm:text-sm text-fg-secondary line-clamp-1">{issue}</p>
               ) : null}
@@ -809,6 +876,20 @@ export function ComicsPage() {
     if (rec && rec.status !== 'dismissed') void openRecommendation(rec);
   }, [data.comicRecommendations, memberId]);
 
+
+  const openSeriesFromBook = async (book: KomgaBook) => {
+    const sid = book.seriesId || book.series?.id;
+    if (!sid) return;
+    try {
+      const detail = await komgaSeriesDetail(sid, memberId);
+      await openSeries(detail);
+    } catch {
+      await openSeries({
+        id: sid,
+        name: book.seriesTitle || book.series?.name || 'Series',
+      });
+    }
+  };
 
   const openSeries = async (s: KomgaSeries) => {
     pushBrowse({ kind: 'series', series: s });
@@ -1292,6 +1373,9 @@ export function ComicsPage() {
                       book={b}
                       memberId={memberId}
                       onOpen={() => void openBookDetail(b)}
+                      onOpenSeries={
+                        b.seriesId || b.series?.id ? () => void openSeriesFromBook(b) : undefined
+                      }
                     />
                   ))}
                 </div>
@@ -1431,6 +1515,11 @@ export function ComicsPage() {
                     memberId={memberId}
                     onResume={() => startReading(continueBooks[0])}
                     onMore={() => void openBookDetail(continueBooks[0])}
+                    onOpenSeries={
+                      continueBooks[0].seriesId || continueBooks[0].series?.id
+                        ? () => void openSeriesFromBook(continueBooks[0])
+                        : undefined
+                    }
                   />
                   {continueBooks.length > 1 && (
                     <div>
@@ -1452,6 +1541,11 @@ export function ComicsPage() {
                               expandable
                               onOpen={() => void openBookDetail(b)}
                               onResume={() => startReading(b)}
+                              onOpenSeries={
+                                b.seriesId || b.series?.id
+                                  ? () => void openSeriesFromBook(b)
+                                  : undefined
+                              }
                             />
                           </div>
                         ))}
@@ -1479,6 +1573,9 @@ export function ComicsPage() {
                       expandable
                       onOpen={() => void openBookDetail(b)}
                       onResume={() => startReading(b)}
+                      onOpenSeries={
+                        b.seriesId || b.series?.id ? () => void openSeriesFromBook(b) : undefined
+                      }
                     />
                   </div>
                 ))}
@@ -1568,6 +1665,9 @@ export function ComicsPage() {
                       expandable
                       onOpen={() => void openBookDetail(b)}
                       onResume={() => startReading(b)}
+                      onOpenSeries={
+                        b.seriesId || b.series?.id ? () => void openSeriesFromBook(b) : undefined
+                      }
                     />
                   </div>
                 ))}
@@ -1582,6 +1682,9 @@ export function ComicsPage() {
                       expandable
                       onOpen={() => void openBookDetail(b)}
                       onResume={() => startReading(b)}
+                      onOpenSeries={
+                        b.seriesId || b.series?.id ? () => void openSeriesFromBook(b) : undefined
+                      }
                     />
                   </div>
                 ))}
@@ -1826,6 +1929,9 @@ export function ComicsPage() {
                           book={b}
                           memberId={memberId}
                           onOpen={() => void openBookDetail(b)}
+                          onOpenSeries={
+                            b.seriesId || b.series?.id ? () => void openSeriesFromBook(b) : undefined
+                          }
                         />
                       ))}
                     </div>
@@ -1860,7 +1966,19 @@ export function ComicsPage() {
               />
               <div className="min-w-0 flex-1 space-y-1.5">
                 {selectedBook.seriesTitle && (
-                  <p className="text-sm text-muted">{selectedBook.seriesTitle}</p>
+                  <button
+                    type="button"
+                    className="text-sm text-muted hover:text-accent hover:underline underline-offset-2 text-left"
+                    disabled={!(selectedBook.seriesId || selectedBook.series?.id)}
+                    onClick={() => {
+                      const sid = selectedBook.seriesId || selectedBook.series?.id;
+                      if (!sid) return;
+                      setSelectedBook(null);
+                      void openSeriesFromBook(selectedBook);
+                    }}
+                  >
+                    {selectedBook.seriesTitle}
+                  </button>
                 )}
                 {authors(selectedBook) && (
                   <p className="text-sm text-fg">{authors(selectedBook)}</p>
