@@ -61,6 +61,84 @@ function prefsKey(memberId?: string) {
   return `greenhq-comic-reader-${memberId || 'default'}`;
 }
 
+function seriesPrefsKey(memberId: string | undefined, seriesId: string) {
+  return `greenhq-comic-series-prefs:${memberId || 'default'}:${seriesId}`;
+}
+
+/**
+ * Infer reading mode from Komga tags / genres / titles.
+ * Used when this member has no saved prefs for the series yet.
+ */
+export function inferReaderDefaults(book: KomgaBook): Pick<ReaderPrefs, 'viewMode' | 'direction'> {
+  const tags = [...(book.metadata?.tags || []), ...(book.metadata?.genres || [])].map((x) =>
+    String(x).toLowerCase(),
+  );
+  const blob = `${tags.join(' ')} ${book.seriesTitle || ''} ${book.name || ''} ${book.metadata?.title || ''}`.toLowerCase();
+
+  if (/webtoon|웹툰|manhwa|long\s*strip|vertical\s*scroll|scroll\s*comic/.test(blob)) {
+    return { viewMode: 'vertical', direction: 'ltr' };
+  }
+  // Manga / RTL markets
+  if (
+    /\bmanga\b|mangaka|manhua|right\s*-?to\s*-?left|\brtl\b|日本語|japanese|\bjp\b|\bja\b|\bkr\b|한국어|korean/.test(
+      blob,
+    )
+  ) {
+    return { viewMode: 'single', direction: 'rtl' };
+  }
+  return { viewMode: 'single', direction: 'ltr' };
+}
+
+function loadSeriesPrefs(
+  memberId: string | undefined,
+  seriesId: string | undefined,
+): Partial<ReaderPrefs> | null {
+  if (!seriesId) return null;
+  try {
+    const raw = localStorage.getItem(seriesPrefsKey(memberId, seriesId));
+    if (!raw) return null;
+    const p = JSON.parse(raw) as Partial<ReaderPrefs>;
+    const out: Partial<ReaderPrefs> = {};
+    if (p.viewMode && ['single', 'double', 'vertical'].includes(p.viewMode)) out.viewMode = p.viewMode;
+    if (p.direction === 'rtl' || p.direction === 'ltr') out.direction = p.direction;
+    if (p.fit && ['width', 'height', 'screen', 'actual'].includes(p.fit)) out.fit = p.fit;
+    if (typeof p.zoom === 'number' && p.zoom >= 0.5 && p.zoom <= 3) out.zoom = p.zoom;
+    return Object.keys(out).length ? out : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveSeriesPrefs(
+  memberId: string | undefined,
+  seriesId: string | undefined,
+  prefs: ReaderPrefs,
+) {
+  if (!seriesId) return;
+  try {
+    localStorage.setItem(
+      seriesPrefsKey(memberId, seriesId),
+      JSON.stringify({
+        viewMode: prefs.viewMode,
+        direction: prefs.direction,
+        fit: prefs.fit,
+        zoom: prefs.zoom,
+      }),
+    );
+  } catch {
+    /* private mode */
+  }
+}
+
+function prefsForBook(memberId: string | undefined, book: KomgaBook): ReaderPrefs {
+  const global = loadPrefs(memberId);
+  const seriesId = book.seriesId || book.series?.id;
+  const series = loadSeriesPrefs(memberId, seriesId);
+  if (series) return { ...global, ...series };
+  // First time in this series → smart defaults, keep global fit/zoom
+  return { ...global, ...inferReaderDefaults(book) };
+}
+
 function loadPrefs(memberId?: string): ReaderPrefs {
   try {
     const raw = localStorage.getItem(prefsKey(memberId));
@@ -107,7 +185,8 @@ export function ComicReader({ book, memberId, onClose, onOpenBook }: Props) {
   const [uiVisible, setUiVisible] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
-  const [prefs, setPrefs] = useState<ReaderPrefs>(() => loadPrefs(memberId));
+  const [prefs, setPrefs] = useState<ReaderPrefs>(() => prefsForBook(memberId, book));
+  const seriesId = book.seriesId || book.series?.id;
   const [isFs, setIsFs] = useState(false);
 
   const pageIndexRef = useRef(0);
@@ -128,10 +207,11 @@ export function ComicReader({ book, memberId, onClose, onOpenBook }: Props) {
       setPrefs((prev) => {
         const next = { ...prev, ...patch };
         savePrefs(memberId, next);
+        saveSeriesPrefs(memberId, seriesId, next);
         return next;
       });
     },
-    [memberId],
+    [memberId, seriesId],
   );
 
   const flushProgress = useCallback(
@@ -213,6 +293,11 @@ export function ComicReader({ book, memberId, onClose, onOpenBook }: Props) {
       document.body.style.overflow = prev;
     };
   }, []);
+
+  // Per-series reading mode when switching issues
+  useEffect(() => {
+    setPrefs(prefsForBook(memberId, book));
+  }, [book.id, memberId]);
 
   // Load pages + resume + next chapter
   useEffect(() => {

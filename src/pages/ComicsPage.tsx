@@ -615,6 +615,7 @@ export function ComicsPage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [seriesContinue, setSeriesContinue] = useState<KomgaBook | null>(null);
+  const [seriesBooksFilter, setSeriesBooksFilter] = useState<'all' | 'unread'>('all');
 
   const loadHome = useCallback(async () => {
     setLoading(true);
@@ -816,6 +817,7 @@ export function ComicsPage() {
     setDetailPage(0);
     setDetailHasMore(false);
     setSeriesContinue(null);
+    setSeriesBooksFilter('all');
     setLibraryLetter(null);
     try {
       const [detail, page] = await Promise.all([
@@ -1019,6 +1021,25 @@ export function ComicsPage() {
     return list;
   }, [searchBooks, searchFilter]);
 
+  const filteredSeriesBooks = useMemo(() => {
+    if (seriesBooksFilter === 'unread') {
+      return detailBooks.filter((b) => bookProgressPercent(b) < 100 && !b.readProgress?.completed);
+    }
+    return detailBooks;
+  }, [detailBooks, seriesBooksFilter]);
+
+  const seriesContinueLabel = useMemo(() => {
+    if (!seriesContinue) return null;
+    const pct = bookProgressPercent(seriesContinue);
+    const num =
+      seriesContinue.number != null && seriesContinue.number !== ''
+        ? `#${seriesContinue.number}`
+        : seriesContinue.metadata?.title || seriesContinue.name || 'next issue';
+    if (pct > 0 && pct < 100) return { action: 'Continue', detail: num, pct };
+    if (pct < 100) return { action: 'Next', detail: num, pct: 0 };
+    return { action: 'Read again', detail: num, pct: 100 };
+  }, [seriesContinue]);
+
   const openBookDetail = async (book: KomgaBook) => {
     try {
       const full = await komgaBook(book.id, memberId);
@@ -1187,10 +1208,85 @@ export function ComicsPage() {
                   </div>
                 </div>
               </div>
+              {/* Sticky where-I-am row */}
+              {seriesContinue && seriesContinueLabel && (
+                <button
+                  type="button"
+                  onClick={() => startReading(seriesContinue)}
+                  className="w-full flex items-center gap-3 sm:gap-4 p-3 sm:p-3.5 rounded-2xl border border-border bg-surface-1 hover:bg-nav-hover text-left shadow-sm"
+                >
+                  <img
+                    src={komgaBookThumbUrl(seriesContinue.id, memberId)}
+                    alt=""
+                    className="w-12 h-[4.5rem] sm:w-14 sm:h-[5.25rem] object-cover rounded-lg border border-border shrink-0"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-accent">
+                      {seriesContinueLabel.action} reading
+                    </p>
+                    <p className="text-sm sm:text-base font-bold text-fg line-clamp-1 mt-0.5">
+                      {seriesContinueLabel.detail}
+                      {seriesContinue.metadata?.title || seriesContinue.name
+                        ? ` · ${seriesContinue.metadata?.title || seriesContinue.name}`
+                        : ''}
+                    </p>
+                    {seriesContinueLabel.pct > 0 && seriesContinueLabel.pct < 100 ? (
+                      <div className="mt-1.5 max-w-xs">
+                        <ProgressBar pct={seriesContinueLabel.pct} className="h-1.5 !bg-inset" />
+                        <p className="text-[10px] text-muted mt-0.5 tabular-nums">
+                          {Math.round(seriesContinueLabel.pct)}% · page{' '}
+                          {seriesContinue.readProgress?.page || '—'}
+                          {seriesContinue.media?.pagesCount
+                            ? ` of ${seriesContinue.media.pagesCount}`
+                            : ''}
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted mt-1">Tap to open in the reader</p>
+                    )}
+                  </div>
+                  <span className="shrink-0 rounded-full bg-accent text-accent-ink p-2.5">
+                    <Play className="w-4 h-4 fill-current" />
+                  </span>
+                </button>
+              )}
+
               <div>
-                <h3 className="text-sm font-bold text-fg mb-3">Books · reading order</h3>
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                  <h3 className="text-sm font-bold text-fg">Books · reading order</h3>
+                  <div className="flex items-center gap-1 rounded-full border border-border p-0.5 bg-surface-2">
+                    <button
+                      type="button"
+                      onClick={() => setSeriesBooksFilter('all')}
+                      className={cn(
+                        'px-3 py-1 rounded-full text-xs font-semibold transition-colors',
+                        seriesBooksFilter === 'all'
+                          ? 'bg-accent text-accent-ink'
+                          : 'text-muted hover:text-fg',
+                      )}
+                    >
+                      All
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSeriesBooksFilter('unread')}
+                      className={cn(
+                        'px-3 py-1 rounded-full text-xs font-semibold transition-colors',
+                        seriesBooksFilter === 'unread'
+                          ? 'bg-accent text-accent-ink'
+                          : 'text-muted hover:text-fg',
+                      )}
+                    >
+                      Unread only
+                      {typeof browse.series.booksUnreadCount === 'number' &&
+                      browse.series.booksUnreadCount > 0
+                        ? ` · ${browse.series.booksUnreadCount}`
+                        : ''}
+                    </button>
+                  </div>
+                </div>
                 <div className="flex flex-wrap gap-4">
-                  {detailBooks.map((b) => (
+                  {filteredSeriesBooks.map((b) => (
                     <BookCard
                       key={b.id}
                       book={b}
@@ -1199,8 +1295,12 @@ export function ComicsPage() {
                     />
                   ))}
                 </div>
-                {detailBooks.length === 0 && (
-                  <p className="text-sm text-muted">No books in this series.</p>
+                {filteredSeriesBooks.length === 0 && (
+                  <p className="text-sm text-muted">
+                    {seriesBooksFilter === 'unread'
+                      ? 'No unread books in this series (or load more below).'
+                      : 'No books in this series.'}
+                  </p>
                 )}
                 <div ref={loadMoreRef} className="h-8 flex items-center justify-center mt-4">
                   {detailLoadingMore && <Loader2 className="w-5 h-5 animate-spin text-muted" />}
