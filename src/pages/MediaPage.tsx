@@ -773,6 +773,7 @@ export function MediaPage() {
                               onOpen={() => void openFocus(item)}
                               onPlay={() => play(item)}
                               embyUserId={embyUserId}
+                              expandable
                             />
                           </div>
                         ))}
@@ -868,8 +869,7 @@ export function MediaPage() {
                   <Section key={view.Id} title={`Latest in ${view.Name}`} empty={false}>
                     <div className="flex gap-3.5 overflow-x-auto pb-2 -mx-1 px-1">
                       {items.map((item) => (
-                        <MediaCard key={item.Id} item={item} square={inMusicContext} onOpen={() => void openFocus(item)} onPlay={() => play(item)}
-                              embyUserId={embyUserId} />
+                        <MediaCard key={item.Id} item={item} square={inMusicContext} onOpen={() => void openFocus(item)} onPlay={() => play(item)} embyUserId={embyUserId} expandable />
                       ))}
                     </div>
                   </Section>
@@ -981,8 +981,6 @@ export function MediaPage() {
                         square={inMusicContext && item.Type !== 'Episode'}
                         layout="grid"
                         onOpen={() => void openFocus(item)}
-                        onPlay={() => play(item)}
-                              embyUserId={embyUserId}
                       />
                     ))}
                   </div>
@@ -1031,8 +1029,6 @@ export function MediaPage() {
                 square={inMusicContext}
                 layout="grid"
                 onOpen={() => void openFocus(item)}
-                onPlay={() => play(item)}
-                              embyUserId={embyUserId}
               />
             ))}
           </div>

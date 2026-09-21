@@ -24,18 +24,17 @@ export type MediaCardVariant = 'poster' | 'continue';
 type Props = {
   item: EmbyItem;
   onOpen: () => void;
-  /** When set, hover/long-press expands the card in-rail with Play. */
+  /** Play handler — required for expand preview on Media Home. */
   onPlay?: () => void;
   variant?: MediaCardVariant;
   square?: boolean;
   layout?: 'scroll' | 'grid';
   className?: string;
   /**
-   * Enable Netflix-style expand-to-the-right preview (default true when onPlay is set).
-   * Collapses automatically when the pointer leaves the expanded card.
+   * Opt-in expand-on-hover (Media Home rails only).
+   * Library / search grids must leave this unset/false.
    */
   expandable?: boolean;
-  /** Emby user id — used to prefetch Overview when the card expands. */
   embyUserId?: string;
 };
 
@@ -126,31 +125,29 @@ function secondaryLine(item: EmbyItem, landscape: boolean): string | null {
   return item.ProductionYear ? String(item.ProductionYear) : item.Type || null;
 }
 
+
+
 function CoverFrame({
   src,
   shape,
   footer,
   badge,
   className,
-  fillHeight,
 }: {
   src: string;
   shape: 'poster' | 'landscape' | 'square';
   footer?: ReactNode;
   badge?: ReactNode;
   className?: string;
-  /** Stretch to parent height (expanded card) — no aspect box. */
-  fillHeight?: boolean;
 }) {
   return (
     <div
       className={cn(
         'relative overflow-hidden bg-surface-2 border border-border shadow-md',
         'rounded-2xl',
-        !fillHeight && shape === 'landscape' && 'aspect-video',
-        !fillHeight && shape === 'square' && 'aspect-square',
-        !fillHeight && shape === 'poster' && 'aspect-[2/3]',
-        fillHeight && 'h-full min-h-0',
+        shape === 'landscape' && 'aspect-video',
+        shape === 'square' && 'aspect-square',
+        shape === 'poster' && 'aspect-[2/3]',
         className,
       )}
       style={{ boxShadow: 'var(--app-shadow-card)' }}
@@ -190,7 +187,8 @@ export function MediaCard({
   expandable: expandableProp,
   embyUserId,
 }: Props) {
-  const expandable = expandableProp ?? Boolean(onPlay);
+  /** Expand-on-hover only when explicitly enabled (Media Home rails). Never on library grids. */
+  const expandable = expandableProp === true && layout !== 'grid' && Boolean(onPlay);
   const [expanded, setExpanded] = useState(false);
   const [full, setFull] = useState<EmbyItem | null>(null);
   const [logoFailed, setLogoFailed] = useState(false);
@@ -222,7 +220,6 @@ export function MediaCard({
     setExpanded(true);
   }, []);
 
-  // Prefetch full item (overview) when expanded
   useEffect(() => {
     if (!expanded) {
       setFull(null);
@@ -272,12 +269,10 @@ export function MediaCard({
     : landscape
       ? embyThumbUrl(item, 720)
       : embyPosterUrl(item, 400);
-  /** Collapsed caption logo (series/season under poster). */
   const seriesLogo =
     !landscape && (item.Type === 'Series' || item.Type === 'Season')
       ? embyBestLogoUrl(item, 64)
       : null;
-  /** Expanded panel title logo — any title with an Emby Logo image. */
   const titleLogo = embyBestLogoUrl(full || item, 220);
   const showTitleLogo = Boolean(titleLogo) && !logoFailed;
 
@@ -301,7 +296,6 @@ export function MediaCard({
     }, 500);
   };
 
-  // Touch: collapse when tapping outside
   useEffect(() => {
     if (!expanded) return;
     const onDoc = (e: PointerEvent) => {
@@ -314,6 +308,14 @@ export function MediaCard({
 
   const coverW =
     shape === 'landscape' ? COVER_LANDSCAPE : shape === 'square' ? COVER_SQUARE : COVER_POSTER;
+
+  /** Collapsed poster column width; expanded uses the same so art doesn't jump. */
+  const artW =
+    shape === 'landscape'
+      ? 'w-[16.5rem] sm:w-[19.5rem]'
+      : shape === 'square'
+        ? 'w-[9.5rem] sm:w-[10.75rem]'
+        : 'w-[9.5rem] sm:w-[10.75rem]';
 
   return (
     <div
@@ -330,27 +332,127 @@ export function MediaCard({
       onPointerUp={clearLongPress}
       onPointerCancel={clearLongPress}
       className={cn(
-        'relative text-left group transition-[width,box-shadow] duration-300 ease-out',
-        layout === 'grid' ? 'w-full min-w-0' : 'shrink-0',
+        'relative text-left group transition-[width] duration-300 ease-out',
+        layout === 'grid' ? 'w-full min-w-0' : 'shrink-0 self-start',
         layout === 'scroll' && !expanded && coverW,
-        expanded && layout === 'scroll' && 'z-20',
+        expanded && 'z-20',
         expanded &&
           (shape === 'landscape'
-            ? 'w-[min(100%,36rem)] sm:w-[42rem] md:w-[48rem]'
-            : 'w-[min(100%,32rem)] sm:w-[40rem] md:w-[46rem]'),
+            ? 'w-[min(100%,36rem)] sm:w-[42rem] md:w-[46rem]'
+            : 'w-[min(100%,30rem)] sm:w-[36rem] md:w-[42rem]'),
         expanded &&
-          'rounded-2xl bg-surface-1 border border-border shadow-xl shadow-black/25 ring-1 ring-black/5 overflow-hidden self-start',
+          'rounded-2xl bg-surface-1 border border-border shadow-xl shadow-black/30 overflow-hidden',
         className,
       )}
     >
-      <div
-        className={cn(
-          expanded ? 'grid grid-cols-[auto_1fr] grid-rows-1 items-stretch' : 'flex flex-col',
-        )}
-      >
-        {/* Art — click opens detail unless long-press just fired.
-            When expanded, a hidden aspect sizer locks row height to the poster;
-            the visible frame fills that height so no gap under the art. */}
+      {expanded ? (
+        /* ── Expanded: horizontal only — poster | details, same height ── */
+        <div className="flex flex-row items-stretch">
+          <button
+            type="button"
+            onClick={() => {
+              if (longPressFired.current) {
+                longPressFired.current = false;
+                return;
+              }
+              onOpen();
+            }}
+            aria-label={displayTitle(item)}
+            className={cn('shrink-0', artW)}
+          >
+            <CoverFrame
+              src={img}
+              shape={shape}
+              className="!rounded-none !rounded-l-2xl !border-0 !shadow-none"
+            />
+          </button>
+          <div className="flex-1 min-w-0 flex flex-col justify-between gap-2 p-3 sm:p-4 overflow-hidden">
+            <div className="min-w-0 space-y-1.5 overflow-hidden">
+              {showTitleLogo ? (
+                <img
+                  src={titleLogo!}
+                  alt={displayTitle(item)}
+                  className="max-h-9 sm:max-h-11 max-w-full w-auto object-contain object-left"
+                  onError={() => setLogoFailed(true)}
+                />
+              ) : (
+                <p className="text-base sm:text-lg font-bold text-fg leading-snug line-clamp-2">
+                  {displayTitle(item)}
+                </p>
+              )}
+              <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] sm:text-xs text-muted">
+                {item.ProductionYear ? <span>{item.ProductionYear}</span> : null}
+                {runtime ? (
+                  <>
+                    {item.ProductionYear ? <span>·</span> : null}
+                    <span className="tabular-nums">{runtime}</span>
+                  </>
+                ) : null}
+                {left && pct > 0 && pct < 100 ? (
+                  <>
+                    <span>·</span>
+                    <span className="text-accent font-semibold tabular-nums">{left}</span>
+                  </>
+                ) : null}
+                {item.OfficialRating ? (
+                  <>
+                    <span>·</span>
+                    <span className="rounded border border-border px-1 py-px text-[10px] font-semibold">
+                      {item.OfficialRating}
+                    </span>
+                  </>
+                ) : null}
+                {item.CommunityRating != null && item.CommunityRating > 0 ? (
+                  <>
+                    <span>·</span>
+                    <span>★ {item.CommunityRating.toFixed(1)}</span>
+                  </>
+                ) : null}
+              </div>
+              {pct > 0 && pct < 100 ? (
+                <div>
+                  <ProgressBar pct={pct} className="!bg-inset" />
+                  <p className="mt-0.5 text-[10px] text-muted tabular-nums">{Math.round(pct)}% watched</p>
+                </div>
+              ) : null}
+              {overview ? (
+                <p className="text-xs sm:text-sm text-fg-secondary leading-relaxed line-clamp-3">
+                  {overview}
+                </p>
+              ) : null}
+            </div>
+            <div className="flex flex-wrap gap-1.5 shrink-0">
+              {onPlay ? (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onPlay();
+                    collapse();
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-accent text-accent-ink px-3.5 py-1.5 text-sm font-bold hover:bg-accent-hover"
+                >
+                  <Play className="w-4 h-4 fill-current" />
+                  {pct > 0 && pct < 100 ? 'Resume' : 'Play'}
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpen();
+                  collapse();
+                }}
+                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface-2 px-3.5 py-1.5 text-sm font-semibold text-fg hover:bg-nav-hover"
+              >
+                <Info className="w-4 h-4" />
+                More
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* ── Collapsed card ── */
         <button
           type="button"
           onClick={() => {
@@ -361,196 +463,67 @@ export function MediaCard({
             onOpen();
           }}
           aria-label={displayTitle(item)}
-          className={cn(
-            'text-left shrink-0 relative',
-            expanded
-              ? shape === 'landscape'
-                ? 'w-[14rem] sm:w-[16rem] md:w-[17.5rem]'
-                : shape === 'square'
-                  ? 'w-[10.75rem] sm:w-[12rem]'
-                  : 'w-[10.75rem] sm:w-[12rem] md:w-[13rem]'
-              : 'w-full',
-          )}
+          className="text-left w-full"
         >
-          {expanded ? (
-            <div
-              className={cn(
-                'invisible pointer-events-none w-full',
-                shape === 'landscape' && 'aspect-video',
-                shape === 'square' && 'aspect-square',
-                shape === 'poster' && 'aspect-[2/3]',
-              )}
-              aria-hidden
-            />
-          ) : null}
           <CoverFrame
             src={img}
             shape={shape}
-            fillHeight={expanded}
-            className={
-              expanded
-                ? '!rounded-l-2xl !rounded-r-none !border-0 absolute inset-0 h-full w-full'
-                : undefined
-            }
             footer={
-              !expanded && landscape && pct > 0 && pct < 100 ? (
+              landscape && pct > 0 && pct < 100 ? (
                 <div className="absolute inset-x-0 bottom-0 p-2.5 bg-gradient-to-t from-black/80 to-transparent space-y-1">
                   <ProgressBar pct={pct} />
                   {left ? (
                     <p className="text-[10px] font-semibold text-white/90 tabular-nums">{left}</p>
                   ) : null}
                 </div>
-              ) : !expanded && !landscape && pct > 0 && pct < 100 ? (
+              ) : !landscape && pct > 0 && pct < 100 ? (
                 <div className="absolute inset-x-0 bottom-0 p-2 bg-gradient-to-t from-black/70 to-transparent">
                   <ProgressBar pct={pct} />
                 </div>
               ) : undefined
             }
             badge={
-              !expanded && item.UserData?.Played && !landscape ? (
+              item.UserData?.Played && !landscape ? (
                 <div className="absolute top-2 right-2 rounded-full bg-emerald-500 text-white p-1 shadow">
                   <Check className="w-3.5 h-3.5" />
                 </div>
               ) : undefined
             }
           />
-          {!expanded && (
-            <>
-              {seriesLogo ? (
-                <div className="mt-2 h-9 flex items-center">
-                  <img
-                    src={seriesLogo}
-                    alt={title}
-                    className="max-h-9 max-w-full w-auto object-contain object-left drop-shadow-sm"
-                    loading="lazy"
-                    onError={(e) => {
-                      (e.currentTarget as HTMLImageElement).style.display = 'none';
-                      const fallback = e.currentTarget.parentElement?.querySelector(
-                        '[data-title-fallback]',
-                      );
-                      if (fallback instanceof HTMLElement) fallback.style.display = 'block';
-                    }}
-                  />
-                  <p
-                    data-title-fallback
-                    className="text-sm font-semibold text-fg line-clamp-2 leading-snug"
-                    style={{ display: 'none' }}
-                  >
-                    {title}
-                  </p>
-                </div>
-              ) : (
-                <p className="mt-2 text-sm font-semibold text-fg line-clamp-2 leading-snug">{title}</p>
-              )}
-              <div className="mt-0.5 flex items-center justify-between gap-1">
-                {sub ? <p className="text-[11px] text-muted line-clamp-1 min-w-0">{sub}</p> : <span />}
-                {landscape && pct > 0 && pct < 100 ? (
-                  <span className="text-[11px] font-semibold text-accent shrink-0">CONTINUE</span>
-                ) : null}
-              </div>
-            </>
-          )}
-        </button>
-
-        {/* Expanded detail panel — grows to the right */}
-        <div
-          className={cn(
-            'overflow-hidden transition-[max-width,opacity] duration-300 ease-out min-h-0',
-            expanded
-              ? 'max-w-[28rem] sm:max-w-[32rem] md:max-w-[36rem] opacity-100 h-0 min-h-full'
-              : 'max-w-0 opacity-0',
-          )}
-        >
-          {expanded && (
-            <div className="h-full max-h-full min-h-0 flex flex-col justify-between p-3 sm:p-4 overflow-hidden">
-              <div className="min-w-0 min-h-0 flex-1 flex flex-col gap-1.5 overflow-hidden">
-                {showTitleLogo ? (
-                  <img
-                    src={titleLogo!}
-                    alt={displayTitle(item)}
-                    className="max-h-10 sm:max-h-12 md:max-h-14 max-w-full w-auto object-contain object-left drop-shadow-sm shrink-0"
-                    onError={() => setLogoFailed(true)}
-                  />
-                ) : (
-                  <p className="text-base sm:text-lg md:text-xl font-bold text-fg leading-snug line-clamp-2 shrink-0">
-                    {displayTitle(item)}
-                  </p>
-                )}
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs sm:text-sm text-muted shrink-0">
-                  {item.ProductionYear ? <span>{item.ProductionYear}</span> : null}
-                  {runtime ? (
-                    <>
-                      {item.ProductionYear ? <span>·</span> : null}
-                      <span className="tabular-nums">{runtime}</span>
-                    </>
-                  ) : null}
-                  {left && pct > 0 && pct < 100 ? (
-                    <>
-                      <span>·</span>
-                      <span className="text-accent font-semibold tabular-nums">{left}</span>
-                    </>
-                  ) : null}
-                  {item.OfficialRating ? (
-                    <>
-                      <span>·</span>
-                      <span className="rounded border border-border px-1 py-px text-[10px] font-semibold">
-                        {item.OfficialRating}
-                      </span>
-                    </>
-                  ) : null}
-                  {item.CommunityRating != null && item.CommunityRating > 0 ? (
-                    <>
-                      <span>·</span>
-                      <span>★ {item.CommunityRating.toFixed(1)}</span>
-                    </>
-                  ) : null}
-                </div>
-                {pct > 0 && pct < 100 ? (
-                  <div className="pt-0.5">
-                    <ProgressBar pct={pct} className="!bg-inset" />
-                    <p className="mt-0.5 text-[10px] text-muted tabular-nums">{Math.round(pct)}% watched</p>
-                  </div>
-                ) : null}
-                {overview ? (
-                  <p className="text-xs sm:text-sm text-fg-secondary leading-relaxed line-clamp-3 min-h-0 overflow-hidden">
-                    {overview}
-                  </p>
-                ) : (
-                  <p className="text-xs text-muted italic">No synopsis</p>
-                )}
-              </div>
-              <div className="flex flex-wrap gap-1.5 pt-2 shrink-0">
-                {onPlay ? (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onPlay();
-                      collapse();
-                    }}
-                    className="inline-flex items-center gap-1.5 rounded-full bg-accent text-accent-ink px-4 py-2 text-sm font-bold hover:bg-accent-hover"
-                  >
-                    <Play className="w-4 h-4 fill-current" />
-                    {pct > 0 && pct < 100 ? 'Resume' : 'Play'}
-                  </button>
-                ) : null}
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onOpen();
-                    collapse();
-                  }}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface-2 px-4 py-2 text-sm font-semibold text-fg hover:bg-nav-hover"
-                >
-                  <Info className="w-4 h-4" />
-                  More
-                </button>
-              </div>
+          {seriesLogo ? (
+            <div className="mt-2 h-9 flex items-center">
+              <img
+                src={seriesLogo}
+                alt={title}
+                className="max-h-9 max-w-full w-auto object-contain object-left drop-shadow-sm"
+                loading="lazy"
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).style.display = 'none';
+                  const fallback = e.currentTarget.parentElement?.querySelector(
+                    '[data-title-fallback]',
+                  );
+                  if (fallback instanceof HTMLElement) fallback.style.display = 'block';
+                }}
+              />
+              <p
+                data-title-fallback
+                className="text-sm font-semibold text-fg line-clamp-2 leading-snug"
+                style={{ display: 'none' }}
+              >
+                {title}
+              </p>
             </div>
+          ) : (
+            <p className="mt-2 text-sm font-semibold text-fg line-clamp-2 leading-snug">{title}</p>
           )}
-        </div>
-      </div>
+          <div className="mt-0.5 flex items-center justify-between gap-1">
+            {sub ? <p className="text-[11px] text-muted line-clamp-1 min-w-0">{sub}</p> : <span />}
+            {landscape && pct > 0 && pct < 100 ? (
+              <span className="text-[11px] font-semibold text-accent shrink-0">CONTINUE</span>
+            ) : null}
+          </div>
+        </button>
+      )}
     </div>
   );
 }
