@@ -788,17 +788,52 @@ export function ComicReader({ book, memberId, onClose, onOpenBook }: Props) {
 
       {/* End of issue — Up next (series continuity) */}
       {atEnd && !showEndOverlay && !loading && !error && prefs.viewMode !== 'vertical' && (
-        <div className="absolute bottom-20 inset-x-0 z-30 flex justify-center px-4 pointer-events-none">
+        <div className="absolute bottom-20 right-3 sm:bottom-24 sm:right-5 z-30 pointer-events-none">
           <button
             type="button"
-            className="pointer-events-auto rounded-full bg-black/85 border border-white/20 px-4 py-2 text-xs font-semibold text-white/90 shadow-lg hover:bg-black"
+            className={cn(
+              'pointer-events-auto flex items-center gap-2.5 rounded-2xl',
+              'bg-black/90 border border-white/20 shadow-2xl shadow-black/50',
+              'pl-2.5 pr-3.5 py-2 text-left',
+              'hover:bg-black hover:border-white/35 transition-colors',
+              'max-w-[14rem] sm:max-w-[16rem]',
+            )}
             onClick={(e) => {
               e.stopPropagation();
               setShowEndOverlay(true);
               void flushProgress(pageIndexRef.current, pagesRef.current);
             }}
+            aria-label={nextChapter ? 'Finished — up next issue' : 'Finished'}
           >
-            {nextChapter ? 'Finished · Up next' : 'Finished'}
+            {nextChapter ? (
+              <img
+                src={komgaBookThumbUrl(nextChapter.id, memberId)}
+                alt=""
+                className="w-10 h-[3.75rem] sm:w-11 sm:h-[4.15rem] object-cover rounded-lg border border-white/15 shrink-0 shadow"
+              />
+            ) : (
+              <span className="w-10 h-[3.75rem] rounded-lg bg-white/10 border border-white/10 flex items-center justify-center shrink-0">
+                <BookOpen className="w-4 h-4 text-emerald-400" />
+              </span>
+            )}
+            <span className="min-w-0 py-0.5">
+              <span className="block text-[10px] font-bold uppercase tracking-wider text-amber-300/95">
+                {nextChapter ? 'Up next' : 'Finished'}
+              </span>
+              {nextChapter ? (
+                <>
+                  <span className="block text-xs font-semibold text-white leading-snug line-clamp-2 mt-0.5">
+                    {nextChapter.number != null ? `#${nextChapter.number}` : bookTitle(nextChapter)}
+                    {nextChapter.number != null && (nextChapter.metadata?.title || nextChapter.name)
+                      ? ` · ${nextChapter.metadata?.title || nextChapter.name}`
+                      : ''}
+                  </span>
+                  <span className="block text-[10px] text-white/50 mt-0.5">Tap for next issue</span>
+                </>
+              ) : (
+                <span className="block text-xs text-white/70 mt-0.5 line-clamp-2">{bookTitle(book)}</span>
+              )}
+            </span>
           </button>
         </div>
       )}
