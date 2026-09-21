@@ -132,21 +132,25 @@ function CoverFrame({
   footer,
   badge,
   className,
+  fillHeight,
 }: {
   src: string;
   shape: 'poster' | 'landscape' | 'square';
   footer?: ReactNode;
   badge?: ReactNode;
   className?: string;
+  /** Stretch to parent height (expanded card) — no aspect box. */
+  fillHeight?: boolean;
 }) {
   return (
     <div
       className={cn(
         'relative overflow-hidden bg-surface-2 border border-border shadow-md',
         'rounded-2xl',
-        shape === 'landscape' && 'aspect-video',
-        shape === 'square' && 'aspect-square',
-        shape === 'poster' && 'aspect-[2/3]',
+        !fillHeight && shape === 'landscape' && 'aspect-video',
+        !fillHeight && shape === 'square' && 'aspect-square',
+        !fillHeight && shape === 'poster' && 'aspect-[2/3]',
+        fillHeight && 'h-full min-h-0',
         className,
       )}
       style={{ boxShadow: 'var(--app-shadow-card)' }}
@@ -341,11 +345,12 @@ export function MediaCard({
     >
       <div
         className={cn(
-          'flex',
-          expanded ? 'flex-row items-stretch gap-0' : 'flex-col',
+          expanded ? 'grid grid-cols-[auto_1fr] grid-rows-1 items-stretch' : 'flex flex-col',
         )}
       >
-        {/* Art — click opens detail unless long-press just fired */}
+        {/* Art — click opens detail unless long-press just fired.
+            When expanded, a hidden aspect sizer locks row height to the poster;
+            the visible frame fills that height so no gap under the art. */}
         <button
           type="button"
           onClick={() => {
@@ -353,29 +358,40 @@ export function MediaCard({
               longPressFired.current = false;
               return;
             }
-            if (expanded) {
-              // clicking art while expanded still opens detail
-              onOpen();
-              return;
-            }
             onOpen();
           }}
           aria-label={displayTitle(item)}
           className={cn(
-            'text-left shrink-0',
+            'text-left shrink-0 relative',
             expanded
               ? shape === 'landscape'
-                ? 'w-[16.5rem] sm:w-[19.5rem]'
+                ? 'w-[14rem] sm:w-[16rem] md:w-[17.5rem]'
                 : shape === 'square'
-                  ? 'w-[9.5rem] sm:w-[10.75rem]'
-                  : 'w-[9.5rem] sm:w-[10.75rem]'
+                  ? 'w-[10.75rem] sm:w-[12rem]'
+                  : 'w-[10.75rem] sm:w-[12rem] md:w-[13rem]'
               : 'w-full',
           )}
         >
+          {expanded ? (
+            <div
+              className={cn(
+                'invisible pointer-events-none w-full',
+                shape === 'landscape' && 'aspect-video',
+                shape === 'square' && 'aspect-square',
+                shape === 'poster' && 'aspect-[2/3]',
+              )}
+              aria-hidden
+            />
+          ) : null}
           <CoverFrame
             src={img}
-            shape={expanded && shape === 'poster' ? 'poster' : shape}
-            className={expanded ? '!rounded-l-2xl !rounded-r-none' : undefined}
+            shape={shape}
+            fillHeight={expanded}
+            className={
+              expanded
+                ? '!rounded-l-2xl !rounded-r-none !border-0 absolute inset-0 h-full w-full'
+                : undefined
+            }
             footer={
               !expanded && landscape && pct > 0 && pct < 100 ? (
                 <div className="absolute inset-x-0 bottom-0 p-2.5 bg-gradient-to-t from-black/80 to-transparent space-y-1">
@@ -441,7 +457,7 @@ export function MediaCard({
           className={cn(
             'overflow-hidden transition-[max-width,opacity] duration-300 ease-out min-h-0',
             expanded
-              ? 'max-w-[28rem] sm:max-w-[32rem] md:max-w-[36rem] opacity-100 flex-1 self-stretch'
+              ? 'max-w-[28rem] sm:max-w-[32rem] md:max-w-[36rem] opacity-100 h-0 min-h-full'
               : 'max-w-0 opacity-0',
           )}
         >
@@ -496,7 +512,7 @@ export function MediaCard({
                   </div>
                 ) : null}
                 {overview ? (
-                  <p className="text-xs sm:text-sm text-fg-secondary leading-relaxed line-clamp-3 sm:line-clamp-4 min-h-0 overflow-hidden">
+                  <p className="text-xs sm:text-sm text-fg-secondary leading-relaxed line-clamp-3 min-h-0 overflow-hidden">
                     {overview}
                   </p>
                 ) : (
