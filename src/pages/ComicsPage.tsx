@@ -23,6 +23,7 @@ import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Modal } from '../components/ui/Modal';
 import { ComicReader } from '../components/ComicReader';
+import { ComicContinueHero } from '../components/ComicContinueHero';
 import {
   bookProgressPercent,
   bookTitle,
@@ -1060,22 +1061,40 @@ export function ComicsPage() {
           {/* ── Home ── */}
           {tab === 'home' && (
             <div className="space-y-10">
-              <Section
-                title="Continue reading"
-                subtitle={continueBooks.length ? `Comics you've started — pick up where you left off` : undefined}
-                empty={continueBooks.length === 0}
-              >
-                {continueBooks.map((b) => (
-                  <div key={b.id} className="snap-start">
-                    <BookCard
-                      book={b}
-                      memberId={memberId}
-                      hero
-                      onOpen={() => void openBookDetail(b)}
-                    />
-                  </div>
-                ))}
-              </Section>
+              {continueBooks.length > 0 && (
+                <section className="space-y-3">
+                  <ComicContinueHero
+                    book={continueBooks[0]}
+                    memberId={memberId}
+                    onResume={() => startReading(continueBooks[0])}
+                    onMore={() => void openBookDetail(continueBooks[0])}
+                  />
+                  {continueBooks.length > 1 && (
+                    <div>
+                      <div className="flex items-end justify-between gap-2 px-0.5 mb-2">
+                        <h2 className="text-sm font-semibold text-muted tracking-tight">
+                          Also in progress
+                        </h2>
+                        <p className="text-[11px] text-muted">
+                          {continueBooks.length - 1} more
+                        </p>
+                      </div>
+                      <div className="flex gap-3.5 overflow-x-auto pb-2 -mx-1 px-1 snap-x scroll-smooth">
+                        {continueBooks.slice(1).map((b) => (
+                          <div key={b.id} className="snap-start">
+                            <BookCard
+                              book={b}
+                              memberId={memberId}
+                              hero
+                              onOpen={() => void openBookDetail(b)}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </section>
+              )}
 
               <Section
                 title="On deck"
