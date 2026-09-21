@@ -189,6 +189,7 @@ export function MediaCard({
   const expandable = expandableProp ?? Boolean(onPlay);
   const [expanded, setExpanded] = useState(false);
   const [full, setFull] = useState<EmbyItem | null>(null);
+  const [logoFailed, setLogoFailed] = useState(false);
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressFired = useRef(false);
@@ -221,8 +222,10 @@ export function MediaCard({
   useEffect(() => {
     if (!expanded) {
       setFull(null);
+      setLogoFailed(false);
       return;
     }
+    setLogoFailed(false);
     setFull(item);
     if (!embyUserId || item.Overview) return;
     let cancelled = false;
@@ -265,10 +268,14 @@ export function MediaCard({
     : landscape
       ? embyThumbUrl(item, 720)
       : embyPosterUrl(item, 400);
+  /** Collapsed caption logo (series/season under poster). */
   const seriesLogo =
     !landscape && (item.Type === 'Series' || item.Type === 'Season')
       ? embyBestLogoUrl(item, 64)
       : null;
+  /** Expanded panel title logo — any title with an Emby Logo image. */
+  const titleLogo = embyBestLogoUrl(full || item, 220);
+  const showTitleLogo = Boolean(titleLogo) && !logoFailed;
 
   const canFineHover =
     typeof window !== 'undefined' &&
@@ -328,14 +335,14 @@ export function MediaCard({
             ? 'w-[min(100%,36rem)] sm:w-[42rem] md:w-[48rem]'
             : 'w-[min(100%,32rem)] sm:w-[40rem] md:w-[46rem]'),
         expanded &&
-          'rounded-2xl bg-surface-1 border border-border shadow-xl shadow-black/25 ring-1 ring-black/5',
+          'rounded-2xl bg-surface-1 border border-border shadow-xl shadow-black/25 ring-1 ring-black/5 overflow-hidden self-start',
         className,
       )}
     >
       <div
         className={cn(
-          'flex items-stretch',
-          expanded ? 'flex-row gap-0' : 'flex-col',
+          'flex',
+          expanded ? 'flex-row items-stretch gap-0' : 'flex-col',
         )}
       >
         {/* Art — click opens detail unless long-press just fired */}
@@ -432,17 +439,28 @@ export function MediaCard({
         {/* Expanded detail panel — grows to the right */}
         <div
           className={cn(
-            'overflow-hidden transition-[max-width,opacity,padding] duration-300 ease-out',
-            expanded ? 'max-w-[28rem] sm:max-w-[32rem] md:max-w-[36rem] opacity-100 flex-1' : 'max-w-0 opacity-0',
+            'overflow-hidden transition-[max-width,opacity] duration-300 ease-out min-h-0',
+            expanded
+              ? 'max-w-[28rem] sm:max-w-[32rem] md:max-w-[36rem] opacity-100 flex-1 self-stretch'
+              : 'max-w-0 opacity-0',
           )}
         >
           {expanded && (
-            <div className="h-full min-h-[10rem] flex flex-col justify-between p-4 sm:p-5 pr-5">
-              <div className="min-w-0 space-y-2">
-                <p className="text-base sm:text-lg md:text-xl font-bold text-fg leading-snug line-clamp-2">
-                  {displayTitle(item)}
-                </p>
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs sm:text-sm text-muted">
+            <div className="h-full max-h-full min-h-0 flex flex-col justify-between p-3 sm:p-4 overflow-hidden">
+              <div className="min-w-0 min-h-0 flex-1 flex flex-col gap-1.5 overflow-hidden">
+                {showTitleLogo ? (
+                  <img
+                    src={titleLogo!}
+                    alt={displayTitle(item)}
+                    className="max-h-10 sm:max-h-12 md:max-h-14 max-w-full w-auto object-contain object-left drop-shadow-sm shrink-0"
+                    onError={() => setLogoFailed(true)}
+                  />
+                ) : (
+                  <p className="text-base sm:text-lg md:text-xl font-bold text-fg leading-snug line-clamp-2 shrink-0">
+                    {displayTitle(item)}
+                  </p>
+                )}
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs sm:text-sm text-muted shrink-0">
                   {item.ProductionYear ? <span>{item.ProductionYear}</span> : null}
                   {runtime ? (
                     <>
@@ -478,14 +496,14 @@ export function MediaCard({
                   </div>
                 ) : null}
                 {overview ? (
-                  <p className="text-sm sm:text-[0.95rem] text-fg-secondary leading-relaxed line-clamp-6 pt-1">
+                  <p className="text-xs sm:text-sm text-fg-secondary leading-relaxed line-clamp-3 sm:line-clamp-4 min-h-0 overflow-hidden">
                     {overview}
                   </p>
                 ) : (
-                  <p className="text-sm text-muted italic pt-1">No synopsis</p>
+                  <p className="text-xs text-muted italic">No synopsis</p>
                 )}
               </div>
-              <div className="flex flex-wrap gap-1.5 pt-2">
+              <div className="flex flex-wrap gap-1.5 pt-2 shrink-0">
                 {onPlay ? (
                   <button
                     type="button"
