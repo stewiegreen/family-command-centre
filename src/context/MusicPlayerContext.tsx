@@ -55,10 +55,21 @@ type PlayTracksOpts = {
 };
 
 type MusicPlayerContextValue = MusicPlayerState & {
+  /** Alias for position (seconds) — mirrors the audio element. */
+  currentTime: number;
+  /** Play a single track (starts Emby stream on the global <audio>). */
+  playTrack: (
+    track: MusicTrack,
+    opts: { embyUserId: string; album?: EmbyItem | null; autoplay?: boolean },
+  ) => void;
   playTracks: (opts: PlayTracksOpts) => void;
   playTrackAt: (index: number) => void;
   togglePlay: () => void;
+  /** Alias for togglePlay */
+  togglePlayPause: () => void;
   play: () => void;
+  /** Alias for play */
+  resume: () => void;
   pause: () => void;
   next: () => void;
   previous: () => void;
@@ -130,9 +141,15 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const loadStream = useCallback(async (item: EmbyItem, userId: string) => {
-    setState((s) => ({ ...s, loading: true, error: null, position: 0 }));
-    startedRef.current = false;
+  const loadStream = useCallback(async (item: EmbyItem, userId: string, startSeconds = 0) => {
+    const start = Math.max(0, startSeconds);
+    setState((s) => ({
+      ...s,
+      loading: true,
+      error: null,
+      position: start,
+    }));
+    startedRef.current = start > 0.5; // already "started" if mid-track seek reload
     mediaSourceId.current = undefined;
     playSessionId.current = undefined;
     attemptRef.current = 0;
@@ -152,6 +169,7 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
         userId,
         mediaSourceId: mediaSourceId.current,
         playSessionId: playSessionId.current,
+        startTicks: start > 0.25 ? secondsToTicks(start) : undefined,
       });
       attemptsRef.current = attempts;
       const src = attempts[0] || null;
@@ -165,7 +183,8 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
       setState((s) => ({
         ...s,
         loading: false,
-        duration: durationSec,
+        duration: durationSec || s.duration,
+        position: start,
         error: src ? null : 'No playable stream',
       }));
     } catch (e) {
@@ -228,6 +247,22 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
       void loadStream(track, opts.embyUserId);
     },
     [loadStream],
+  );
+
+  const playTrack = useCallback(
+    (
+      track: MusicTrack,
+      opts: { embyUserId: string; album?: EmbyItem | null; autoplay?: boolean },
+    ) => {
+      playTracks({
+        tracks: [track],
+        startIndex: 0,
+        album: opts.album ?? null,
+        autoplay: opts.autoplay !== false,
+        embyUserId: opts.embyUserId,
+      });
+    },
+    [playTracks],
   );
 
   const playTrackAt = useCallback(
@@ -326,14 +361,59 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
     void loadStream(track, s.embyUserId);
   }, [loadStream]);
 
-  const seek = useCallback((seconds: number) => {
-    const el = audioRef.current;
-    if (el) el.currentTime = seconds;
-    setState((s) => ({
-      ...s,
-      position: Math.max(0, Math.min(seconds, s.duration || seconds)),
-    }));
-  }, []);
+  const seek = useCallback(
+    (seconds: number) => {
+      const s = stateRef.current;
+      const el = audioRef.current;
+      const metaDur =
+        s.duration > 0
+          ? s.duration
+          : typeof s.currentTrack?.RunTimeTicks === 'number'
+            ? s.currentTrack.RunTimeTicks / 10_000_000
+            : 0;
+      const elDur =
+        el && Number.isFinite(el.duration) && el.duration > 0 ? el.duration : 0;
+      const dur = elDur || metaDur;
+      const target = Math.max(0, dur > 0 ? Math.min(seconds, dur) : Math.max(0, seconds));
+
+      setState((prev) => ({ ...prev, position: target }));
+
+      // Prefer native seek when the stream reports seekable ranges
+      const canNative =
+        el &&
+        el.seekable &&
+        el.seekable.length > 0 &&
+        el.readyState >= 1;
+
+      if (canNative && el) {
+        try {
+          el.currentTime = target;
+          // Transcode/progressive streams often ignore currentTime — fall back to StartTimeTicks
+          window.setTimeout(() => {
+            const audio = audioRef.current;
+            if (!audio) return;
+            if (Math.abs(audio.currentTime - target) <= 1.25) {
+              setState((prev) => ({ ...prev, position: audio.currentTime }));
+              return;
+            }
+            const st = stateRef.current;
+            if (st.currentTrack && st.embyUserId) {
+              void loadStream(st.currentTrack, st.embyUserId, target);
+            }
+          }, 120);
+          return;
+        } catch {
+          /* fall through to reload */
+        }
+      }
+
+      // Emby progressive/transcode: reload stream at StartTimeTicks
+      if (s.currentTrack && s.embyUserId) {
+        void loadStream(s.currentTrack, s.embyUserId, target);
+      }
+    },
+    [loadStream],
+  );
 
   const setVolume = useCallback((v: number) => {
     const vol = Math.max(0, Math.min(1, v));
@@ -517,10 +597,14 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
   const value = useMemo<MusicPlayerContextValue>(
     () => ({
       ...state,
+      currentTime: state.position,
+      playTrack,
       playTracks,
       playTrackAt,
       togglePlay,
+      togglePlayPause: togglePlay,
       play,
+      resume: play,
       pause,
       next,
       previous,
@@ -537,6 +621,7 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
     }),
     [
       state,
+      playTrack,
       playTracks,
       playTrackAt,
       togglePlay,
