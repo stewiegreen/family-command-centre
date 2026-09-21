@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   BookOpen,
   Check,
+  Info,
   Library,
   List,
   Loader2,
@@ -140,47 +141,294 @@ function BookCard({
   book,
   memberId,
   onOpen,
+  onResume,
   hero,
+  expandable = false,
 }: {
   book: KomgaBook;
   memberId?: string;
   onOpen: () => void;
+  /** Opens reader — required for expand panel Play/Resume. */
+  onResume?: () => void;
   hero?: boolean;
+  /** Home rails only — expand-on-hover / long-press. */
+  expandable?: boolean;
 }) {
   const pct = bookProgressPercent(book);
+  const [expanded, setExpanded] = useState(false);
+  const [full, setFull] = useState<KomgaBook | null>(null);
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressFired = useRef(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  const clearHover = useCallback(() => {
+    if (hoverTimer.current) {
+      clearTimeout(hoverTimer.current);
+      hoverTimer.current = null;
+    }
+  }, []);
+
+  const clearLongPress = useCallback(() => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  }, []);
+
+  const collapse = useCallback(() => {
+    clearHover();
+    setExpanded(false);
+  }, [clearHover]);
+
+  useEffect(() => {
+    if (!expanded) {
+      setFull(null);
+      return;
+    }
+    setFull(book);
+    if (book.metadata?.summary) return;
+    let cancelled = false;
+    void komgaBook(book.id, memberId)
+      .then((detail) => {
+        if (!cancelled && detail) setFull(detail);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [expanded, book, memberId]);
+
+  useEffect(() => {
+    if (!expanded) return;
+    const onDoc = (e: PointerEvent) => {
+      if (!rootRef.current?.contains(e.target as Node)) collapse();
+    };
+    document.addEventListener('pointerdown', onDoc);
+    return () => document.removeEventListener('pointerdown', onDoc);
+  }, [expanded, collapse]);
+
+  const canFineHover =
+    typeof window !== 'undefined' &&
+    window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+
+  const startHoverExpand = () => {
+    if (!expandable || !canFineHover) return;
+    clearHover();
+    hoverTimer.current = setTimeout(() => setExpanded(true), 700);
+  };
+
+  const startLongPress = () => {
+    if (!expandable) return;
+    longPressFired.current = false;
+    clearLongPress();
+    longPressTimer.current = setTimeout(() => {
+      longPressFired.current = true;
+      setExpanded(true);
+    }, 500);
+  };
+
+  const show = full || book;
+  const summary = (show.metadata?.summary || '').trim();
+  const series = book.seriesTitle || book.series?.name;
+  const issue =
+    book.number != null
+      ? `#${book.number}${book.metadata?.title || book.name ? ` · ${book.metadata?.title || book.name}` : ''}`
+      : book.metadata?.title || book.name || null;
+  const page =
+    typeof book.readProgress?.page === 'number' && book.readProgress.page > 0
+      ? typeof book.media?.pagesCount === 'number'
+        ? `Page ${book.readProgress.page} of ${book.media.pagesCount}`
+        : `Page ${book.readProgress.page}`
+      : book.media?.pagesCount
+        ? `${book.media.pagesCount} pages`
+        : null;
+
+  const coverW = hero ? COVER_SERIES : COVER_BOOK;
+
+  if (!expandable) {
+    return (
+      <button
+        type="button"
+        onClick={onOpen}
+        className={cn('shrink-0 text-left group', coverW)}
+        aria-label={bookTitle(book)}
+      >
+        <CoverFrame
+          src={komgaBookThumbUrl(book.id, memberId)}
+          alt=""
+          footer={
+            pct > 0 && pct < 100 ? (
+              <div className="absolute inset-x-0 bottom-0 p-2 bg-gradient-to-t from-black/75 to-transparent">
+                <ProgressBar pct={pct} className="h-1.5" />
+              </div>
+            ) : undefined
+          }
+          badge={
+            pct >= 100 ? (
+              <div className="absolute top-2 right-2 rounded-full bg-emerald-500 text-white p-1 shadow">
+                <Check className="w-3.5 h-3.5" />
+              </div>
+            ) : undefined
+          }
+        />
+        <p className="mt-2 text-sm font-semibold text-fg line-clamp-2 leading-snug">{bookTitle(book)}</p>
+        <div className="mt-0.5 flex items-center justify-between gap-1">
+          <StatusPill book={book} />
+          {hero && pct > 0 && pct < 100 && (
+            <span className="text-[11px] font-semibold text-accent">CONTINUE</span>
+          )}
+        </div>
+      </button>
+    );
+  }
+
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className={cn('shrink-0 text-left group', hero ? COVER_SERIES : COVER_BOOK)}
-      aria-label={bookTitle(book)}
+    <div
+      ref={rootRef}
+      onPointerEnter={startHoverExpand}
+      onPointerLeave={() => {
+        clearHover();
+        clearLongPress();
+        if (canFineHover) collapse();
+      }}
+      onPointerDown={(e) => {
+        if (e.pointerType === 'touch' || e.pointerType === 'pen') startLongPress();
+      }}
+      onPointerUp={clearLongPress}
+      onPointerCancel={clearLongPress}
+      className={cn(
+        'relative text-left group transition-[width] duration-300 ease-out shrink-0 self-start',
+        !expanded && coverW,
+        expanded && 'z-20 w-[min(100%,30rem)] sm:w-[34rem] md:w-[38rem]',
+        expanded &&
+          'rounded-2xl bg-surface-1 border border-border shadow-xl shadow-black/25 overflow-hidden',
+      )}
     >
-      <CoverFrame
-        src={komgaBookThumbUrl(book.id, memberId)}
-        alt=""
-        footer={
-          pct > 0 && pct < 100 ? (
-            <div className="absolute inset-x-0 bottom-0 p-2 bg-gradient-to-t from-black/75 to-transparent">
-              <ProgressBar pct={pct} className="h-1.5" />
+      {expanded ? (
+        <div className="flex flex-row items-stretch">
+          <button
+            type="button"
+            className="shrink-0 w-[9.5rem] sm:w-[10.75rem]"
+            onClick={() => {
+              if (longPressFired.current) {
+                longPressFired.current = false;
+                return;
+              }
+              onOpen();
+              collapse();
+            }}
+            aria-label={bookTitle(book)}
+          >
+            <CoverFrame
+              src={komgaBookThumbUrl(book.id, memberId)}
+              alt=""
+              className="!rounded-none !rounded-l-2xl !border-0 !shadow-none"
+            />
+          </button>
+          <div className="flex-1 min-w-0 flex flex-col justify-between gap-2 p-3 sm:p-4 overflow-hidden">
+            <div className="min-w-0 space-y-1.5 overflow-hidden">
+              <p className="text-base sm:text-lg font-bold text-fg leading-snug line-clamp-2">
+                {series || bookTitle(book)}
+              </p>
+              {issue && series ? (
+                <p className="text-xs sm:text-sm text-fg-secondary line-clamp-1">{issue}</p>
+              ) : null}
+              <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] sm:text-xs text-muted">
+                <StatusPill book={book} />
+                {page ? (
+                  <>
+                    <span>·</span>
+                    <span className="tabular-nums">{page}</span>
+                  </>
+                ) : null}
+                {pct > 0 && pct < 100 ? (
+                  <>
+                    <span>·</span>
+                    <span className="tabular-nums">{Math.round(pct)}%</span>
+                  </>
+                ) : null}
+              </div>
+              {pct > 0 && pct < 100 ? (
+                <ProgressBar pct={pct} className="!bg-inset h-1.5" />
+              ) : null}
+              {summary ? (
+                <p className="text-xs sm:text-sm text-fg-secondary leading-relaxed line-clamp-3">
+                  {summary}
+                </p>
+              ) : null}
             </div>
-          ) : undefined
-        }
-        badge={
-          pct >= 100 ? (
-            <div className="absolute top-2 right-2 rounded-full bg-emerald-500 text-white p-1 shadow">
-              <Check className="w-3.5 h-3.5" />
+            <div className="flex flex-wrap gap-1.5 shrink-0">
+              {onResume ? (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onResume();
+                    collapse();
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-accent text-accent-ink px-3.5 py-1.5 text-sm font-bold hover:bg-accent-hover"
+                >
+                  <Play className="w-4 h-4 fill-current" />
+                  {pct > 0 && pct < 100 ? 'Resume' : 'Read'}
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpen();
+                  collapse();
+                }}
+                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface-2 px-3.5 py-1.5 text-sm font-semibold text-fg hover:bg-nav-hover"
+              >
+                <Info className="w-4 h-4" />
+                More
+              </button>
             </div>
-          ) : undefined
-        }
-      />
-      <p className="mt-2 text-sm font-semibold text-fg line-clamp-2 leading-snug">{bookTitle(book)}</p>
-      <div className="mt-0.5 flex items-center justify-between gap-1">
-        <StatusPill book={book} />
-        {hero && pct > 0 && pct < 100 && (
-          <span className="text-[11px] font-semibold text-accent">CONTINUE</span>
-        )}
-      </div>
-    </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => {
+            if (longPressFired.current) {
+              longPressFired.current = false;
+              return;
+            }
+            onOpen();
+          }}
+          className="text-left w-full"
+          aria-label={bookTitle(book)}
+        >
+          <CoverFrame
+            src={komgaBookThumbUrl(book.id, memberId)}
+            alt=""
+            footer={
+              pct > 0 && pct < 100 ? (
+                <div className="absolute inset-x-0 bottom-0 p-2 bg-gradient-to-t from-black/75 to-transparent">
+                  <ProgressBar pct={pct} className="h-1.5" />
+                </div>
+              ) : undefined
+            }
+            badge={
+              pct >= 100 ? (
+                <div className="absolute top-2 right-2 rounded-full bg-emerald-500 text-white p-1 shadow">
+                  <Check className="w-3.5 h-3.5" />
+                </div>
+              ) : undefined
+            }
+          />
+          <p className="mt-2 text-sm font-semibold text-fg line-clamp-2 leading-snug">{bookTitle(book)}</p>
+          <div className="mt-0.5 flex items-center justify-between gap-1">
+            <StatusPill book={book} />
+            {hero && pct > 0 && pct < 100 && (
+              <span className="text-[11px] font-semibold text-accent">CONTINUE</span>
+            )}
+          </div>
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -1086,7 +1334,9 @@ export function ComicsPage() {
                               book={b}
                               memberId={memberId}
                               hero
+                              expandable
                               onOpen={() => void openBookDetail(b)}
+                              onResume={() => startReading(b)}
                             />
                           </div>
                         ))}
@@ -1111,7 +1361,9 @@ export function ComicsPage() {
                       book={b}
                       memberId={memberId}
                       hero
+                      expandable
                       onOpen={() => void openBookDetail(b)}
+                      onResume={() => startReading(b)}
                     />
                   </div>
                 ))}
@@ -1195,7 +1447,13 @@ export function ComicsPage() {
               <Section title="Recently added" empty={latest.length === 0}>
                 {latest.map((b) => (
                   <div key={b.id} className="snap-start">
-                    <BookCard book={b} memberId={memberId} onOpen={() => void openBookDetail(b)} />
+                    <BookCard
+                      book={b}
+                      memberId={memberId}
+                      expandable
+                      onOpen={() => void openBookDetail(b)}
+                      onResume={() => startReading(b)}
+                    />
                   </div>
                 ))}
               </Section>
@@ -1203,7 +1461,13 @@ export function ComicsPage() {
               <Section title="Recently read" empty={recentlyRead.length === 0}>
                 {recentlyRead.map((b) => (
                   <div key={b.id} className="snap-start">
-                    <BookCard book={b} memberId={memberId} onOpen={() => void openBookDetail(b)} />
+                    <BookCard
+                      book={b}
+                      memberId={memberId}
+                      expandable
+                      onOpen={() => void openBookDetail(b)}
+                      onResume={() => startReading(b)}
+                    />
                   </div>
                 ))}
               </Section>
