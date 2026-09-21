@@ -151,7 +151,7 @@ export function AlbumPlayer({
                     embyUserId: userId,
                   });
                 } else {
-                  music.togglePlayPause();
+                  music.togglePlay();
                 }
               }}
               aria-label={playingHere ? 'Pause' : 'Play'}
