@@ -1,12 +1,18 @@
 /**
- * Lightweight canvas spectrum — same MusicPlayerContext analyser / <audio>.
- * Mirrored bars + soft glow, capped raf when paused.
+ * Lightweight canvas spectrum — MusicPlayerContext analyser / single <audio>.
+ * variant: "inline" (under art) | "hero" (replaces album art).
  */
 import { useEffect, useRef } from 'react';
 import { useMusicPlayer } from '../../context/MusicPlayerContext';
 import { cn } from '../../lib/cn';
 
-export function MusicVisualizer({ className }: { className?: string }) {
+export function MusicVisualizer({
+  className,
+  variant = 'inline',
+}: {
+  className?: string;
+  variant?: 'inline' | 'hero';
+}) {
   const { isPlaying, ensureAnalyser } = useMusicPlayer();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rafRef = useRef(0);
@@ -20,12 +26,11 @@ export function MusicVisualizer({ className }: { className?: string }) {
     if (!ctx2d) return;
 
     let alive = true;
-    const bins = 64;
-    const data = new Uint8Array(bins * 2);
-    // Smoothed heights to reduce flicker / CPU spikes
+    const bins = variant === 'hero' ? 72 : 56;
+    const data = new Uint8Array(256);
     const smooth = new Float32Array(bins);
     let lastFrame = 0;
-    const minFrameMs = 1000 / 36; // ~36fps cap
+    const minFrameMs = 1000 / 36;
 
     const draw = (ts: number) => {
       if (!alive) return;
@@ -36,49 +41,65 @@ export function MusicVisualizer({ className }: { className?: string }) {
       const { width, height } = canvas;
       ctx2d.clearRect(0, 0, width, height);
 
+      // Soft vignette for hero mode
+      if (variant === 'hero') {
+        const vg = ctx2d.createRadialGradient(
+          width / 2,
+          height / 2,
+          height * 0.1,
+          width / 2,
+          height / 2,
+          height * 0.7,
+        );
+        vg.addColorStop(0, 'rgba(16, 185, 129, 0.06)');
+        vg.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx2d.fillStyle = vg;
+        ctx2d.fillRect(0, 0, width, height);
+      }
+
       const analyser = ensureAnalyser();
-      const midY = height * 0.55;
+      const midY = height * (variant === 'hero' ? 0.52 : 0.55);
       const n = bins;
-      const gap = Math.max(1, width * 0.004);
+      const gap = Math.max(1.5, width * 0.0035);
       const barW = (width - gap * (n - 1)) / n;
 
       if (!analyser) {
         for (let i = 0; i < n; i++) {
-          const h = 3 + Math.sin(ts / 500 + i * 0.35) * 2.5;
+          const h = 4 + Math.sin(ts / 480 + i * 0.32) * 3;
           smooth[i] = h;
-          ctx2d.fillStyle = 'rgba(52, 211, 153, 0.2)';
-          ctx2d.fillRect(i * (barW + gap), midY - h / 2, barW, h);
+          ctx2d.fillStyle = 'rgba(52, 211, 153, 0.22)';
+          const bw = Math.max(1, barW * 0.82);
+          const ox = i * (barW + gap) + (barW - bw) / 2;
+          ctx2d.fillRect(ox, midY - h / 2, bw, h);
         }
         return;
       }
 
       analyser.getByteFrequencyData(data);
       const step = Math.max(1, Math.floor(data.length / n));
-      const boost = playingRef.current ? 1 : 0.22;
+      const boost = playingRef.current ? 1 : 0.2;
 
       for (let i = 0; i < n; i++) {
-        // Weight lower-mid frequencies a bit more (musical)
-        const idx = Math.min(data.length - 1, Math.floor(i * step * 0.85) + 2);
+        const idx = Math.min(data.length - 1, Math.floor(i * step * 0.82) + 3);
         const raw = (data[idx] || 0) / 255;
-        const shaped = Math.pow(raw, 0.85) * boost;
-        const target = Math.max(2, shaped * height * 0.85);
-        smooth[i] = smooth[i] * 0.62 + target * 0.38;
+        const shaped = Math.pow(raw, 0.82) * boost;
+        const target = Math.max(2, shaped * height * (variant === 'hero' ? 0.78 : 0.85));
+        smooth[i] = smooth[i]! * 0.6 + target * 0.4;
         const h = smooth[i]!;
 
         const x = i * (barW + gap);
-        const g = ctx2d.createLinearGradient(x, midY - h / 2, x, midY + h / 2);
-        g.addColorStop(0, 'rgba(167, 243, 208, 0.9)');
-        g.addColorStop(0.45, 'rgba(52, 211, 153, 0.75)');
-        g.addColorStop(1, 'rgba(16, 185, 129, 0.15)');
-        ctx2d.fillStyle = g;
-        // Rounded-ish bars via slight inset
-        const bw = Math.max(1, barW * 0.85);
+        const bw = Math.max(1, barW * 0.82);
         const ox = x + (barW - bw) / 2;
+
+        const g = ctx2d.createLinearGradient(ox, midY - h / 2, ox, midY + h / 2);
+        g.addColorStop(0, 'rgba(167, 243, 208, 0.95)');
+        g.addColorStop(0.4, 'rgba(52, 211, 153, 0.8)');
+        g.addColorStop(1, 'rgba(5, 150, 105, 0.12)');
+        ctx2d.fillStyle = g;
         ctx2d.fillRect(ox, midY - h / 2, bw, h);
       }
 
-      // Soft center glow line
-      ctx2d.strokeStyle = 'rgba(255,255,255,0.06)';
+      ctx2d.strokeStyle = 'rgba(255,255,255,0.05)';
       ctx2d.beginPath();
       ctx2d.moveTo(0, midY);
       ctx2d.lineTo(width, midY);
@@ -102,13 +123,15 @@ export function MusicVisualizer({ className }: { className?: string }) {
       cancelAnimationFrame(rafRef.current);
       ro.disconnect();
     };
-  }, [ensureAnalyser]);
+  }, [ensureAnalyser, variant]);
 
   return (
     <div
       className={cn(
-        'w-full h-16 sm:h-[4.5rem] rounded-xl overflow-hidden',
-        'bg-black/25 ring-1 ring-white/5',
+        'w-full overflow-hidden',
+        variant === 'hero'
+          ? 'h-full rounded-2xl bg-black/40 ring-1 ring-white/8'
+          : 'h-16 sm:h-[4.5rem] rounded-xl bg-black/25 ring-1 ring-white/5',
         className,
       )}
     >

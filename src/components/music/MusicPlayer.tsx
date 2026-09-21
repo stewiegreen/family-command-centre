@@ -1,11 +1,13 @@
 /**
- * Expanded GreenHQ music player — dedicated desktop player feel.
+ * Expanded Greenamp player — art/visualizer-first, dynamic album atmosphere.
  * Playback stays on MusicPlayerContext’s single <audio>.
  */
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
+  Activity,
   ChevronDown,
+  Image,
   ListMusic,
   Volume2,
   VolumeX,
@@ -23,6 +25,8 @@ import { MusicProgress } from './MusicProgress';
 import { MusicQueue } from './MusicQueue';
 import { MusicVisualizer } from './MusicVisualizer';
 
+type VisualMode = 'art' | 'viz';
+
 function formatRemain(sec: number): string {
   if (!Number.isFinite(sec) || sec < 0) return '0:00';
   const s = Math.floor(sec % 60);
@@ -33,8 +37,9 @@ function formatRemain(sec: number): string {
 export function MusicPlayer() {
   const music = useMusicPlayer();
   const open = Boolean(music.expanded && music.currentTrack);
+  /** Remembered while the expanded player stays open. */
+  const [visualMode, setVisualMode] = useState<VisualMode>('art');
 
-  // Lock body scroll while expanded
   useEffect(() => {
     if (!open) return;
     const prev = document.body.style.overflow;
@@ -43,6 +48,11 @@ export function MusicPlayer() {
       document.body.style.overflow = prev;
     };
   }, [open]);
+
+  // Reset mode when fully closed so next open starts on art (session feel)
+  useEffect(() => {
+    if (!music.expanded) setVisualMode('art');
+  }, [music.expanded]);
 
   if (!open || !music.currentTrack) return null;
 
@@ -53,53 +63,62 @@ export function MusicPlayer() {
   const albumName = track.Album || music.album?.Name || '';
   const artItem =
     music.album && music.album.ImageTags?.Primary ? music.album : track;
-  const art = embyPosterUrl(artItem, 900) || embyPosterUrl(track, 900);
-  const artBlur = embyPosterUrl(artItem, 160) || art;
+  const art = embyPosterUrl(artItem, 1000) || embyPosterUrl(track, 1000);
+  // Low-res for blur layer (cheaper + softer)
+  const artAtmosphere = embyPosterUrl(artItem, 120) || embyPosterUrl(track, 120) || art;
   const remaining = Math.max(0, (music.duration || 0) - (music.position || 0));
+  const artKey = artItem.Id || track.Id;
 
   const body = (
     <div
       className={cn(
         'fixed inset-0 z-[100] flex items-end sm:items-center justify-center',
-        'p-0 sm:p-5 md:p-8',
+        'p-0 sm:p-4 md:p-6 lg:p-8',
       )}
       role="dialog"
       aria-modal="true"
-      aria-label="Music player"
+      aria-label="Greenamp music player"
     >
-      {/* Backdrop */}
+      {/* Dim page */}
       <button
         type="button"
-        className="absolute inset-0 bg-black/75 backdrop-blur-[6px] transition-opacity"
+        className="absolute inset-0 bg-black/80"
         aria-label="Minimize player"
         onClick={() => music.setExpanded(false)}
       />
 
-      {/* Shell */}
+      {/* Player shell */}
       <div
         className={cn(
-          'relative z-10 w-full sm:max-w-3xl lg:max-w-5xl',
-          'max-h-[min(94vh,920px)]',
+          'relative z-10 w-full sm:max-w-3xl lg:max-w-5xl xl:max-w-6xl',
+          'max-h-[min(96vh,940px)]',
           'rounded-t-[1.75rem] sm:rounded-3xl overflow-hidden',
-          'border border-white/[0.08] shadow-2xl shadow-black/70',
-          'flex flex-col',
-          'bg-zinc-950/95',
+          'border border-white/[0.07] shadow-2xl shadow-black/80',
+          'flex flex-col bg-zinc-950',
         )}
       >
-        {/* Atmosphere */}
-        {artBlur ? (
-          <img
-            src={artBlur}
-            alt=""
-            className="absolute inset-0 w-full h-full object-cover opacity-[0.28] blur-3xl scale-150 saturate-150"
-            aria-hidden
-          />
-        ) : null}
-        <div className="absolute inset-0 bg-gradient-to-b from-zinc-950/30 via-zinc-950/80 to-zinc-950" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(16,185,129,0.08),_transparent_55%)]" />
+        {/* ── Dynamic album atmosphere ─────────────────────────── */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden>
+          {artAtmosphere ? (
+            <img
+              key={artKey}
+              src={artAtmosphere}
+              alt=""
+              className={cn(
+                'absolute inset-0 w-full h-full object-cover',
+                'scale-[1.45] blur-[48px] saturate-150',
+                'opacity-[0.34] transition-opacity duration-700',
+              )}
+            />
+          ) : null}
+          {/* Darken + readability layers */}
+          <div className="absolute inset-0 bg-zinc-950/55" />
+          <div className="absolute inset-0 bg-gradient-to-b from-zinc-950/20 via-zinc-950/70 to-zinc-950" />
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_50%_20%,_rgba(16,185,129,0.1),_transparent_50%)]" />
+        </div>
 
-        {/* Chrome */}
-        <div className="relative z-10 flex items-center gap-2 px-4 sm:px-5 py-3 shrink-0 border-b border-white/[0.06]">
+        {/* ── Chrome ───────────────────────────────────────────── */}
+        <div className="relative z-10 flex items-center gap-2 px-3 sm:px-5 py-2.5 sm:py-3 shrink-0 border-b border-white/[0.06]">
           <button
             type="button"
             onClick={() => music.setExpanded(false)}
@@ -110,25 +129,58 @@ export function MusicPlayer() {
             )}
           >
             <ChevronDown className="w-4 h-4" />
-            <span className="hidden sm:inline">Mini player</span>
+            <span className="hidden sm:inline">Mini</span>
           </button>
 
-          <p className="flex-1 text-center text-[11px] font-semibold uppercase tracking-[0.14em] text-white/35 truncate px-2">
-            Now playing
+          <p className="flex-1 text-center text-[10px] sm:text-[11px] font-bold uppercase tracking-[0.16em] text-white/30 truncate">
+            Greenamp
           </p>
+
+          {/* Art ↔ Viz toggle */}
+          <div className="flex items-center rounded-full bg-black/35 p-0.5 ring-1 ring-white/10">
+            <button
+              type="button"
+              onClick={() => setVisualMode('art')}
+              className={cn(
+                'flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors',
+                visualMode === 'art'
+                  ? 'bg-white/15 text-white'
+                  : 'text-white/45 hover:text-white/80',
+              )}
+              aria-pressed={visualMode === 'art'}
+              title="Album art"
+            >
+              <Image className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Art</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setVisualMode('viz')}
+              className={cn(
+                'flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors',
+                visualMode === 'viz'
+                  ? 'bg-emerald-500/25 text-emerald-200'
+                  : 'text-white/45 hover:text-white/80',
+              )}
+              aria-pressed={visualMode === 'viz'}
+              title="Visualizer"
+            >
+              <Activity className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Viz</span>
+            </button>
+          </div>
 
           <button
             type="button"
             onClick={() => music.setQueueOpen(!music.queueOpen)}
             className={cn(
-              'flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-semibold transition-colors',
+              'flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-semibold transition-colors',
               music.queueOpen
                 ? 'bg-emerald-500/20 text-emerald-300 ring-1 ring-emerald-400/30'
                 : 'text-white/50 hover:text-white hover:bg-white/10',
             )}
           >
             <ListMusic className="w-3.5 h-3.5" />
-            <span className="hidden xs:inline sm:inline">Queue</span>
             {music.queue.length > 0 ? (
               <span className="tabular-nums text-[10px] opacity-70">{music.queue.length}</span>
             ) : null}
@@ -139,13 +191,12 @@ export function MusicPlayer() {
             onClick={music.stop}
             className="p-1.5 rounded-full text-white/40 hover:text-white hover:bg-white/10 transition-colors"
             aria-label="Stop and close"
-            title="Stop"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Body */}
+        {/* ── Body ─────────────────────────────────────────────── */}
         <div className="relative z-10 flex-1 min-h-0 overflow-hidden">
           <div
             className={cn(
@@ -155,37 +206,49 @@ export function MusicPlayer() {
                 : 'grid-cols-1',
             )}
           >
-            {/* Main */}
-            <div className="overflow-y-auto overscroll-contain px-5 sm:px-8 py-5 sm:py-7">
-              <div className="flex flex-col items-center max-w-md mx-auto w-full">
-                {/* Album art */}
+            <div className="overflow-y-auto overscroll-contain px-5 sm:px-8 py-5 sm:py-6">
+              <div className="flex flex-col items-center max-w-lg mx-auto w-full">
+                {/* Dominant visual: art OR visualizer */}
                 <div
                   className={cn(
-                    'relative w-full max-w-[min(100%,20rem)] sm:max-w-[22rem]',
-                    'aspect-square rounded-2xl overflow-hidden',
-                    'border border-white/10 bg-zinc-900',
-                    'shadow-[0_20px_60px_-15px_rgba(0,0,0,0.8)]',
-                    'ring-1 ring-white/5',
+                    'relative w-full max-w-[min(100%,22rem)] sm:max-w-[24rem] md:max-w-[26rem]',
+                    'aspect-square',
                   )}
                 >
-                  {art ? (
-                    <img
-                      src={art}
-                      alt=""
-                      className="w-full h-full object-cover transition-opacity duration-500"
-                    />
+                  {visualMode === 'art' ? (
+                    <div
+                      key={`art-${artKey}`}
+                      className={cn(
+                        'w-full h-full rounded-2xl overflow-hidden',
+                        'border border-white/10 bg-zinc-900',
+                        'shadow-[0_24px_80px_-20px_rgba(0,0,0,0.9)]',
+                        'ring-1 ring-white/5',
+                      )}
+                    >
+                      {art ? (
+                        <img
+                          src={art}
+                          alt=""
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-gradient-to-br from-emerald-900/40 to-zinc-800" />
+                      )}
+                    </div>
                   ) : (
-                    <div className="w-full h-full bg-gradient-to-br from-emerald-900/40 to-zinc-800" />
+                    <div className="w-full h-full">
+                      <MusicVisualizer variant="hero" className="h-full" />
+                    </div>
                   )}
                 </div>
 
-                {/* Meta */}
+                {/* Meta under visual */}
                 <div className="w-full mt-6 text-center space-y-1.5">
-                  <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight leading-snug line-clamp-2">
+                  <h2 className="text-xl sm:text-2xl md:text-[1.65rem] font-bold text-white tracking-tight leading-snug line-clamp-2">
                     {title}
                   </h2>
                   {artist ? (
-                    <p className="text-sm sm:text-[15px] text-white/70 font-medium line-clamp-1">
+                    <p className="text-sm sm:text-[15px] text-white/75 font-medium line-clamp-1">
                       {artist}
                     </p>
                   ) : null}
@@ -196,36 +259,29 @@ export function MusicPlayer() {
                   ) : null}
                 </div>
 
-                {/* Visualizer */}
-                <div className="w-full mt-5">
-                  <MusicVisualizer />
-                </div>
-
-                {/* Progress */}
-                <div className="w-full mt-5 space-y-1.5">
+                {/* Transport */}
+                <div className="w-full mt-6 space-y-3">
                   <MusicProgress
                     position={music.position}
                     duration={music.duration}
                     onSeek={music.seek}
                   />
                   {remaining > 0 ? (
-                    <p className="text-[10px] text-white/30 text-center tabular-nums tracking-wide">
+                    <p className="text-[10px] text-white/30 text-center tabular-nums">
                       −{formatRemain(remaining)} remaining
                     </p>
                   ) : null}
                 </div>
 
-                {/* Transport */}
                 <MusicControls
                   size="lg"
                   isPlaying={music.isPlaying}
                   onPrev={music.previous}
                   onToggle={music.togglePlay}
                   onNext={music.next}
-                  className="mt-4"
+                  className="mt-3"
                 />
 
-                {/* Volume */}
                 <div className="flex items-center gap-2.5 w-full max-w-[16rem] mt-5">
                   <button
                     type="button"
@@ -251,26 +307,24 @@ export function MusicPlayer() {
                       '[&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3',
                       '[&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full',
                       '[&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow',
-                      '[&::-webkit-slider-thumb]:transition-transform [&::-webkit-slider-thumb]:hover:scale-110',
                     )}
                     aria-label="Volume"
                   />
                 </div>
 
                 {music.error ? (
-                  <p className="mt-4 text-xs text-red-400/90 text-center px-3 leading-relaxed">
+                  <p className="mt-4 text-xs text-red-400/90 text-center px-3">
                     {music.error}
                   </p>
                 ) : null}
               </div>
             </div>
 
-            {/* Queue pane */}
             {music.queueOpen ? (
               <div
                 className={cn(
                   'border-t lg:border-t-0 lg:border-l border-white/[0.07]',
-                  'bg-black/20 backdrop-blur-sm',
+                  'bg-black/25 backdrop-blur-md',
                   'px-4 sm:px-5 py-4',
                   'min-h-[14rem] max-h-[38vh] lg:max-h-none lg:min-h-0',
                   'overflow-hidden flex flex-col',
