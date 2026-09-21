@@ -309,13 +309,91 @@ export function MediaCard({
   const coverW =
     shape === 'landscape' ? COVER_LANDSCAPE : shape === 'square' ? COVER_SQUARE : COVER_POSTER;
 
-  /** Collapsed poster column width; expanded uses the same so art doesn't jump. */
+  /** Fixed rem art width so outer width can tween and push rail siblings. */
   const artW =
     shape === 'landscape'
       ? 'w-[16.5rem] sm:w-[19.5rem]'
       : shape === 'square'
         ? 'w-[9.5rem] sm:w-[10.75rem]'
         : 'w-[9.5rem] sm:w-[10.75rem]';
+
+  const expandedTotal =
+    shape === 'landscape'
+      ? 'w-[min(100%,36rem)] sm:w-[42rem] md:w-[46rem]'
+      : 'w-[min(100%,30rem)] sm:w-[36rem] md:w-[42rem]';
+
+  // Non-expandable: original collapsed card only
+  if (!expandable) {
+    return (
+      <button
+        type="button"
+        onClick={onOpen}
+        aria-label={displayTitle(item)}
+        className={cn(
+          'text-left group',
+          layout === 'grid' ? 'w-full min-w-0' : 'shrink-0',
+          layout === 'scroll' && coverW,
+          className,
+        )}
+      >
+        <CoverFrame
+          src={img}
+          shape={shape}
+          footer={
+            landscape && pct > 0 && pct < 100 ? (
+              <div className="absolute inset-x-0 bottom-0 p-2.5 bg-gradient-to-t from-black/80 to-transparent space-y-1">
+                <ProgressBar pct={pct} />
+                {left ? (
+                  <p className="text-[10px] font-semibold text-white/90 tabular-nums">{left}</p>
+                ) : null}
+              </div>
+            ) : !landscape && pct > 0 && pct < 100 ? (
+              <div className="absolute inset-x-0 bottom-0 p-2 bg-gradient-to-t from-black/70 to-transparent">
+                <ProgressBar pct={pct} />
+              </div>
+            ) : undefined
+          }
+          badge={
+            item.UserData?.Played && !landscape ? (
+              <div className="absolute top-2 right-2 rounded-full bg-emerald-500 text-white p-1 shadow">
+                <Check className="w-3.5 h-3.5" />
+              </div>
+            ) : undefined
+          }
+        />
+        {seriesLogo ? (
+          <div className="mt-2 h-9 flex items-center">
+            <img
+              src={seriesLogo}
+              alt={title}
+              className="max-h-9 max-w-full w-auto object-contain object-left drop-shadow-sm"
+              loading="lazy"
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).style.display = 'none';
+                const fallback = e.currentTarget.parentElement?.querySelector('[data-title-fallback]');
+                if (fallback instanceof HTMLElement) fallback.style.display = 'block';
+              }}
+            />
+            <p
+              data-title-fallback
+              className="text-sm font-semibold text-fg line-clamp-2 leading-snug"
+              style={{ display: 'none' }}
+            >
+              {title}
+            </p>
+          </div>
+        ) : (
+          <p className="mt-2 text-sm font-semibold text-fg line-clamp-2 leading-snug">{title}</p>
+        )}
+        <div className="mt-0.5 flex items-center justify-between gap-1">
+          {sub ? <p className="text-[11px] text-muted line-clamp-1 min-w-0">{sub}</p> : <span />}
+          {landscape && pct > 0 && pct < 100 ? (
+            <span className="text-[11px] font-semibold text-accent shrink-0">CONTINUE</span>
+          ) : null}
+        </div>
+      </button>
+    );
+  }
 
   return (
     <div
@@ -332,41 +410,106 @@ export function MediaCard({
       onPointerUp={clearLongPress}
       onPointerCancel={clearLongPress}
       className={cn(
-        'relative text-left group transition-[width] duration-300 ease-out',
-        layout === 'grid' ? 'w-full min-w-0' : 'shrink-0 self-start',
-        layout === 'scroll' && !expanded && coverW,
-        expanded && 'z-20',
+        'relative text-left group shrink-0 self-start',
+        'transition-[width,box-shadow,background-color,border-color] duration-300 ease-in-out',
+        expanded ? expandedTotal : artW,
         expanded &&
-          (shape === 'landscape'
-            ? 'w-[min(100%,36rem)] sm:w-[42rem] md:w-[46rem]'
-            : 'w-[min(100%,30rem)] sm:w-[36rem] md:w-[42rem]'),
-        expanded &&
-          'rounded-2xl bg-surface-1 border border-border shadow-xl shadow-black/30 overflow-hidden',
+          'rounded-2xl bg-surface-1 border border-border shadow-xl shadow-black/20 overflow-hidden',
         className,
       )}
+      style={{ willChange: 'width' }}
     >
-      {expanded ? (
-        /* ── Expanded: horizontal only — poster | details, same height ── */
-        <div className="flex flex-row items-stretch">
-          <button
-            type="button"
-            onClick={() => {
-              if (longPressFired.current) {
-                longPressFired.current = false;
-                return;
-              }
-              onOpen();
-            }}
-            aria-label={displayTitle(item)}
-            className={cn('shrink-0', artW)}
+      <div className="flex flex-row items-start overflow-hidden">
+        <button
+          type="button"
+          className={cn('shrink-0 text-left', artW)}
+          onClick={() => {
+            if (longPressFired.current) {
+              longPressFired.current = false;
+              return;
+            }
+            onOpen();
+          }}
+          aria-label={displayTitle(item)}
+        >
+          <CoverFrame
+            src={img}
+            shape={shape}
+            className={cn(
+              'transition-[border-radius] duration-300 ease-in-out',
+              expanded && '!rounded-l-2xl !rounded-r-none !border-0 !shadow-none',
+            )}
+            footer={
+              !expanded && landscape && pct > 0 && pct < 100 ? (
+                <div className="absolute inset-x-0 bottom-0 p-2.5 bg-gradient-to-t from-black/80 to-transparent space-y-1">
+                  <ProgressBar pct={pct} />
+                  {left ? (
+                    <p className="text-[10px] font-semibold text-white/90 tabular-nums">{left}</p>
+                  ) : null}
+                </div>
+              ) : !expanded && !landscape && pct > 0 && pct < 100 ? (
+                <div className="absolute inset-x-0 bottom-0 p-2 bg-gradient-to-t from-black/70 to-transparent">
+                  <ProgressBar pct={pct} />
+                </div>
+              ) : undefined
+            }
+            badge={
+              !expanded && item.UserData?.Played && !landscape ? (
+                <div className="absolute top-2 right-2 rounded-full bg-emerald-500 text-white p-1 shadow">
+                  <Check className="w-3.5 h-3.5" />
+                </div>
+              ) : undefined
+            }
+          />
+          <div
+            className={cn(
+              'transition-opacity duration-200 ease-in-out',
+              expanded ? 'opacity-0 h-0 overflow-hidden pointer-events-none' : 'opacity-100',
+            )}
           >
-            <CoverFrame
-              src={img}
-              shape={shape}
-              className="!rounded-none !rounded-l-2xl !border-0 !shadow-none"
-            />
-          </button>
-          <div className="flex-1 min-w-0 flex flex-col justify-between gap-2 p-3 sm:p-4 overflow-hidden">
+            {seriesLogo ? (
+              <div className="mt-2 h-9 flex items-center">
+                <img
+                  src={seriesLogo}
+                  alt={title}
+                  className="max-h-9 max-w-full w-auto object-contain object-left drop-shadow-sm"
+                  loading="lazy"
+                  onError={(e) => {
+                    (e.currentTarget as HTMLImageElement).style.display = 'none';
+                    const fallback = e.currentTarget.parentElement?.querySelector(
+                      '[data-title-fallback]',
+                    );
+                    if (fallback instanceof HTMLElement) fallback.style.display = 'block';
+                  }}
+                />
+                <p
+                  data-title-fallback
+                  className="text-sm font-semibold text-fg line-clamp-2 leading-snug"
+                  style={{ display: 'none' }}
+                >
+                  {title}
+                </p>
+              </div>
+            ) : (
+              <p className="mt-2 text-sm font-semibold text-fg line-clamp-2 leading-snug">{title}</p>
+            )}
+            <div className="mt-0.5 flex items-center justify-between gap-1">
+              {sub ? <p className="text-[11px] text-muted line-clamp-1 min-w-0">{sub}</p> : <span />}
+              {landscape && pct > 0 && pct < 100 ? (
+                <span className="text-[11px] font-semibold text-accent shrink-0">CONTINUE</span>
+              ) : null}
+            </div>
+          </div>
+        </button>
+
+        <div
+          className={cn(
+            'overflow-hidden transition-[max-width,opacity] duration-300 ease-in-out',
+            expanded ? 'max-w-[26rem] opacity-100' : 'max-w-0 opacity-0',
+          )}
+          aria-hidden={!expanded}
+        >
+          <div className="w-[18rem] sm:w-[22rem] md:w-[24rem] flex flex-col justify-between gap-2 p-3 sm:p-4 h-full">
             <div className="min-w-0 space-y-1.5 overflow-hidden">
               {showTitleLogo ? (
                 <img
@@ -425,6 +568,7 @@ export function MediaCard({
               {onPlay ? (
                 <button
                   type="button"
+                  tabIndex={expanded ? 0 : -1}
                   onClick={(e) => {
                     e.stopPropagation();
                     onPlay();
@@ -438,6 +582,7 @@ export function MediaCard({
               ) : null}
               <button
                 type="button"
+                tabIndex={expanded ? 0 : -1}
                 onClick={(e) => {
                   e.stopPropagation();
                   onOpen();
@@ -451,79 +596,7 @@ export function MediaCard({
             </div>
           </div>
         </div>
-      ) : (
-        /* ── Collapsed card ── */
-        <button
-          type="button"
-          onClick={() => {
-            if (longPressFired.current) {
-              longPressFired.current = false;
-              return;
-            }
-            onOpen();
-          }}
-          aria-label={displayTitle(item)}
-          className="text-left w-full"
-        >
-          <CoverFrame
-            src={img}
-            shape={shape}
-            footer={
-              landscape && pct > 0 && pct < 100 ? (
-                <div className="absolute inset-x-0 bottom-0 p-2.5 bg-gradient-to-t from-black/80 to-transparent space-y-1">
-                  <ProgressBar pct={pct} />
-                  {left ? (
-                    <p className="text-[10px] font-semibold text-white/90 tabular-nums">{left}</p>
-                  ) : null}
-                </div>
-              ) : !landscape && pct > 0 && pct < 100 ? (
-                <div className="absolute inset-x-0 bottom-0 p-2 bg-gradient-to-t from-black/70 to-transparent">
-                  <ProgressBar pct={pct} />
-                </div>
-              ) : undefined
-            }
-            badge={
-              item.UserData?.Played && !landscape ? (
-                <div className="absolute top-2 right-2 rounded-full bg-emerald-500 text-white p-1 shadow">
-                  <Check className="w-3.5 h-3.5" />
-                </div>
-              ) : undefined
-            }
-          />
-          {seriesLogo ? (
-            <div className="mt-2 h-9 flex items-center">
-              <img
-                src={seriesLogo}
-                alt={title}
-                className="max-h-9 max-w-full w-auto object-contain object-left drop-shadow-sm"
-                loading="lazy"
-                onError={(e) => {
-                  (e.currentTarget as HTMLImageElement).style.display = 'none';
-                  const fallback = e.currentTarget.parentElement?.querySelector(
-                    '[data-title-fallback]',
-                  );
-                  if (fallback instanceof HTMLElement) fallback.style.display = 'block';
-                }}
-              />
-              <p
-                data-title-fallback
-                className="text-sm font-semibold text-fg line-clamp-2 leading-snug"
-                style={{ display: 'none' }}
-              >
-                {title}
-              </p>
-            </div>
-          ) : (
-            <p className="mt-2 text-sm font-semibold text-fg line-clamp-2 leading-snug">{title}</p>
-          )}
-          <div className="mt-0.5 flex items-center justify-between gap-1">
-            {sub ? <p className="text-[11px] text-muted line-clamp-1 min-w-0">{sub}</p> : <span />}
-            {landscape && pct > 0 && pct < 100 ? (
-              <span className="text-[11px] font-semibold text-accent shrink-0">CONTINUE</span>
-            ) : null}
-          </div>
-        </button>
-      )}
+      </div>
     </div>
   );
 }
