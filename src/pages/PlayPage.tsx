@@ -58,6 +58,8 @@ import {
   persistWordleProgress,
   clearWordleLocal,
   wordleStorageKey,
+  wordleDailyForToday,
+  pruneWordleInProgress,
   type LetterState,
   type WordleState,
 } from '../lib/wordle';
@@ -94,6 +96,19 @@ export function PlayPage() {
   const [busy, setBusy] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [solo, setSolo] = useState<'wordle' | 'wordle-random' | null>(null);
+
+  // Sydney day change (or legacy UTC seed) → reset shared Wordle doc to today's empty board.
+  useEffect(() => {
+    const seed = todaySeed();
+    const cur = data.wordleDaily;
+    if (!cur) return;
+    if (cur.seed === seed) return;
+    update((prev) => {
+      if (!prev.wordleDaily || prev.wordleDaily.seed === seed) return prev;
+      return { ...prev, wordleDaily: wordleDailyForToday(prev.wordleDaily, seed) };
+    });
+  }, [data.wordleDaily?.seed]);
+
 
   useEffect(() => {
     if (!familyId || !authUid) {
@@ -451,17 +466,14 @@ export function PlayPage() {
                   // Never persist a board from another calendar day onto "today"
                   if (state.seed && state.seed !== seed) return;
                   update((prev) => {
-                    const base =
-                      prev.wordleDaily && prev.wordleDaily.seed === seed
-                        ? prev.wordleDaily
-                        : { seed, solves: [], finishedMemberIds: [], inProgress: {} };
+                    // New calendar day → wipe prior solves/progress for the whole family
+                    const base = wordleDailyForToday(prev.wordleDaily, seed);
                     return {
                       ...prev,
                       wordleDaily: {
                         ...base,
-                        seed,
                         inProgress: {
-                          ...(base.inProgress || {}),
+                          ...pruneWordleInProgress(base.inProgress, seed),
                           [me.id]: { guesses: state.guesses, seed },
                         },
                       },

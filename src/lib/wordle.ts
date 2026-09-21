@@ -1464,16 +1464,59 @@ export function pickAnswer(seed?: string): string {
 
 /**
  * Canonical calendar day for the shared family Daily Wordle.
- * Uses UTC so every device (any timezone / clock skew within a day) gets the
- * same seed. Local `getFullYear`/`getDate` would give different words when
- * family members are in different zones or a phone has the wrong timezone.
+ * Rolls at **midnight Australia/Sydney** so the household shares one puzzle day
+ * that matches NSW local time (not UTC, which flips mid-morning in Sydney).
  */
-export function todaySeed(): string {
-  const d = new Date();
-  const y = d.getUTCFullYear();
-  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
-  const day = String(d.getUTCDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+export function todaySeed(now: Date = new Date()): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Australia/Sydney',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now);
+  const y = parts.find((p) => p.type === 'year')?.value;
+  const mo = parts.find((p) => p.type === 'month')?.value;
+  const d = parts.find((p) => p.type === 'day')?.value;
+  if (y && mo && d) return `${y}-${mo}-${d}`;
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Australia/Sydney',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(now);
+}
+
+/** Keep only in-progress boards that explicitly belong to `seed`. */
+export function pruneWordleInProgress(
+  inProgress: WordleDaily['inProgress'] | undefined,
+  seed: string,
+): NonNullable<WordleDaily['inProgress']> {
+  const out: NonNullable<WordleDaily['inProgress']> = {};
+  for (const [memberId, entry] of Object.entries(inProgress || {})) {
+    if (!entry || !Array.isArray(entry.guesses) || entry.guesses.length === 0) continue;
+    // Require matching seed — legacy rows without seed are dropped on a new day
+    if (entry.seed === seed) out[memberId] = { guesses: entry.guesses, seed };
+  }
+  return out;
+}
+
+/**
+ * Family wordleDaily for *today's* seed.
+ * Different stored seed → clean slate (solves + progress cleared).
+ */
+export function wordleDailyForToday(
+  existing: WordleDaily | null | undefined,
+  seed = todaySeed(),
+): WordleDaily {
+  if (existing && existing.seed === seed) {
+    return {
+      seed,
+      solves: [...(existing.solves || [])],
+      finishedMemberIds: [...(existing.finishedMemberIds || [])],
+      inProgress: pruneWordleInProgress(existing.inProgress, seed),
+    };
+  }
+  return { seed, solves: [], finishedMemberIds: [], inProgress: {} };
 }
 
 /** Wordle scoring: greens first, then yellows with correct multiplicity. */
@@ -1568,15 +1611,7 @@ export function recordDailyWordleFinish(
   name: string,
   outcome: { won: boolean; guesses: number },
 ): WordleDaily {
-  const base: WordleDaily =
-    existing && existing.seed === seed
-      ? {
-          seed,
-          solves: [...(existing.solves || [])],
-          finishedMemberIds: [...(existing.finishedMemberIds || [])],
-          inProgress: { ...(existing.inProgress || {}) },
-        }
-      : { seed, solves: [], finishedMemberIds: [], inProgress: {} };
+  const base: WordleDaily = wordleDailyForToday(existing, seed);
 
   const finished = new Set(base.finishedMemberIds || []);
   if (finished.has(memberId)) {
@@ -1658,9 +1693,16 @@ export function loadWordleLocal(key: string): WordleState | null {
     // Daily boards must match the seed embedded in the key / payload
     if (parsed.mode === 'daily') {
       const today = todaySeed();
-      if (parsed.seed && parsed.seed !== today) return null;
-      // Never trust a stored answer from another day — rebuild from seed
-      return restoreDailyFromGuesses(parsed.guesses, parsed.seed || today);
+      // Missing or mismatched seed → ignore (prevents yesterday's guesses on a new key)
+      if (!parsed.seed || parsed.seed !== today) {
+        try {
+          localStorage.removeItem(key);
+        } catch {
+          /* ignore */
+        }
+        return null;
+      }
+      return restoreDailyFromGuesses(parsed.guesses, today);
     }
     const status = evaluateStatus(parsed.guesses, parsed.answer);
     return { ...parsed, status };
@@ -1707,14 +1749,17 @@ export function initialWordleState(
   const key = wordleStorageKey(mode, opts.memberId, seed);
 
   if (mode === 'daily') {
-    // Family doc still on another calendar day → never resume that progress as "today"
+    const daily = wordleDailyForToday(opts.daily, seed);
+
+    // Family doc / local still on another calendar day → hard reset local key
     if (opts.daily?.seed && opts.daily.seed !== seed) {
       clearWordleLocal(key);
-      return newWordleGame('daily');
+      // Also clear the previous-day local key if present
+      clearWordleLocal(wordleStorageKey('daily', opts.memberId, opts.daily.seed));
     }
 
-    const finished = new Set(opts.daily?.finishedMemberIds || []);
-    if (opts.memberId && opts.daily?.seed === seed && finished.has(opts.memberId)) {
+    const finished = new Set(daily.finishedMemberIds || []);
+    if (opts.memberId && finished.has(opts.memberId)) {
       const answer = pickAnswer(seed);
       return {
         answer,
@@ -1725,22 +1770,20 @@ export function initialWordleState(
       };
     }
 
-    const cloudEntry =
-      opts.memberId && opts.daily?.seed === seed
-        ? opts.daily.inProgress?.[opts.memberId]
-        : undefined;
-    const cloudGuesses = cloudEntry?.guesses;
-    const cloudSeed = cloudEntry?.seed;
+    // Cloud progress only if this member's entry is stamped with today's seed
+    const cloudEntry = opts.memberId ? daily.inProgress?.[opts.memberId] : undefined;
     if (
-      cloudGuesses &&
-      cloudGuesses.length > 0 &&
-      (!cloudSeed || cloudSeed === seed)
+      cloudEntry &&
+      cloudEntry.seed === seed &&
+      Array.isArray(cloudEntry.guesses) &&
+      cloudEntry.guesses.length > 0
     ) {
-      const restored = restoreDailyFromGuesses(cloudGuesses, seed);
+      const restored = restoreDailyFromGuesses(cloudEntry.guesses, seed);
       if (restored.status === 'playing') {
         saveWordleLocal(key, restored);
         return restored;
       }
+      // Finished in cloud guesses but not marked finished — treat as fresh playing only if incomplete
     }
 
     const local = loadWordleLocal(key);
@@ -1753,9 +1796,7 @@ export function initialWordleState(
     ) {
       return restoreDailyFromGuesses(local.guesses, seed);
     }
-    if (local && local.seed && local.seed !== seed) {
-      clearWordleLocal(key);
-    }
+    clearWordleLocal(key);
     return newWordleGame('daily');
   }
 
