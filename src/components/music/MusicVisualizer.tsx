@@ -1,5 +1,6 @@
 /**
- * Lightweight canvas spectrum visualizer — uses MusicPlayerContext analyser.
+ * Lightweight canvas spectrum — same MusicPlayerContext analyser / <audio>.
+ * Mirrored bars + soft glow, capped raf when paused.
  */
 import { useEffect, useRef } from 'react';
 import { useMusicPlayer } from '../../context/MusicPlayerContext';
@@ -9,6 +10,8 @@ export function MusicVisualizer({ className }: { className?: string }) {
   const { isPlaying, ensureAnalyser } = useMusicPlayer();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rafRef = useRef(0);
+  const playingRef = useRef(isPlaying);
+  playingRef.current = isPlaying;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -17,42 +20,69 @@ export function MusicVisualizer({ className }: { className?: string }) {
     if (!ctx2d) return;
 
     let alive = true;
-    const data = new Uint8Array(128);
+    const bins = 64;
+    const data = new Uint8Array(bins * 2);
+    // Smoothed heights to reduce flicker / CPU spikes
+    const smooth = new Float32Array(bins);
+    let lastFrame = 0;
+    const minFrameMs = 1000 / 36; // ~36fps cap
 
-    const draw = () => {
+    const draw = (ts: number) => {
       if (!alive) return;
       rafRef.current = requestAnimationFrame(draw);
-      const analyser = ensureAnalyser();
+      if (ts - lastFrame < minFrameMs) return;
+      lastFrame = ts;
+
       const { width, height } = canvas;
       ctx2d.clearRect(0, 0, width, height);
 
+      const analyser = ensureAnalyser();
+      const midY = height * 0.55;
+      const n = bins;
+      const gap = Math.max(1, width * 0.004);
+      const barW = (width - gap * (n - 1)) / n;
+
       if (!analyser) {
-        // Idle bars
-        const n = 32;
-        const gap = 2;
-        const barW = (width - gap * (n - 1)) / n;
         for (let i = 0; i < n; i++) {
-          const h = 4 + Math.sin(Date.now() / 400 + i * 0.4) * 3;
-          ctx2d.fillStyle = 'rgba(52, 211, 153, 0.25)';
-          ctx2d.fillRect(i * (barW + gap), height - h, barW, h);
+          const h = 3 + Math.sin(ts / 500 + i * 0.35) * 2.5;
+          smooth[i] = h;
+          ctx2d.fillStyle = 'rgba(52, 211, 153, 0.2)';
+          ctx2d.fillRect(i * (barW + gap), midY - h / 2, barW, h);
         }
         return;
       }
 
       analyser.getByteFrequencyData(data);
-      const n = 48;
-      const step = Math.floor(data.length / n);
-      const gap = 2;
-      const barW = (width - gap * (n - 1)) / n;
+      const step = Math.max(1, Math.floor(data.length / n));
+      const boost = playingRef.current ? 1 : 0.22;
+
       for (let i = 0; i < n; i++) {
-        const v = data[i * step] || 0;
-        const h = Math.max(2, (v / 255) * height * (isPlaying ? 0.92 : 0.35));
-        const g = ctx2d.createLinearGradient(0, height - h, 0, height);
-        g.addColorStop(0, 'rgba(110, 231, 183, 0.95)');
-        g.addColorStop(1, 'rgba(16, 185, 129, 0.35)');
+        // Weight lower-mid frequencies a bit more (musical)
+        const idx = Math.min(data.length - 1, Math.floor(i * step * 0.85) + 2);
+        const raw = (data[idx] || 0) / 255;
+        const shaped = Math.pow(raw, 0.85) * boost;
+        const target = Math.max(2, shaped * height * 0.85);
+        smooth[i] = smooth[i] * 0.62 + target * 0.38;
+        const h = smooth[i]!;
+
+        const x = i * (barW + gap);
+        const g = ctx2d.createLinearGradient(x, midY - h / 2, x, midY + h / 2);
+        g.addColorStop(0, 'rgba(167, 243, 208, 0.9)');
+        g.addColorStop(0.45, 'rgba(52, 211, 153, 0.75)');
+        g.addColorStop(1, 'rgba(16, 185, 129, 0.15)');
         ctx2d.fillStyle = g;
-        ctx2d.fillRect(i * (barW + gap), height - h, barW, h);
+        // Rounded-ish bars via slight inset
+        const bw = Math.max(1, barW * 0.85);
+        const ox = x + (barW - bw) / 2;
+        ctx2d.fillRect(ox, midY - h / 2, bw, h);
       }
+
+      // Soft center glow line
+      ctx2d.strokeStyle = 'rgba(255,255,255,0.06)';
+      ctx2d.beginPath();
+      ctx2d.moveTo(0, midY);
+      ctx2d.lineTo(width, midY);
+      ctx2d.stroke();
     };
 
     const ro = new ResizeObserver(() => {
@@ -65,17 +95,23 @@ export function MusicVisualizer({ className }: { className?: string }) {
       canvas.style.height = `${parent.clientHeight}px`;
     });
     ro.observe(canvas.parentElement || canvas);
-    draw();
+    rafRef.current = requestAnimationFrame(draw);
 
     return () => {
       alive = false;
       cancelAnimationFrame(rafRef.current);
       ro.disconnect();
     };
-  }, [ensureAnalyser, isPlaying]);
+  }, [ensureAnalyser]);
 
   return (
-    <div className={cn('w-full h-14 sm:h-16 rounded-lg overflow-hidden bg-black/30', className)}>
+    <div
+      className={cn(
+        'w-full h-16 sm:h-[4.5rem] rounded-xl overflow-hidden',
+        'bg-black/25 ring-1 ring-white/5',
+        className,
+      )}
+    >
       <canvas ref={canvasRef} className="w-full h-full block" />
     </div>
   );
