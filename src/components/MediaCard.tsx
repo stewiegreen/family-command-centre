@@ -325,8 +325,8 @@ export function MediaCard({
         expanded && layout === 'scroll' && 'z-20',
         expanded &&
           (shape === 'landscape'
-            ? 'w-[min(100%,28rem)] sm:w-[32rem]'
-            : 'w-[min(100%,22rem)] sm:w-[26rem]'),
+            ? 'w-[min(100%,36rem)] sm:w-[42rem] md:w-[48rem]'
+            : 'w-[min(100%,32rem)] sm:w-[40rem] md:w-[46rem]'),
         expanded &&
           'rounded-2xl bg-surface-1 border border-border shadow-xl shadow-black/25 ring-1 ring-black/5',
         className,
@@ -358,11 +358,11 @@ export function MediaCard({
             'text-left shrink-0',
             expanded
               ? shape === 'landscape'
-                ? 'w-[11rem] sm:w-[13rem]'
-                : 'w-[7.5rem] sm:w-[8.5rem]'
-              : layout === 'grid'
-                ? 'w-full'
-                : 'w-full',
+                ? 'w-[16.5rem] sm:w-[19.5rem]'
+                : shape === 'square'
+                  ? 'w-[9.5rem] sm:w-[10.75rem]'
+                  : 'w-[9.5rem] sm:w-[10.75rem]'
+              : 'w-full',
           )}
         >
           <CoverFrame
@@ -433,16 +433,16 @@ export function MediaCard({
         <div
           className={cn(
             'overflow-hidden transition-[max-width,opacity,padding] duration-300 ease-out',
-            expanded ? 'max-w-[18rem] opacity-100 flex-1' : 'max-w-0 opacity-0',
+            expanded ? 'max-w-[28rem] sm:max-w-[32rem] md:max-w-[36rem] opacity-100 flex-1' : 'max-w-0 opacity-0',
           )}
         >
           {expanded && (
-            <div className="h-full min-h-[8.5rem] flex flex-col justify-between p-3 sm:p-3.5 pr-3.5">
-              <div className="min-w-0 space-y-1.5">
-                <p className="text-sm sm:text-base font-bold text-fg leading-snug line-clamp-2">
+            <div className="h-full min-h-[10rem] flex flex-col justify-between p-4 sm:p-5 pr-5">
+              <div className="min-w-0 space-y-2">
+                <p className="text-base sm:text-lg md:text-xl font-bold text-fg leading-snug line-clamp-2">
                   {displayTitle(item)}
                 </p>
-                <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] text-muted">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs sm:text-sm text-muted">
                   {item.ProductionYear ? <span>{item.ProductionYear}</span> : null}
                   {runtime ? (
                     <>
@@ -478,11 +478,11 @@ export function MediaCard({
                   </div>
                 ) : null}
                 {overview ? (
-                  <p className="text-[11px] sm:text-xs text-fg-secondary leading-relaxed line-clamp-4 pt-0.5">
+                  <p className="text-sm sm:text-[0.95rem] text-fg-secondary leading-relaxed line-clamp-6 pt-1">
                     {overview}
                   </p>
                 ) : (
-                  <p className="text-[11px] text-muted italic pt-0.5">No synopsis</p>
+                  <p className="text-sm text-muted italic pt-1">No synopsis</p>
                 )}
               </div>
               <div className="flex flex-wrap gap-1.5 pt-2">
@@ -494,9 +494,9 @@ export function MediaCard({
                       onPlay();
                       collapse();
                     }}
-                    className="inline-flex items-center gap-1 rounded-full bg-accent text-accent-ink px-3 py-1.5 text-xs font-bold hover:bg-accent-hover"
+                    className="inline-flex items-center gap-1.5 rounded-full bg-accent text-accent-ink px-4 py-2 text-sm font-bold hover:bg-accent-hover"
                   >
-                    <Play className="w-3.5 h-3.5 fill-current" />
+                    <Play className="w-4 h-4 fill-current" />
                     {pct > 0 && pct < 100 ? 'Resume' : 'Play'}
                   </button>
                 ) : null}
@@ -507,9 +507,9 @@ export function MediaCard({
                     onOpen();
                     collapse();
                   }}
-                  className="inline-flex items-center gap-1 rounded-full border border-border bg-surface-2 px-3 py-1.5 text-xs font-semibold text-fg hover:bg-nav-hover"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface-2 px-4 py-2 text-sm font-semibold text-fg hover:bg-nav-hover"
                 >
-                  <Info className="w-3.5 h-3.5" />
+                  <Info className="w-4 h-4" />
                   More
                 </button>
               </div>
