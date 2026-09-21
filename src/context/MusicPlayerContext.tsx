@@ -1,56 +1,61 @@
 /**
- * Global music session for GreenHQ Mini Music Player.
- * Step 1: state + mini-player visibility across navigation.
- * Step 2+: Emby audio element, queue, progress reporting live here.
- *
- * Does NOT replace VideoPlayer / AlbumPlayer yet — those stay until
- * MediaPage is wired to this context in a later step.
+ * Global music session — persists across GreenHQ navigation.
+ * Owns the single <audio> element and Emby stream attempts.
  */
 import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
-import type { EmbyItem } from '../lib/emby';
+import {
+  embyAudioPlayAttempts,
+  embyPlaybackInfo,
+  embyReportProgress,
+  embyReportStart,
+  embyReportStop,
+  secondsToTicks,
+  type EmbyItem,
+} from '../lib/emby';
 
 export type MusicRepeat = 'off' | 'all' | 'one';
-
 export type MusicTrack = EmbyItem;
 
 export type MusicPlayerState = {
-  /** Current track (null = nothing loaded → mini player hidden). */
   currentTrack: MusicTrack | null;
-  /** Album/container for art fallback and “playing from”. */
   album: EmbyItem | null;
   queue: MusicTrack[];
   queueIndex: number;
   isPlaying: boolean;
-  /** Seconds */
   position: number;
   duration: number;
   volume: number;
   muted: boolean;
   shuffle: boolean;
   repeat: MusicRepeat;
-  /** Mini bar visible (user can dismiss without clearing session). */
   miniVisible: boolean;
-  /** Expanded full player (Step 3). */
   expanded: boolean;
-  /** Queue drawer (Step 4). */
   queueOpen: boolean;
+  loading: boolean;
+  error: string | null;
+  /** Emby user for stream URLs — set with each playTracks call. */
+  embyUserId: string | null;
+};
+
+type PlayTracksOpts = {
+  tracks: MusicTrack[];
+  startIndex?: number;
+  album?: EmbyItem | null;
+  autoplay?: boolean;
+  embyUserId: string;
 };
 
 type MusicPlayerContextValue = MusicPlayerState & {
-  /** Replace session (album + tracks). Used by MediaPage later. */
-  playTracks: (opts: {
-    tracks: MusicTrack[];
-    startIndex?: number;
-    album?: EmbyItem | null;
-    autoplay?: boolean;
-  }) => void;
+  playTracks: (opts: PlayTracksOpts) => void;
   playTrackAt: (index: number) => void;
   togglePlay: () => void;
   play: () => void;
@@ -65,9 +70,7 @@ type MusicPlayerContextValue = MusicPlayerState & {
   setMiniVisible: (v: boolean) => void;
   setExpanded: (v: boolean) => void;
   setQueueOpen: (v: boolean) => void;
-  /** Stop and clear session (Close on mini player). */
   stop: () => void;
-  /** Soft dismiss mini chrome; keeps session so it can be reopened later. */
   minimize: () => void;
 };
 
@@ -88,60 +91,165 @@ const initial: MusicPlayerState = {
   miniVisible: false,
   expanded: false,
   queueOpen: false,
+  loading: false,
+  error: null,
+  embyUserId: null,
 };
 
 export function MusicPlayerProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<MusicPlayerState>(initial);
+  const stateRef = useRef(state);
+  stateRef.current = state;
+
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const mediaSourceId = useRef<string | undefined>(undefined);
+  const playSessionId = useRef<string | undefined>(undefined);
+  const startedRef = useRef(false);
+  const progressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const attemptRef = useRef(0);
+  const attemptsRef = useRef<string[]>([]);
+  const trackIdRef = useRef<string | null>(null);
+
+  const clearProgressTimer = () => {
+    if (progressTimer.current) {
+      clearTimeout(progressTimer.current);
+      progressTimer.current = null;
+    }
+  };
+
+  const reportStop = useCallback(async (itemId: string, ticks: number) => {
+    try {
+      await embyReportStop({
+        itemId,
+        mediaSourceId: mediaSourceId.current,
+        playSessionId: playSessionId.current,
+        positionTicks: ticks,
+      });
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const loadStream = useCallback(async (item: EmbyItem, userId: string) => {
+    setState((s) => ({ ...s, loading: true, error: null, position: 0 }));
+    startedRef.current = false;
+    mediaSourceId.current = undefined;
+    playSessionId.current = undefined;
+    attemptRef.current = 0;
+    trackIdRef.current = item.Id;
+
+    try {
+      try {
+        const info = await embyPlaybackInfo(userId, item.Id);
+        const ms = info.MediaSources?.[0];
+        mediaSourceId.current = ms?.Id;
+        playSessionId.current = info.PlaySessionId || ms?.Id;
+      } catch {
+        /* optional */
+      }
+      const attempts = embyAudioPlayAttempts({
+        itemId: item.Id,
+        userId,
+        mediaSourceId: mediaSourceId.current,
+        playSessionId: playSessionId.current,
+      });
+      attemptsRef.current = attempts;
+      const src = attempts[0] || null;
+      const el = audioRef.current;
+      if (el && src) {
+        el.src = src;
+        el.load();
+      }
+      const durationSec =
+        typeof item.RunTimeTicks === 'number' ? item.RunTimeTicks / 10_000_000 : 0;
+      setState((s) => ({
+        ...s,
+        loading: false,
+        duration: durationSec,
+        error: src ? null : 'No playable stream',
+      }));
+    } catch (e) {
+      setState((s) => ({
+        ...s,
+        loading: false,
+        error: e instanceof Error ? e.message : 'Could not load track',
+        isPlaying: false,
+      }));
+    }
+  }, []);
+
+  const tryNextAttempt = useCallback(() => {
+    const next = attemptRef.current + 1;
+    const list = attemptsRef.current;
+    if (next >= list.length) {
+      setState((s) => ({
+        ...s,
+        error:
+          'Could not play this track in the browser (tried MP3 transcode + direct). FLAC may need Emby transcoding.',
+        isPlaying: false,
+        loading: false,
+      }));
+      return;
+    }
+    attemptRef.current = next;
+    const src = list[next];
+    const el = audioRef.current;
+    if (el && src) {
+      el.src = src;
+      el.load();
+      setState((s) => ({ ...s, error: null, loading: true }));
+      void el.play().then(() => setState((s) => ({ ...s, loading: false }))).catch(() => tryNextAttempt());
+    }
+  }, []);
 
   const playTracks = useCallback(
-    (opts: {
-      tracks: MusicTrack[];
-      startIndex?: number;
-      album?: EmbyItem | null;
-      autoplay?: boolean;
-    }) => {
+    (opts: PlayTracksOpts) => {
       const tracks = opts.tracks.filter(Boolean);
-      if (!tracks.length) return;
-      const startIndex = Math.min(
-        Math.max(0, opts.startIndex ?? 0),
-        tracks.length - 1,
-      );
+      if (!tracks.length || !opts.embyUserId) return;
+      const startIndex = Math.min(Math.max(0, opts.startIndex ?? 0), tracks.length - 1);
       const track = tracks[startIndex]!;
       const durationSec =
         typeof track.RunTimeTicks === 'number' ? track.RunTimeTicks / 10_000_000 : 0;
+
       setState((s) => ({
         ...s,
         queue: tracks,
         queueIndex: startIndex,
         currentTrack: track,
-        album: opts.album ?? s.album,
+        album: opts.album ?? null,
         position: 0,
         duration: durationSec,
         isPlaying: opts.autoplay !== false,
         miniVisible: true,
         expanded: false,
+        embyUserId: opts.embyUserId,
+        error: null,
       }));
+      void loadStream(track, opts.embyUserId);
     },
-    [],
+    [loadStream],
   );
 
-  const playTrackAt = useCallback((index: number) => {
-    setState((s) => {
-      if (index < 0 || index >= s.queue.length) return s;
+  const playTrackAt = useCallback(
+    (index: number) => {
+      const s = stateRef.current;
+      if (index < 0 || index >= s.queue.length || !s.embyUserId) return;
       const track = s.queue[index]!;
       const durationSec =
         typeof track.RunTimeTicks === 'number' ? track.RunTimeTicks / 10_000_000 : 0;
-      return {
-        ...s,
+      setState((prev) => ({
+        ...prev,
         queueIndex: index,
         currentTrack: track,
         position: 0,
         duration: durationSec,
         isPlaying: true,
         miniVisible: true,
-      };
-    });
-  }, []);
+      }));
+      void loadStream(track, s.embyUserId);
+    },
+    [loadStream],
+  );
 
   const togglePlay = useCallback(() => {
     setState((s) => {
@@ -159,52 +267,68 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const next = useCallback(() => {
-    setState((s) => {
-      if (!s.queue.length) return s;
-      let nextIndex = s.queueIndex + 1;
-      if (nextIndex >= s.queue.length) {
-        if (s.repeat === 'all') nextIndex = 0;
-        else return { ...s, isPlaying: false };
+    const s = stateRef.current;
+    if (!s.queue.length || !s.embyUserId) return;
+    if (s.repeat === 'one') {
+      const el = audioRef.current;
+      if (el) {
+        el.currentTime = 0;
+        void el.play();
       }
-      const track = s.queue[nextIndex]!;
-      const durationSec =
-        typeof track.RunTimeTicks === 'number' ? track.RunTimeTicks / 10_000_000 : 0;
-      return {
-        ...s,
-        queueIndex: nextIndex,
-        currentTrack: track,
-        position: 0,
-        duration: durationSec,
-        isPlaying: true,
-        miniVisible: true,
-      };
-    });
-  }, []);
+      setState((prev) => ({ ...prev, position: 0, isPlaying: true }));
+      return;
+    }
+    let nextIndex = s.queueIndex + 1;
+    if (nextIndex >= s.queue.length) {
+      if (s.repeat === 'all') nextIndex = 0;
+      else {
+        setState((prev) => ({ ...prev, isPlaying: false }));
+        return;
+      }
+    }
+    const track = s.queue[nextIndex]!;
+    const durationSec =
+      typeof track.RunTimeTicks === 'number' ? track.RunTimeTicks / 10_000_000 : 0;
+    setState((prev) => ({
+      ...prev,
+      queueIndex: nextIndex,
+      currentTrack: track,
+      position: 0,
+      duration: durationSec,
+      isPlaying: true,
+      miniVisible: true,
+    }));
+    void loadStream(track, s.embyUserId);
+  }, [loadStream]);
 
   const previous = useCallback(() => {
-    setState((s) => {
-      if (!s.queue.length) return s;
-      // Restart current if more than 3s in
-      if (s.position > 3) {
-        return { ...s, position: 0 };
-      }
-      const prevIndex = Math.max(0, s.queueIndex - 1);
-      const track = s.queue[prevIndex]!;
-      const durationSec =
-        typeof track.RunTimeTicks === 'number' ? track.RunTimeTicks / 10_000_000 : 0;
-      return {
-        ...s,
-        queueIndex: prevIndex,
-        currentTrack: track,
-        position: 0,
-        duration: durationSec,
-        isPlaying: true,
-        miniVisible: true,
-      };
-    });
-  }, []);
+    const s = stateRef.current;
+    if (!s.queue.length || !s.embyUserId) return;
+    if (s.position > 3) {
+      const el = audioRef.current;
+      if (el) el.currentTime = 0;
+      setState((prev) => ({ ...prev, position: 0 }));
+      return;
+    }
+    const prevIndex = Math.max(0, s.queueIndex - 1);
+    const track = s.queue[prevIndex]!;
+    const durationSec =
+      typeof track.RunTimeTicks === 'number' ? track.RunTimeTicks / 10_000_000 : 0;
+    setState((prev) => ({
+      ...prev,
+      queueIndex: prevIndex,
+      currentTrack: track,
+      position: 0,
+      duration: durationSec,
+      isPlaying: true,
+      miniVisible: true,
+    }));
+    void loadStream(track, s.embyUserId);
+  }, [loadStream]);
 
   const seek = useCallback((seconds: number) => {
+    const el = audioRef.current;
+    if (el) el.currentTime = seconds;
     setState((s) => ({
       ...s,
       position: Math.max(0, Math.min(seconds, s.duration || seconds)),
@@ -212,15 +336,21 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const setVolume = useCallback((v: number) => {
+    const vol = Math.max(0, Math.min(1, v));
+    if (audioRef.current) audioRef.current.volume = vol;
     setState((s) => ({
       ...s,
-      volume: Math.max(0, Math.min(1, v)),
-      muted: v <= 0 ? true : s.muted && v > 0 ? false : s.muted,
+      volume: vol,
+      muted: vol <= 0 ? true : false,
     }));
   }, []);
 
   const toggleMute = useCallback(() => {
-    setState((s) => ({ ...s, muted: !s.muted }));
+    setState((s) => {
+      const muted = !s.muted;
+      if (audioRef.current) audioRef.current.muted = muted;
+      return { ...s, muted };
+    });
   }, []);
 
   const toggleShuffle = useCallback(() => {
@@ -239,7 +369,7 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const setExpanded = useCallback((v: boolean) => {
-    setState((s) => ({ ...s, expanded: v, miniVisible: v ? s.miniVisible : s.miniVisible }));
+    setState((s) => ({ ...s, expanded: v }));
   }, []);
 
   const setQueueOpen = useCallback((v: boolean) => {
@@ -247,11 +377,141 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const stop = useCallback(() => {
+    const s = stateRef.current;
+    const el = audioRef.current;
+    if (s.currentTrack && el) {
+      void reportStop(s.currentTrack.Id, secondsToTicks(el.currentTime));
+    }
+    if (el) {
+      el.pause();
+      el.removeAttribute('src');
+      el.load();
+    }
+    clearProgressTimer();
     setState(initial);
-  }, []);
+  }, [reportStop]);
 
   const minimize = useCallback(() => {
     setState((s) => ({ ...s, miniVisible: false, expanded: false, queueOpen: false }));
+  }, []);
+
+  // Sync play/pause + volume to element
+  useEffect(() => {
+    const el = audioRef.current;
+    if (!el) return;
+    el.volume = state.muted ? 0 : state.volume;
+    el.muted = state.muted;
+    if (state.isPlaying) {
+      void el.play().catch(() => tryNextAttempt());
+    } else {
+      el.pause();
+    }
+  }, [state.isPlaying, state.volume, state.muted, tryNextAttempt]);
+
+  // After src load, try play if needed
+  useEffect(() => {
+    const el = audioRef.current;
+    if (!el || !state.currentTrack) return;
+    const onCanPlay = () => {
+      setState((s) => ({ ...s, loading: false }));
+      if (stateRef.current.isPlaying) {
+        void el.play().catch(() => tryNextAttempt());
+      }
+    };
+    const onTimeUpdate = () => {
+      const track = stateRef.current.currentTrack;
+      if (!track) return;
+      setState((s) => ({
+        ...s,
+        position: el.currentTime,
+        duration: el.duration && Number.isFinite(el.duration) ? el.duration : s.duration,
+      }));
+      if (!startedRef.current && el.currentTime > 0.2) {
+        startedRef.current = true;
+        void embyReportStart({
+          itemId: track.Id,
+          mediaSourceId: mediaSourceId.current,
+          playSessionId: playSessionId.current,
+          positionTicks: secondsToTicks(el.currentTime),
+        });
+      }
+      clearProgressTimer();
+      progressTimer.current = setTimeout(() => {
+        const t = stateRef.current.currentTrack;
+        if (!t) return;
+        void embyReportProgress({
+          itemId: t.Id,
+          mediaSourceId: mediaSourceId.current,
+          playSessionId: playSessionId.current,
+          positionTicks: secondsToTicks(el.currentTime),
+          isPaused: el.paused,
+        });
+      }, 800);
+    };
+    const onEnded = () => {
+      const t = stateRef.current.currentTrack;
+      if (t) void reportStop(t.Id, secondsToTicks(el.currentTime));
+      // advance
+      const s = stateRef.current;
+      if (s.repeat === 'one') {
+        el.currentTime = 0;
+        void el.play();
+        return;
+      }
+      let nextIndex = s.queueIndex + 1;
+      if (nextIndex >= s.queue.length) {
+        if (s.repeat === 'all') nextIndex = 0;
+        else {
+          setState((prev) => ({ ...prev, isPlaying: false }));
+          return;
+        }
+      }
+      const nextTrack = s.queue[nextIndex];
+      if (!nextTrack || !s.embyUserId) {
+        setState((prev) => ({ ...prev, isPlaying: false }));
+        return;
+      }
+      const durationSec =
+        typeof nextTrack.RunTimeTicks === 'number' ? nextTrack.RunTimeTicks / 10_000_000 : 0;
+      setState((prev) => ({
+        ...prev,
+        queueIndex: nextIndex,
+        currentTrack: nextTrack,
+        position: 0,
+        duration: durationSec,
+        isPlaying: true,
+      }));
+      void loadStream(nextTrack, s.embyUserId);
+    };
+    const onError = () => tryNextAttempt();
+
+    el.addEventListener('canplay', onCanPlay);
+    el.addEventListener('timeupdate', onTimeUpdate);
+    el.addEventListener('ended', onEnded);
+    el.addEventListener('error', onError);
+    return () => {
+      el.removeEventListener('canplay', onCanPlay);
+      el.removeEventListener('timeupdate', onTimeUpdate);
+      el.removeEventListener('ended', onEnded);
+      el.removeEventListener('error', onError);
+    };
+  }, [loadStream, reportStop, tryNextAttempt, state.currentTrack?.Id]);
+
+  // Unmount cleanup
+  useEffect(() => {
+    return () => {
+      clearProgressTimer();
+      const el = audioRef.current;
+      const t = trackIdRef.current;
+      if (el && t) {
+        void embyReportStop({
+          itemId: t,
+          mediaSourceId: mediaSourceId.current,
+          playSessionId: playSessionId.current,
+          positionTicks: secondsToTicks(el.currentTime),
+        });
+      }
+    };
   }, []);
 
   const value = useMemo<MusicPlayerContextValue>(
@@ -298,19 +558,20 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
   );
 
   return (
-    <MusicPlayerContext.Provider value={value}>{children}</MusicPlayerContext.Provider>
+    <MusicPlayerContext.Provider value={value}>
+      {/* Single persistent audio element — survives page changes */}
+      <audio ref={audioRef} preload="metadata" className="hidden" />
+      {children}
+    </MusicPlayerContext.Provider>
   );
 }
 
 export function useMusicPlayer(): MusicPlayerContextValue {
   const ctx = useContext(MusicPlayerContext);
-  if (!ctx) {
-    throw new Error('useMusicPlayer must be used within MusicPlayerProvider');
-  }
+  if (!ctx) throw new Error('useMusicPlayer must be used within MusicPlayerProvider');
   return ctx;
 }
 
-/** Optional hook when provider may be absent (tests). */
 export function useMusicPlayerOptional(): MusicPlayerContextValue | null {
   return useContext(MusicPlayerContext);
 }

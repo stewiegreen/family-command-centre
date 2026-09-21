@@ -29,7 +29,7 @@ import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
 import { Modal } from '../components/ui/Modal';
 import { VideoPlayer } from '../components/VideoPlayer';
-import { AlbumPlayer } from '../components/AlbumPlayer';
+import { useMusicPlayer } from '../context/MusicPlayerContext';
 import {
   displayTitle,
   embyBackdropUrl,
@@ -149,6 +149,7 @@ export function MediaPage() {
   const members = data.members || [];
   const memberId = currentUser?.id || '';
   const embyUserId = currentUser?.embyUserId?.trim() || '';
+  const music = useMusicPlayer();
   const webUrl = resolveEmbyWebUrl(data.settings);
 
   const [tab, setTab] = useState<Tab>('home');
@@ -199,12 +200,6 @@ export function MediaPage() {
   const [focus, setFocus] = useState<EmbyItem | null>(null);
   const [focusLoading, setFocusLoading] = useState(false);
   const [watching, setWatching] = useState<EmbyItem | null>(null);
-  const [albumSession, setAlbumSession] = useState<{
-    album: EmbyItem;
-    tracks: EmbyItem[];
-    startIndex: number;
-    autoplay: boolean;
-  } | null>(null);
 
   const openAlbum = useCallback(
     async (album: EmbyItem, opts?: { startIndex?: number; autoplay?: boolean }) => {
@@ -220,23 +215,24 @@ export function MediaPage() {
         });
         const tracks = sortMediaItems(items).filter(isAudioItem);
         if (!tracks.length) {
-          // Fall back to folder browse if no audio children
           setBrowseOrigin('home');
           setTab('libraries');
           pushBrowse({ kind: 'folder', item: full, title: full.Name || 'Album' });
           return;
         }
-        setAlbumSession({
-          album: full,
+        // Global music session — keeps playing when leaving Media
+        music.playTracks({
           tracks,
+          album: full,
           startIndex: opts?.startIndex ?? 0,
-          autoplay: opts?.autoplay ?? false,
+          autoplay: opts?.autoplay ?? true,
+          embyUserId,
         });
       } catch (e) {
         console.warn('openAlbum failed', e);
       }
     },
-    [embyUserId],
+    [embyUserId, music],
   );
 
   const [recommendTarget, setRecommendTarget] = useState<EmbyItem | null>(null);
@@ -273,22 +269,33 @@ export function MediaPage() {
               const tracks = sortMediaItems(items).filter(isAudioItem);
               const startIndex = Math.max(0, tracks.findIndex((x) => x.Id === item.Id));
               if (tracks.length) {
-                setAlbumSession({
-                  album,
+                music.playTracks({
                   tracks,
+                  album,
                   startIndex: startIndex < 0 ? 0 : startIndex,
                   autoplay: true,
+                  embyUserId,
                 });
                 return;
               }
             } catch {
-              /* fall through */
+              /* fall through — single-track session */
             }
-            setWatching(item);
+            music.playTracks({
+              tracks: [item],
+              startIndex: 0,
+              autoplay: true,
+              embyUserId,
+            });
           })();
           return;
         }
-        setWatching(item);
+        music.playTracks({
+          tracks: [item],
+          startIndex: 0,
+          autoplay: true,
+          embyUserId,
+        });
         return;
       }
       if (item.Type === 'Movie' || item.Type === 'Episode' || !item.Type) {
@@ -298,7 +305,7 @@ export function MediaPage() {
       }
       void openFocus(item);
     },
-    [embyUserId, openAlbum],
+    [embyUserId, openAlbum, music],
   );
 
   const playExternal = useCallback(
@@ -465,7 +472,13 @@ export function MediaPage() {
           const tracks = sortMediaItems(items).filter(isAudioItem);
           const startIndex = Math.max(0, tracks.findIndex((t) => t.Id === item.Id));
           if (tracks.length) {
-            setAlbumSession({ album, tracks, startIndex: startIndex < 0 ? 0 : startIndex, autoplay: true });
+            music.playTracks({
+              tracks,
+              album,
+              startIndex: startIndex < 0 ? 0 : startIndex,
+              autoplay: true,
+              embyUserId,
+            });
             return;
           }
         } catch {
@@ -1055,17 +1068,6 @@ export function MediaPage() {
             setWatching(null);
             void loadHome();
           }}
-        />
-      )}
-
-      {albumSession && embyUserId && (
-        <AlbumPlayer
-          album={albumSession.album}
-          tracks={albumSession.tracks}
-          userId={embyUserId}
-          startIndex={albumSession.startIndex}
-          autoplay={albumSession.autoplay}
-          onClose={() => setAlbumSession(null)}
         />
       )}
 
