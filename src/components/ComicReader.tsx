@@ -22,6 +22,7 @@ import {
   Loader2,
   Maximize,
   Minimize,
+  Play,
   Settings2,
   X,
 } from 'lucide-react';
@@ -102,6 +103,7 @@ export function ComicReader({ book, memberId, onClose, onOpenBook }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [imgError, setImgError] = useState(false);
   const [nextChapter, setNextChapter] = useState<KomgaBook | null>(null);
+  const [showEndOverlay, setShowEndOverlay] = useState(false);
   const [uiVisible, setUiVisible] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
@@ -183,10 +185,22 @@ export function ComicReader({ book, memberId, onClose, onOpenBook }: Props) {
 
   const goNext = useCallback(() => {
     const step = prefs.viewMode === 'double' ? 2 : 1;
-    goTo(pageIndexRef.current + step);
-  }, [goTo, prefs.viewMode]);
+    const list = pagesRef.current;
+    const cur = pageIndexRef.current;
+    if (list.length && cur + step >= list.length) {
+      // Past the last page → end-of-issue overlay (series continuity)
+      setShowEndOverlay(true);
+      // Snap to last page and mark progress complete
+      if (cur < list.length - 1) goTo(list.length - 1);
+      else void flushProgress(list.length - 1, list);
+      bumpUi();
+      return;
+    }
+    goTo(cur + step);
+  }, [goTo, prefs.viewMode, flushProgress, bumpUi]);
 
   const goPrev = useCallback(() => {
+    setShowEndOverlay(false);
     const step = prefs.viewMode === 'double' ? 2 : 1;
     goTo(pageIndexRef.current - step);
   }, [goTo, prefs.viewMode]);
@@ -210,6 +224,7 @@ export function ComicReader({ book, memberId, onClose, onOpenBook }: Props) {
     setSettingsOpen(false);
     setInfoOpen(false);
     pageIndexRef.current = 0;
+    setShowEndOverlay(false);
     setPageIndex(0);
 
     void (async () => {
@@ -275,6 +290,22 @@ export function ComicReader({ book, memberId, onClose, onOpenBook }: Props) {
       img.src = komgaPageImageUrl(book.id, num, memberId);
     }
   }, [pageIndex, pages, book.id, memberId, prefs.viewMode]);
+
+  // Vertical (webtoon): show end overlay when scrolled near the bottom
+  useEffect(() => {
+    if (prefs.viewMode !== 'vertical') return;
+    const el = verticalRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      const remaining = el.scrollHeight - el.scrollTop - el.clientHeight;
+      if (remaining < 120 && pagesRef.current.length > 0) {
+        setShowEndOverlay(true);
+        void flushProgress(pagesRef.current.length - 1, pagesRef.current);
+      }
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, [prefs.viewMode, flushProgress, pages.length, book.id]);
 
   // Keyboard
   useEffect(() => {
@@ -748,41 +779,122 @@ export function ComicReader({ book, memberId, onClose, onOpenBook }: Props) {
             e.stopPropagation();
             goNext();
           }}
-          disabled={pageIndex >= total - 1}
-          className="p-2 rounded-xl hover:bg-white/10 disabled:opacity-30"
-          aria-label="Next page"
+          className="p-2 rounded-xl hover:bg-white/10"
+          aria-label={pageIndex >= total - 1 ? 'Finished — up next' : 'Next page'}
         >
           <ChevronRight className="w-6 h-6" />
         </button>
       </div>
 
-      {/* End of book */}
-      {atEnd && !loading && !error && prefs.viewMode !== 'vertical' && (
-        <div className="absolute bottom-16 inset-x-0 z-30 flex justify-center px-4 pointer-events-none">
-          <div className="pointer-events-auto rounded-2xl bg-black/90 border border-white/15 px-5 py-4 text-center space-y-3 max-w-sm shadow-2xl">
-            <div className="flex justify-center text-emerald-400">
-              <BookOpen className="w-6 h-6" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold">Finished</p>
-              <p className="text-xs text-white/60 mt-0.5 line-clamp-2">{bookTitle(book)}</p>
-            </div>
+      {/* End of issue — Up next (series continuity) */}
+      {atEnd && !showEndOverlay && !loading && !error && prefs.viewMode !== 'vertical' && (
+        <div className="absolute bottom-20 inset-x-0 z-30 flex justify-center px-4 pointer-events-none">
+          <button
+            type="button"
+            className="pointer-events-auto rounded-full bg-black/85 border border-white/20 px-4 py-2 text-xs font-semibold text-white/90 shadow-lg hover:bg-black"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowEndOverlay(true);
+              void flushProgress(pageIndexRef.current, pagesRef.current);
+            }}
+          >
+            {nextChapter ? 'Finished · Up next' : 'Finished'}
+          </button>
+        </div>
+      )}
+
+      {showEndOverlay && !loading && !error && (
+        <div
+          className={cn(
+            'absolute inset-0 z-40 flex items-center justify-center p-4',
+            'bg-black/80 backdrop-blur-sm',
+            // Soft appearance when simply on last page; full commitment after next-past-end
+            showEndOverlay ? 'opacity-100' : 'opacity-100',
+          )}
+          role="dialog"
+          aria-label="End of issue"
+          onClick={(e) => {
+            // Click outside card → stay; don't close accidentally
+            e.stopPropagation();
+          }}
+        >
+          <div
+            className={cn(
+              'w-full max-w-md rounded-2xl border border-white/15 bg-zinc-950/95 shadow-2xl',
+              'overflow-hidden',
+            )}
+            onClick={(e) => e.stopPropagation()}
+          >
             {nextChapter ? (
+              <div className="flex gap-4 p-4 sm:p-5">
+                <img
+                  src={komgaBookThumbUrl(nextChapter.id, memberId)}
+                  alt=""
+                  className="w-[5.5rem] sm:w-[6.5rem] aspect-[2/3] object-cover rounded-xl border border-white/10 shadow-lg shrink-0"
+                />
+                <div className="min-w-0 flex-1 flex flex-col justify-center">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-amber-300/90">
+                    Up next
+                  </p>
+                  <p className="mt-1 text-lg sm:text-xl font-bold text-white leading-snug line-clamp-2">
+                    {nextChapter.seriesTitle || nextChapter.series?.name || bookTitle(nextChapter)}
+                  </p>
+                  <p className="mt-0.5 text-sm text-white/70 line-clamp-2">
+                    {nextChapter.number != null ? `#${nextChapter.number}` : ''}
+                    {nextChapter.number != null && (nextChapter.metadata?.title || nextChapter.name)
+                      ? ' · '
+                      : ''}
+                    {nextChapter.metadata?.title || nextChapter.name || ''}
+                  </p>
+                  <p className="mt-2 text-[11px] text-white/45 line-clamp-1">
+                    Finished · {bookTitle(book)}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="p-5 text-center space-y-2">
+                <div className="flex justify-center text-emerald-400">
+                  <BookOpen className="w-7 h-7" />
+                </div>
+                <p className="text-base font-bold text-white">Finished</p>
+                <p className="text-sm text-white/60 line-clamp-2">{bookTitle(book)}</p>
+                <p className="text-xs text-white/40">No next issue in this series</p>
+              </div>
+            )}
+
+            <div className="px-4 pb-4 sm:px-5 sm:pb-5 flex flex-col gap-2">
+              {nextChapter ? (
+                <Button
+                  className="w-full !font-bold"
+                  onClick={() => {
+                    void flushProgress(pageIndexRef.current, pagesRef.current).then(() => {
+                      setShowEndOverlay(false);
+                      onOpenBook(nextChapter);
+                    });
+                  }}
+                >
+                  <Play className="w-4 h-4 mr-1.5 fill-current" />
+                  Read next
+                </Button>
+              ) : null}
               <Button
-                size="sm"
-                className="w-full"
+                variant="secondary"
+                className="w-full !bg-white/10 !text-white !border-white/20 hover:!bg-white/15"
                 onClick={() => {
-                  void flushProgress(pageIndexRef.current, pagesRef.current).then(() =>
-                    onOpenBook(nextChapter),
-                  );
+                  setShowEndOverlay(false);
+                  handleClose();
                 }}
               >
-                Next: {bookTitle(nextChapter)}
+                Done
               </Button>
-            ) : null}
-            <Button size="sm" variant="secondary" className="w-full" onClick={handleClose}>
-              Back to library
-            </Button>
+              <button
+                type="button"
+                className="text-xs text-white/50 hover:text-white/80 py-1"
+                onClick={() => setShowEndOverlay(false)}
+              >
+                Back to last page
+              </button>
+            </div>
           </div>
         </div>
       )}
