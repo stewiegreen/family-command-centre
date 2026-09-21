@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import { MusicPlayerProvider } from './context/MusicPlayerContext';
 import { MiniMusicPlayer } from './components/music/MiniMusicPlayer';
+import { MusicPlayer } from './components/music/MusicPlayer';
 import { Layout } from './components/Layout';
 import { AuthScreen } from './components/AuthScreen';
 import { FamilySetupScreen } from './components/FamilySetupScreen';
@@ -112,6 +113,7 @@ function AppShell() {
         )}
         <QuickAddFab />
         <MiniMusicPlayer />
+        <MusicPlayer />
       </Layout>
     </KidPinGate>
   );

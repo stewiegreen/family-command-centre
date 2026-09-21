@@ -83,6 +83,12 @@ type MusicPlayerContextValue = MusicPlayerState & {
   setQueueOpen: (v: boolean) => void;
   stop: () => void;
   minimize: () => void;
+  /** Remove a track from the queue by index. */
+  removeFromQueue: (index: number) => void;
+  /** Underlying <audio> for visualizer (same instance as playback). */
+  getAudioElement: () => HTMLAudioElement | null;
+  /** Web Audio analyser (lazy); routes element → analyser → destination once. */
+  ensureAnalyser: () => AnalyserNode | null;
 };
 
 const MusicPlayerContext = createContext<MusicPlayerContextValue | null>(null);
@@ -113,6 +119,9 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
   stateRef.current = state;
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const mediaSourceWired = useRef(false);
   const mediaSourceId = useRef<string | undefined>(undefined);
   const playSessionId = useRef<string | undefined>(undefined);
   const startedRef = useRef(false);
@@ -475,6 +484,66 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
     setState((s) => ({ ...s, miniVisible: false, expanded: false, queueOpen: false }));
   }, []);
 
+  const removeFromQueue = useCallback(
+    (index: number) => {
+      const s = stateRef.current;
+      if (index < 0 || index >= s.queue.length) return;
+      const removedCurrent = index === s.queueIndex;
+      const queue = s.queue.filter((_, i) => i !== index);
+      if (!queue.length) {
+        stop();
+        return;
+      }
+      let queueIndex = s.queueIndex;
+      if (index < s.queueIndex) queueIndex -= 1;
+      else if (removedCurrent) {
+        queueIndex = Math.min(index, queue.length - 1);
+      }
+      const track = queue[queueIndex]!;
+      const durationSec =
+        typeof track.RunTimeTicks === 'number' ? track.RunTimeTicks / 10_000_000 : 0;
+      setState((prev) => ({
+        ...prev,
+        queue,
+        queueIndex,
+        currentTrack: track,
+        duration: removedCurrent ? durationSec : prev.duration,
+        position: removedCurrent ? 0 : prev.position,
+      }));
+      if (removedCurrent && s.embyUserId) {
+        void loadStream(track, s.embyUserId);
+      }
+    },
+    [loadStream, stop],
+  );
+
+  const getAudioElement = useCallback(() => audioRef.current, []);
+
+  const ensureAnalyser = useCallback(() => {
+    const el = audioRef.current;
+    if (!el || typeof window === 'undefined') return null;
+    try {
+      const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      if (!AC) return null;
+      if (!audioCtxRef.current) audioCtxRef.current = new AC();
+      const ctx = audioCtxRef.current;
+      if (ctx.state === 'suspended') void ctx.resume();
+      if (!mediaSourceWired.current) {
+        const source = ctx.createMediaElementSource(el);
+        const analyser = ctx.createAnalyser();
+        analyser.fftSize = 256;
+        analyser.smoothingTimeConstant = 0.75;
+        source.connect(analyser);
+        analyser.connect(ctx.destination);
+        analyserRef.current = analyser;
+        mediaSourceWired.current = true;
+      }
+      return analyserRef.current;
+    } catch {
+      return analyserRef.current;
+    }
+  }, []);
+
   // Sync play/pause + volume to element
   useEffect(() => {
     const el = audioRef.current;
@@ -618,6 +687,9 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
       setQueueOpen,
       stop,
       minimize,
+      removeFromQueue,
+      getAudioElement,
+      ensureAnalyser,
     }),
     [
       state,
@@ -639,6 +711,9 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
       setQueueOpen,
       stop,
       minimize,
+      removeFromQueue,
+      getAudioElement,
+      ensureAnalyser,
     ],
   );
 

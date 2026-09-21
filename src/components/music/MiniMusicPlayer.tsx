@@ -12,7 +12,7 @@ import { MusicProgress } from './MusicProgress';
 export function MiniMusicPlayer() {
   const mp = useMusicPlayer();
 
-  if (!mp.currentTrack || !mp.miniVisible) return null;
+  if (!mp.currentTrack || !mp.miniVisible || mp.expanded) return null;
 
   const track = mp.currentTrack;
   const title = displayTitle(track);
@@ -125,7 +125,7 @@ export function MiniMusicPlayer() {
           {/* Queue stub (Step 4) */}
           <button
             type="button"
-            onClick={() => mp.setQueueOpen(!mp.queueOpen)}
+            onClick={() => { mp.setQueueOpen(true); mp.setExpanded(true); }}
             className="p-1.5 rounded-lg text-white/55 hover:text-white hover:bg-white/10 shrink-0"
             aria-label="Queue"
             title="Queue (coming next)"
