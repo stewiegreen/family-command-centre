@@ -29,6 +29,7 @@ import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
 import { Modal } from '../components/ui/Modal';
 import { VideoPlayer } from '../components/VideoPlayer';
+import { AlbumPlayer } from '../components/AlbumPlayer';
 import { useMusicPlayer } from '../context/MusicPlayerContext';
 import {
   displayTitle,
@@ -200,6 +201,13 @@ export function MediaPage() {
   const [focus, setFocus] = useState<EmbyItem | null>(null);
   const [focusLoading, setFocusLoading] = useState(false);
   const [watching, setWatching] = useState<EmbyItem | null>(null);
+  /** Album sheet UI only — audio lives in MusicPlayerContext. */
+  const [albumUi, setAlbumUi] = useState<{
+    album: EmbyItem;
+    tracks: EmbyItem[];
+    startIndex: number;
+    autoplay: boolean;
+  } | null>(null);
 
   const openAlbum = useCallback(
     async (album: EmbyItem, opts?: { startIndex?: number; autoplay?: boolean }) => {
@@ -221,13 +229,10 @@ export function MediaPage() {
           return;
         }
         // Global music session — keeps playing when leaving Media
-        music.playTracks({
-          tracks,
-          album: full,
-          startIndex: opts?.startIndex ?? 0,
-          autoplay: opts?.autoplay ?? true,
-          embyUserId,
-        });
+        const startIndex = opts?.startIndex ?? 0;
+        const autoplay = opts?.autoplay ?? true;
+        // UI sheet; AlbumPlayer hands tracks to MusicPlayerContext (single audio owner)
+        setAlbumUi({ album: full, tracks, startIndex, autoplay });
       } catch (e) {
         console.warn('openAlbum failed', e);
       }
@@ -269,13 +274,8 @@ export function MediaPage() {
               const tracks = sortMediaItems(items).filter(isAudioItem);
               const startIndex = Math.max(0, tracks.findIndex((x) => x.Id === item.Id));
               if (tracks.length) {
-                music.playTracks({
-                  tracks,
-                  album,
-                  startIndex: startIndex < 0 ? 0 : startIndex,
-                  autoplay: true,
-                  embyUserId,
-                });
+                const idx = startIndex < 0 ? 0 : startIndex;
+                setAlbumUi({ album, tracks, startIndex: idx, autoplay: true });
                 return;
               }
             } catch {
@@ -1058,7 +1058,18 @@ export function MediaPage() {
         </Button>
       </Card>
 
-            {watching && embyUserId && (
+                  {albumUi && embyUserId && (
+        <AlbumPlayer
+          album={albumUi.album}
+          tracks={albumUi.tracks}
+          userId={embyUserId}
+          startIndex={albumUi.startIndex}
+          autoplay={albumUi.autoplay}
+          onClose={() => setAlbumUi(null)}
+        />
+      )}
+
+      {watching && embyUserId && (
         <VideoPlayer
           item={watching}
           userId={embyUserId}

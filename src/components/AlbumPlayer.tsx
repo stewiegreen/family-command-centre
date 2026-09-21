@@ -1,7 +1,9 @@
 /**
- * Full-screen album player — art, track list, sequential play via Emby Audio proxy.
+ * Album browser UI — track list + art.
+ * All audio is owned by MusicPlayerContext (global <audio> + Emby streams).
+ * Closing this sheet does NOT stop playback; the mini player continues.
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import {
   ArrowLeft,
@@ -14,17 +16,12 @@ import {
 import {
   albumArtistLine,
   displayTitle,
-  embyAudioPlayAttempts,
-  embyPlaybackInfo,
   embyPosterUrl,
-  embyReportProgress,
-  embyReportStart,
-  embyReportStop,
   formatTicksDuration,
   isAudioItem,
-  secondsToTicks,
   type EmbyItem,
 } from '../lib/emby';
+import { useMusicPlayer } from '../context/MusicPlayerContext';
 import { Button } from './ui/Button';
 import { cn } from '../lib/cn';
 
@@ -32,7 +29,6 @@ type Props = {
   album: EmbyItem;
   tracks: EmbyItem[];
   userId: string;
-  /** Start playing this track index immediately (default: show UI, wait for Play). */
   startIndex?: number;
   autoplay?: boolean;
   onClose: () => void;
@@ -51,211 +47,70 @@ export function AlbumPlayer({
   autoplay = false,
   onClose,
 }: Props) {
-  const tracks = rawTracks.filter(isAudioItem);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const mediaSourceId = useRef<string | undefined>(undefined);
-  const playSessionId = useRef<string | undefined>(undefined);
-  const startedRef = useRef(false);
-  const progressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const attemptRef = useRef(0);
-  const attemptsRef = useRef<string[]>([]);
+  const music = useMusicPlayer();
+  const tracks = useMemo(() => rawTracks.filter(isAudioItem), [rawTracks]);
 
-  const [index, setIndex] = useState(() =>
-    Math.min(Math.max(0, startIndex), Math.max(0, tracks.length - 1)),
-  );
-  const [playing, setPlaying] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [current, setCurrent] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [src, setSrc] = useState<string | null>(null);
-
-  const track = tracks[index] || null;
   const art = embyPosterUrl(album, 600);
-  const artist = albumArtistLine(album) || (track ? albumArtistLine(track) : '');
+  const artist = albumArtistLine(album);
 
-  const clearProgressTimer = () => {
-    if (progressTimer.current) {
-      clearTimeout(progressTimer.current);
-      progressTimer.current = null;
-    }
-  };
+  // Hand session to global player once on open (no local <audio>)
+  useEffect(() => {
+    if (!tracks.length || !userId) return;
+    const idx = Math.min(Math.max(0, startIndex), tracks.length - 1);
+    const sameAlbum =
+      music.album?.Id === album.Id &&
+      music.queue.length === tracks.length &&
+      tracks[0] &&
+      music.queue[0]?.Id === tracks[0].Id;
 
-  const reportStop = useCallback(
-    async (itemId: string, ticks: number) => {
-      try {
-        await embyReportStop({
-          itemId,
-          mediaSourceId: mediaSourceId.current,
-          playSessionId: playSessionId.current,
-          positionTicks: ticks,
-        });
-      } catch {
-        /* ignore */
-      }
-    },
-    [],
-  );
-
-  const loadTrack = useCallback(
-    async (item: EmbyItem) => {
-      setLoading(true);
-      setError(null);
-      setSrc(null);
-      setCurrent(0);
-      setDuration(0);
-      startedRef.current = false;
-      mediaSourceId.current = undefined;
-      playSessionId.current = undefined;
-      attemptRef.current = 0;
-      try {
-        // PlaybackInfo is nice-to-have (session ids); do not block play if it fails
-        try {
-          const info = await embyPlaybackInfo(userId, item.Id);
-          const ms = info.MediaSources?.[0];
-          mediaSourceId.current = ms?.Id;
-          playSessionId.current = info.PlaySessionId || ms?.Id;
-        } catch {
-          /* continue without session ids */
-        }
-        const attempts = embyAudioPlayAttempts({
-          itemId: item.Id,
-          userId,
-          mediaSourceId: mediaSourceId.current,
-          playSessionId: playSessionId.current,
-        });
-        attemptsRef.current = attempts;
-        setSrc(attempts[0] || null);
-        setLoading(false);
-      } catch (e) {
-        setLoading(false);
-        setError(e instanceof Error ? e.message : 'Could not load track');
-        setPlaying(false);
-      }
-    },
-    [userId],
-  );
-
-  const tryNextAttempt = useCallback(() => {
-    const next = attemptRef.current + 1;
-    const list = attemptsRef.current;
-    if (next >= list.length) {
-      setError('Could not play this track in the browser (tried MP3 transcode + direct). FLAC needs Emby transcoding enabled.');
-      setPlaying(false);
-      setLoading(false);
+    if (sameAlbum) {
+      // Already playing this album — jump to requested track if needed, don't rebuild session
+      if (autoplay && idx !== music.queueIndex) music.playTrackAt(idx);
       return;
     }
-    attemptRef.current = next;
-    setError(null);
-    setLoading(true);
-    setSrc(list[next] || null);
-  }, []);
 
-  // Load when track index changes
-  useEffect(() => {
-    const item = tracks[index];
-    if (!item) return;
-    void loadTrack(item);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [index]);
+    music.playTracks({
+      tracks,
+      album,
+      startIndex: idx,
+      autoplay: autoplay !== false,
+      embyUserId: userId,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per album open
+  }, [album.Id, userId]);
 
-  // Autoplay on first open if requested
-  useEffect(() => {
-    if (autoplay) setPlaying(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    const el = audioRef.current;
-    if (!el || !src) return;
-    el.src = src;
-    el.load();
-    setLoading(false);
-    if (playing) {
-      void el.play().catch(() => {
-        // NotDecoded / NotSupported → next stream strategy
-        tryNextAttempt();
-      });
-    }
-  }, [src, playing, tryNextAttempt]);
-
-  useEffect(() => {
-    const el = audioRef.current;
-    if (!el) return;
-    if (playing && src) {
-      void el.play().catch(() => tryNextAttempt());
-    } else if (!playing) {
-      el.pause();
-    }
-  }, [playing, src, tryNextAttempt]);
-
-  const onTimeUpdate = () => {
-    const el = audioRef.current;
-    if (!el || !track) return;
-    setCurrent(el.currentTime);
-    if (!startedRef.current && el.currentTime > 0.2) {
-      startedRef.current = true;
-      void embyReportStart({
-        itemId: track.Id,
-        mediaSourceId: mediaSourceId.current,
-        playSessionId: playSessionId.current,
-        positionTicks: secondsToTicks(el.currentTime),
-      });
-    }
-    clearProgressTimer();
-    progressTimer.current = setTimeout(() => {
-      if (!track) return;
-      void embyReportProgress({
-        itemId: track.Id,
-        mediaSourceId: mediaSourceId.current,
-        playSessionId: playSessionId.current,
-        positionTicks: secondsToTicks(el.currentTime),
-        isPaused: el.paused,
-      });
-    }, 800);
-  };
-
-  const onEnded = () => {
-    const item = tracks[index];
-    if (item) {
-      void reportStop(item.Id, secondsToTicks(audioRef.current?.currentTime || 0));
-    }
-    if (index < tracks.length - 1) {
-      setIndex((i) => i + 1);
-      setPlaying(true);
-    } else {
-      setPlaying(false);
-    }
-  };
-
-  const close = async () => {
-    const el = audioRef.current;
-    const item = tracks[index];
-    if (item && el) {
-      await reportStop(item.Id, secondsToTicks(el.currentTime));
-    }
-    onClose();
-  };
+  const activeId = music.currentTrack?.Id;
+  const playingHere =
+    music.isPlaying &&
+    Boolean(activeId && tracks.some((t) => t.Id === activeId));
 
   const playFrom = (i: number) => {
-    if (i === index) {
-      setPlaying(true);
-      return;
+    if (!tracks.length || !userId) return;
+    // Ensure queue is this album, then jump
+    if (music.album?.Id !== album.Id || music.queue.length !== tracks.length) {
+      music.playTracks({
+        tracks,
+        album,
+        startIndex: i,
+        autoplay: true,
+        embyUserId: userId,
+      });
+    } else {
+      music.playTrackAt(i);
     }
-    setPlaying(true);
-    setIndex(i);
   };
 
   const body = (
     <div className="fixed inset-0 z-[80] bg-[var(--app-page,#0a0a12)] text-fg flex flex-col">
       <div className="flex items-center gap-3 px-4 py-3 border-b border-border shrink-0">
-        <Button type="button" variant="ghost" size="sm" onClick={() => void close()} aria-label="Close">
+        <Button type="button" variant="ghost" size="sm" onClick={onClose} aria-label="Close">
           <ArrowLeft className="w-5 h-5" />
         </Button>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-bold truncate">{displayTitle(album)}</p>
           {artist ? <p className="text-xs text-muted truncate">{artist}</p> : null}
         </div>
+        {music.loading ? <Loader2 className="w-4 h-4 animate-spin text-muted shrink-0" /> : null}
       </div>
 
       <div className="flex-1 overflow-y-auto">
@@ -268,63 +123,92 @@ export function AlbumPlayer({
             <h1 className="text-xl font-bold tracking-tight">{displayTitle(album)}</h1>
             {artist ? <p className="text-sm text-muted">{artist}</p> : null}
             <p className="text-xs text-muted">{tracks.length} tracks</p>
+            {music.error ? (
+              <p className="text-xs text-red-400 mt-2 px-2">{music.error}</p>
+            ) : null}
           </div>
 
           <div className="flex justify-center gap-3">
             <Button
               type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => music.previous()}
+              aria-label="Previous"
+            >
+              <SkipBack className="w-4 h-4" />
+            </Button>
+            <Button
+              type="button"
               onClick={() => {
-                if (playing) setPlaying(false);
-                else {
-                  if (!src) void loadTrack(tracks[index]!);
-                  setPlaying(true);
+                if (!tracks.length) return;
+                if (!music.currentTrack || music.album?.Id !== album.Id) {
+                  music.playTracks({
+                    tracks,
+                    album,
+                    startIndex: 0,
+                    autoplay: true,
+                    embyUserId: userId,
+                  });
+                } else {
+                  music.togglePlayPause();
                 }
               }}
-              className="min-w-[10rem]"
+              aria-label={playingHere ? 'Pause' : 'Play'}
             >
-              {playing ? (
-                <>
-                  <Pause className="w-4 h-4 mr-2" /> Pause
-                </>
+              {playingHere ? (
+                <Pause className="w-5 h-5 fill-current" />
               ) : (
-                <>
-                  <Play className="w-4 h-4 mr-2 fill-current" /> Play album
-                </>
+                <Play className="w-5 h-5 fill-current" />
               )}
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => music.next()}
+              aria-label="Next"
+            >
+              <SkipForward className="w-4 h-4" />
             </Button>
           </div>
 
-          {error ? (
-            <p className="text-sm text-red-400 text-center">{error}</p>
-          ) : null}
-
-          <ul className="rounded-2xl border border-border divide-y divide-border overflow-hidden bg-elevated">
+          <ul className="space-y-0.5 rounded-2xl border border-border overflow-hidden bg-surface-1">
             {tracks.map((t, i) => {
-              const active = i === index;
+              const isActive = activeId === t.Id;
               return (
                 <li key={t.Id}>
                   <button
                     type="button"
                     onClick={() => playFrom(i)}
                     className={cn(
-                      'w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-accent/10 transition-colors',
-                      active && 'bg-accent/15',
+                      'w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors',
+                      isActive
+                        ? 'bg-accent/15 text-fg'
+                        : 'hover:bg-nav-hover text-fg',
                     )}
                   >
                     <span
                       className={cn(
                         'w-7 text-center text-xs tabular-nums shrink-0',
-                        active ? 'text-accent font-bold' : 'text-muted',
+                        isActive ? 'text-accent font-bold' : 'text-muted',
                       )}
                     >
-                      {active && playing ? (
-                        <span className="inline-block w-2 h-2 rounded-full bg-accent animate-pulse" />
+                      {isActive && playingHere ? (
+                        <span className="inline-block w-3 h-3 rounded-sm bg-accent animate-pulse" />
                       ) : (
                         trackLabel(t, i)
                       )}
                     </span>
-                    <span className={cn('flex-1 min-w-0 text-sm truncate', active && 'font-semibold text-accent')}>
-                      {t.Name || `Track ${i + 1}`}
+                    <span className="min-w-0 flex-1">
+                      <span className={cn('block text-sm truncate', isActive && 'font-semibold')}>
+                        {displayTitle(t)}
+                      </span>
+                      {albumArtistLine(t) && albumArtistLine(t) !== artist ? (
+                        <span className="block text-[11px] text-muted truncate">
+                          {albumArtistLine(t)}
+                        </span>
+                      ) : null}
                     </span>
                     <span className="text-[11px] text-muted tabular-nums shrink-0">
                       {formatTicksDuration(t.RunTimeTicks)}
@@ -336,91 +220,9 @@ export function AlbumPlayer({
           </ul>
         </div>
       </div>
-
-      {/* Now playing bar */}
-      <div className="shrink-0 border-t border-border bg-elevated/95 backdrop-blur px-4 py-3">
-        <div className="max-w-lg mx-auto flex items-center gap-3">
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold truncate">
-              {track?.Name || '—'}
-            </p>
-            <p className="text-[11px] text-muted tabular-nums">
-              {formatTicksDuration(secondsToTicks(current))}
-              {' / '}
-              {formatTicksDuration(track?.RunTimeTicks || secondsToTicks(duration))}
-            </p>
-          </div>
-          {loading ? <Loader2 className="w-5 h-5 animate-spin text-muted" /> : null}
-          <button
-            type="button"
-            className="p-2 rounded-full hover:bg-accent/15 text-fg disabled:opacity-30"
-            disabled={index <= 0}
-            onClick={() => {
-              setIndex((i) => Math.max(0, i - 1));
-              setPlaying(true);
-            }}
-            aria-label="Previous"
-          >
-            <SkipBack className="w-5 h-5" />
-          </button>
-          <button
-            type="button"
-            className="p-2.5 rounded-full bg-accent text-white hover:opacity-90"
-            onClick={() => setPlaying((p) => !p)}
-            aria-label={playing ? 'Pause' : 'Play'}
-          >
-            {playing ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 fill-current" />}
-          </button>
-          <button
-            type="button"
-            className="p-2 rounded-full hover:bg-accent/15 text-fg disabled:opacity-30"
-            disabled={index >= tracks.length - 1}
-            onClick={() => {
-              setIndex((i) => Math.min(tracks.length - 1, i + 1));
-              setPlaying(true);
-            }}
-            aria-label="Next"
-          >
-            <SkipForward className="w-5 h-5" />
-          </button>
-        </div>
-        <div className="max-w-lg mx-auto mt-2 h-1 rounded-full bg-surface-2 overflow-hidden">
-          <div
-            className="h-full bg-accent rounded-full transition-[width]"
-            style={{
-              width: `${duration > 0 ? Math.min(100, (current / duration) * 100) : 0}%`,
-            }}
-          />
-        </div>
-      </div>
-
-      <audio
-        ref={audioRef}
-        onTimeUpdate={onTimeUpdate}
-        onLoadedMetadata={() => {
-          const el = audioRef.current;
-          if (el) {
-            setDuration(el.duration || 0);
-            setLoading(false);
-          }
-        }}
-        onEnded={onEnded}
-        onPlay={() => {
-          setPlaying(true);
-          setLoading(false);
-          setError(null);
-        }}
-        onPause={() => setPlaying(false)}
-        onError={() => {
-          // MEDIA_ERR_* — FLAC static streams land here; advance strategy
-          tryNextAttempt();
-        }}
-        playsInline
-        preload="auto"
-      />
     </div>
   );
 
-  if (typeof document === 'undefined') return null;
+  if (typeof document === 'undefined') return body;
   return createPortal(body, document.body);
 }
