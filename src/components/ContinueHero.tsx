@@ -2,6 +2,7 @@
  * Featured "Continue Watching" hero — primary resume target for Media Home.
  * Backdrop + logo + progress + one-tap Play; rest of the queue stays in a rail.
  */
+import { useEffect, useState } from 'react';
 import { Info, Play } from 'lucide-react';
 import { Button } from './ui/Button';
 import {
@@ -61,6 +62,12 @@ export function ContinueHero({
   const sub = episodeLine(item);
   const actionLabel =
     pct > 0 && pct < 100 ? 'Resume' : item.Type === 'Episode' ? 'Play episode' : 'Play';
+  const [logoFailed, setLogoFailed] = useState(false);
+  const showLogo = Boolean(logo) && !logoFailed;
+
+  useEffect(() => {
+    setLogoFailed(false);
+  }, [item.Id, logo]);
 
   return (
     <div
@@ -117,19 +124,18 @@ export function ContinueHero({
             Continue watching
           </p>
 
-          {logo ? (
+          {showLogo ? (
             <img
-              src={logo}
-              alt=""
+              src={logo!}
+              alt={seriesOrTitle}
               className="max-h-12 sm:max-h-14 md:max-h-16 max-w-[min(100%,18rem)] w-auto object-contain object-left drop-shadow-md mb-1.5"
-              onError={(e) => {
-                (e.currentTarget as HTMLImageElement).style.display = 'none';
-              }}
+              onError={() => setLogoFailed(true)}
             />
-          ) : null}
-          <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-white tracking-tight leading-tight line-clamp-2 drop-shadow">
-            {seriesOrTitle}
-          </h2>
+          ) : (
+            <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-white tracking-tight leading-tight line-clamp-2 drop-shadow">
+              {seriesOrTitle}
+            </h2>
+          )}
 
           {sub ? (
             <p className="mt-1 text-sm sm:text-base text-white/85 line-clamp-1">{sub}</p>
