@@ -1,10 +1,10 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 /**
  * GreenHQ media card — visual language matched to Comics CoverFrame / BookCard.
  * Artwork is primary; captions stay short; no Emby chrome.
  * Music albums are always square; episodes / Continue Watching are landscape.
  */
-import { Check, Film, Play } from 'lucide-react';
+import { Check, Film, Info, Play } from 'lucide-react';
 import {
   displayTitle,
   embyBestLogoUrl,
@@ -13,6 +13,8 @@ import {
   embyThumbUrl,
   playedPercent,
   remainingLabel,
+  runtimeLabel,
+  embyItem,
   type EmbyItem,
 } from '../lib/emby';
 import { cn } from '../lib/cn';
@@ -22,14 +24,19 @@ export type MediaCardVariant = 'poster' | 'continue';
 type Props = {
   item: EmbyItem;
   onOpen: () => void;
-  /** Desktop hover (~280ms) or touch long-press → in-rail preview (optional). */
-  onPreviewIntent?: () => void;
+  /** When set, hover/long-press expands the card in-rail with Play. */
+  onPlay?: () => void;
   variant?: MediaCardVariant;
-  /** Force square art (music libraries / folders that Emby types as Folder). */
   square?: boolean;
-  /** scroll = fixed card width (home rows); grid = fill cell (library pages, 6 across). */
   layout?: 'scroll' | 'grid';
   className?: string;
+  /**
+   * Enable Netflix-style expand-to-the-right preview (default true when onPlay is set).
+   * Collapses automatically when the pointer leaves the expanded card.
+   */
+  expandable?: boolean;
+  /** Emby user id — used to prefetch Overview when the card expands. */
+  embyUserId?: string;
 };
 
 const COVER_POSTER = 'w-[9.5rem] sm:w-[10.75rem]';
@@ -124,11 +131,13 @@ function CoverFrame({
   shape,
   footer,
   badge,
+  className,
 }: {
   src: string;
   shape: 'poster' | 'landscape' | 'square';
-  footer?: React.ReactNode;
-  badge?: React.ReactNode;
+  footer?: ReactNode;
+  badge?: ReactNode;
+  className?: string;
 }) {
   return (
     <div
@@ -138,6 +147,7 @@ function CoverFrame({
         shape === 'landscape' && 'aspect-video',
         shape === 'square' && 'aspect-square',
         shape === 'poster' && 'aspect-[2/3]',
+        className,
       )}
       style={{ boxShadow: 'var(--app-shadow-card)' }}
     >
@@ -164,18 +174,25 @@ function CoverFrame({
   );
 }
 
+
 export function MediaCard({
   item,
   onOpen,
-  onPreviewIntent,
+  onPlay,
   variant = 'poster',
   square: forceSquare,
   layout = 'scroll',
   className,
+  expandable: expandableProp,
+  embyUserId,
 }: Props) {
+  const expandable = expandableProp ?? Boolean(onPlay);
+  const [expanded, setExpanded] = useState(false);
+  const [full, setFull] = useState<EmbyItem | null>(null);
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressFired = useRef(false);
+  const rootRef = useRef<HTMLDivElement>(null);
 
   const clearHover = useCallback(() => {
     if (hoverTimer.current) {
@@ -191,28 +208,35 @@ export function MediaCard({
     }
   }, []);
 
-  const startHoverPreview = () => {
-    if (!onPreviewIntent) return;
-    // Only use hover on devices that support fine pointer (skip sticky touch)
-    if (typeof window !== 'undefined' && window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
-      clearHover();
-      hoverTimer.current = setTimeout(() => {
-        onPreviewIntent();
-      }, 280);
-    }
-  };
+  const collapse = useCallback(() => {
+    clearHover();
+    setExpanded(false);
+  }, [clearHover]);
 
-  const startLongPress = () => {
-    if (!onPreviewIntent) return;
-    longPressFired.current = false;
-    clearLongPress();
-    longPressTimer.current = setTimeout(() => {
-      longPressFired.current = true;
-      onPreviewIntent();
-    }, 420);
-  };
+  const expand = useCallback(() => {
+    setExpanded(true);
+  }, []);
+
+  // Prefetch full item (overview) when expanded
+  useEffect(() => {
+    if (!expanded) {
+      setFull(null);
+      return;
+    }
+    setFull(item);
+    if (!embyUserId || item.Overview) return;
+    let cancelled = false;
+    void embyItem(embyUserId, item.Id)
+      .then((detail) => {
+        if (!cancelled) setFull(detail);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [expanded, item, embyUserId]);
+
   const pct = playedPercent(item);
-  // Episodes only — never poster/square, even inside a poster grid or music-style square force
   const isEpisode =
     item.Type === 'Episode' ||
     (item.Type !== 'Series' &&
@@ -233,112 +257,266 @@ export function MediaCard({
         : 'poster';
   const title = primaryTitle(item, landscape);
   const sub = secondaryLine(item, landscape);
-  const left = landscape ? remainingLabel(item) : null;
+  const left = remainingLabel(item);
+  const runtime = runtimeLabel(full || item);
+  const overview = ((full || item).Overview || '').trim();
   const img = isEpisode
     ? embyEpisodeArtUrl(item, 720)
     : landscape
       ? embyThumbUrl(item, 720)
       : embyPosterUrl(item, 400);
-  // TV shows: prefer Emby Logo in the title slot under the poster
   const seriesLogo =
     !landscape && (item.Type === 'Series' || item.Type === 'Season')
       ? embyBestLogoUrl(item, 64)
       : null;
 
+  const canFineHover =
+    typeof window !== 'undefined' &&
+    window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+
+  const startHoverExpand = () => {
+    if (!expandable || !canFineHover) return;
+    clearHover();
+    hoverTimer.current = setTimeout(() => expand(), 700);
+  };
+
+  const startLongPress = () => {
+    if (!expandable) return;
+    longPressFired.current = false;
+    clearLongPress();
+    longPressTimer.current = setTimeout(() => {
+      longPressFired.current = true;
+      expand();
+    }, 500);
+  };
+
+  // Touch: collapse when tapping outside
+  useEffect(() => {
+    if (!expanded) return;
+    const onDoc = (e: PointerEvent) => {
+      if (!rootRef.current) return;
+      if (!rootRef.current.contains(e.target as Node)) collapse();
+    };
+    document.addEventListener('pointerdown', onDoc);
+    return () => document.removeEventListener('pointerdown', onDoc);
+  }, [expanded, collapse]);
+
+  const coverW =
+    shape === 'landscape' ? COVER_LANDSCAPE : shape === 'square' ? COVER_SQUARE : COVER_POSTER;
+
   return (
-    <button
-      type="button"
-      onClick={() => {
-        if (longPressFired.current) {
-          longPressFired.current = false;
-          return;
-        }
-        onOpen();
-      }}
-      onPointerEnter={startHoverPreview}
+    <div
+      ref={rootRef}
+      onPointerEnter={startHoverExpand}
       onPointerLeave={() => {
         clearHover();
         clearLongPress();
+        if (canFineHover) collapse();
       }}
       onPointerDown={(e) => {
         if (e.pointerType === 'touch' || e.pointerType === 'pen') startLongPress();
       }}
       onPointerUp={clearLongPress}
       onPointerCancel={clearLongPress}
-      onContextMenu={(e) => {
-        if (onPreviewIntent) {
-          e.preventDefault();
-          onPreviewIntent();
-        }
-      }}
-      aria-label={displayTitle(item)}
       className={cn(
-        'text-left group',
+        'relative text-left group transition-[width,box-shadow] duration-300 ease-out',
         layout === 'grid' ? 'w-full min-w-0' : 'shrink-0',
-        layout === 'scroll' &&
+        layout === 'scroll' && !expanded && coverW,
+        expanded && layout === 'scroll' && 'z-20',
+        expanded &&
           (shape === 'landscape'
-            ? COVER_LANDSCAPE
-            : shape === 'square'
-              ? COVER_SQUARE
-              : COVER_POSTER),
+            ? 'w-[min(100%,28rem)] sm:w-[32rem]'
+            : 'w-[min(100%,22rem)] sm:w-[26rem]'),
+        expanded &&
+          'rounded-2xl bg-surface-1 border border-border shadow-xl shadow-black/25 ring-1 ring-black/5',
         className,
       )}
     >
-      <CoverFrame
-        src={img}
-        shape={shape}
-        footer={
-          landscape && pct > 0 && pct < 100 ? (
-            <div className="absolute inset-x-0 bottom-0 p-2.5 bg-gradient-to-t from-black/80 to-transparent space-y-1">
-              <ProgressBar pct={pct} />
-              {left ? (
-                <p className="text-[10px] font-semibold text-white/90 tabular-nums">{left}</p>
-              ) : null}
-            </div>
-          ) : !landscape && pct > 0 && pct < 100 ? (
-            <div className="absolute inset-x-0 bottom-0 p-2 bg-gradient-to-t from-black/70 to-transparent">
-              <ProgressBar pct={pct} />
-            </div>
-          ) : undefined
-        }
-        badge={
-          item.UserData?.Played && !landscape ? (
-            <div className="absolute top-2 right-2 rounded-full bg-emerald-500 text-white p-1 shadow">
-              <Check className="w-3.5 h-3.5" />
-            </div>
-          ) : undefined
-        }
-      />
-      {seriesLogo ? (
-        <div className="mt-2 h-9 flex items-center">
-          <img
-            src={seriesLogo}
-            alt={title}
-            className="max-h-9 max-w-full w-auto object-contain object-left drop-shadow-sm"
-            loading="lazy"
-            onError={(e) => {
-              (e.currentTarget as HTMLImageElement).style.display = 'none';
-              const fallback = e.currentTarget.parentElement?.querySelector('[data-title-fallback]');
-              if (fallback instanceof HTMLElement) fallback.style.display = 'block';
-            }}
+      <div
+        className={cn(
+          'flex items-stretch',
+          expanded ? 'flex-row gap-0' : 'flex-col',
+        )}
+      >
+        {/* Art — click opens detail unless long-press just fired */}
+        <button
+          type="button"
+          onClick={() => {
+            if (longPressFired.current) {
+              longPressFired.current = false;
+              return;
+            }
+            if (expanded) {
+              // clicking art while expanded still opens detail
+              onOpen();
+              return;
+            }
+            onOpen();
+          }}
+          aria-label={displayTitle(item)}
+          className={cn(
+            'text-left shrink-0',
+            expanded
+              ? shape === 'landscape'
+                ? 'w-[11rem] sm:w-[13rem]'
+                : 'w-[7.5rem] sm:w-[8.5rem]'
+              : layout === 'grid'
+                ? 'w-full'
+                : 'w-full',
+          )}
+        >
+          <CoverFrame
+            src={img}
+            shape={expanded && shape === 'poster' ? 'poster' : shape}
+            className={expanded ? '!rounded-l-2xl !rounded-r-none' : undefined}
+            footer={
+              !expanded && landscape && pct > 0 && pct < 100 ? (
+                <div className="absolute inset-x-0 bottom-0 p-2.5 bg-gradient-to-t from-black/80 to-transparent space-y-1">
+                  <ProgressBar pct={pct} />
+                  {left ? (
+                    <p className="text-[10px] font-semibold text-white/90 tabular-nums">{left}</p>
+                  ) : null}
+                </div>
+              ) : !expanded && !landscape && pct > 0 && pct < 100 ? (
+                <div className="absolute inset-x-0 bottom-0 p-2 bg-gradient-to-t from-black/70 to-transparent">
+                  <ProgressBar pct={pct} />
+                </div>
+              ) : undefined
+            }
+            badge={
+              !expanded && item.UserData?.Played && !landscape ? (
+                <div className="absolute top-2 right-2 rounded-full bg-emerald-500 text-white p-1 shadow">
+                  <Check className="w-3.5 h-3.5" />
+                </div>
+              ) : undefined
+            }
           />
-          <p
-            data-title-fallback
-            className="text-sm font-semibold text-fg line-clamp-2 leading-snug"
-            style={{ display: 'none' }}
-          >
-            {title}
-          </p>
+          {!expanded && (
+            <>
+              {seriesLogo ? (
+                <div className="mt-2 h-9 flex items-center">
+                  <img
+                    src={seriesLogo}
+                    alt={title}
+                    className="max-h-9 max-w-full w-auto object-contain object-left drop-shadow-sm"
+                    loading="lazy"
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).style.display = 'none';
+                      const fallback = e.currentTarget.parentElement?.querySelector(
+                        '[data-title-fallback]',
+                      );
+                      if (fallback instanceof HTMLElement) fallback.style.display = 'block';
+                    }}
+                  />
+                  <p
+                    data-title-fallback
+                    className="text-sm font-semibold text-fg line-clamp-2 leading-snug"
+                    style={{ display: 'none' }}
+                  >
+                    {title}
+                  </p>
+                </div>
+              ) : (
+                <p className="mt-2 text-sm font-semibold text-fg line-clamp-2 leading-snug">{title}</p>
+              )}
+              <div className="mt-0.5 flex items-center justify-between gap-1">
+                {sub ? <p className="text-[11px] text-muted line-clamp-1 min-w-0">{sub}</p> : <span />}
+                {landscape && pct > 0 && pct < 100 ? (
+                  <span className="text-[11px] font-semibold text-accent shrink-0">CONTINUE</span>
+                ) : null}
+              </div>
+            </>
+          )}
+        </button>
+
+        {/* Expanded detail panel — grows to the right */}
+        <div
+          className={cn(
+            'overflow-hidden transition-[max-width,opacity,padding] duration-300 ease-out',
+            expanded ? 'max-w-[18rem] opacity-100 flex-1' : 'max-w-0 opacity-0',
+          )}
+        >
+          {expanded && (
+            <div className="h-full min-h-[8.5rem] flex flex-col justify-between p-3 sm:p-3.5 pr-3.5">
+              <div className="min-w-0 space-y-1.5">
+                <p className="text-sm sm:text-base font-bold text-fg leading-snug line-clamp-2">
+                  {displayTitle(item)}
+                </p>
+                <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] text-muted">
+                  {item.ProductionYear ? <span>{item.ProductionYear}</span> : null}
+                  {runtime ? (
+                    <>
+                      {item.ProductionYear ? <span>·</span> : null}
+                      <span className="tabular-nums">{runtime}</span>
+                    </>
+                  ) : null}
+                  {left && pct > 0 && pct < 100 ? (
+                    <>
+                      <span>·</span>
+                      <span className="text-accent font-semibold tabular-nums">{left}</span>
+                    </>
+                  ) : null}
+                  {item.OfficialRating ? (
+                    <>
+                      <span>·</span>
+                      <span className="rounded border border-border px-1 py-px text-[10px] font-semibold">
+                        {item.OfficialRating}
+                      </span>
+                    </>
+                  ) : null}
+                  {item.CommunityRating != null && item.CommunityRating > 0 ? (
+                    <>
+                      <span>·</span>
+                      <span>★ {item.CommunityRating.toFixed(1)}</span>
+                    </>
+                  ) : null}
+                </div>
+                {pct > 0 && pct < 100 ? (
+                  <div className="pt-0.5">
+                    <ProgressBar pct={pct} className="!bg-inset" />
+                    <p className="mt-0.5 text-[10px] text-muted tabular-nums">{Math.round(pct)}% watched</p>
+                  </div>
+                ) : null}
+                {overview ? (
+                  <p className="text-[11px] sm:text-xs text-fg-secondary leading-relaxed line-clamp-4 pt-0.5">
+                    {overview}
+                  </p>
+                ) : (
+                  <p className="text-[11px] text-muted italic pt-0.5">No synopsis</p>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-1.5 pt-2">
+                {onPlay ? (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onPlay();
+                      collapse();
+                    }}
+                    className="inline-flex items-center gap-1 rounded-full bg-accent text-accent-ink px-3 py-1.5 text-xs font-bold hover:bg-accent-hover"
+                  >
+                    <Play className="w-3.5 h-3.5 fill-current" />
+                    {pct > 0 && pct < 100 ? 'Resume' : 'Play'}
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onOpen();
+                    collapse();
+                  }}
+                  className="inline-flex items-center gap-1 rounded-full border border-border bg-surface-2 px-3 py-1.5 text-xs font-semibold text-fg hover:bg-nav-hover"
+                >
+                  <Info className="w-3.5 h-3.5" />
+                  More
+                </button>
+              </div>
+            </div>
+          )}
         </div>
-      ) : (
-        <p className="mt-2 text-sm font-semibold text-fg line-clamp-2 leading-snug">{title}</p>
-      )}
-      <div className="mt-0.5 flex items-center justify-between gap-1">
-        {sub ? <p className="text-[11px] text-muted line-clamp-1 min-w-0">{sub}</p> : <span />}
-        {landscape && pct > 0 && pct < 100 ? (
-          <span className="text-[11px] font-semibold text-accent shrink-0">CONTINUE</span>
-        ) : null}
       </div>
-    </button>
+    </div>
   );
 }

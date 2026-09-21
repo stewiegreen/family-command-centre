@@ -59,7 +59,6 @@ import {
 } from '../lib/emby';
 import { MediaCard } from '../components/MediaCard';
 import { ContinueHero } from '../components/ContinueHero';
-import { MediaPreview } from '../components/MediaPreview';
 import { cn } from '../lib/cn';
 
 type Tab = 'home' | 'libraries' | 'search';
@@ -200,7 +199,6 @@ export function MediaPage() {
   const [focus, setFocus] = useState<EmbyItem | null>(null);
   const [focusLoading, setFocusLoading] = useState(false);
   const [watching, setWatching] = useState<EmbyItem | null>(null);
-  const [previewItem, setPreviewItem] = useState<EmbyItem | null>(null);
   const [albumSession, setAlbumSession] = useState<{
     album: EmbyItem;
     tracks: EmbyItem[];
@@ -773,7 +771,8 @@ export function MediaPage() {
                               item={item}
                               variant="continue"
                               onOpen={() => void openFocus(item)}
-                              onPreviewIntent={() => setPreviewItem(item)}
+                              onPlay={() => play(item)}
+                              embyUserId={embyUserId}
                             />
                           </div>
                         ))}
@@ -869,7 +868,8 @@ export function MediaPage() {
                   <Section key={view.Id} title={`Latest in ${view.Name}`} empty={false}>
                     <div className="flex gap-3.5 overflow-x-auto pb-2 -mx-1 px-1">
                       {items.map((item) => (
-                        <MediaCard key={item.Id} item={item} square={inMusicContext} onOpen={() => void openFocus(item)} onPreviewIntent={() => setPreviewItem(item)} />
+                        <MediaCard key={item.Id} item={item} square={inMusicContext} onOpen={() => void openFocus(item)} onPlay={() => play(item)}
+                              embyUserId={embyUserId} />
                       ))}
                     </div>
                   </Section>
@@ -981,7 +981,8 @@ export function MediaPage() {
                         square={inMusicContext && item.Type !== 'Episode'}
                         layout="grid"
                         onOpen={() => void openFocus(item)}
-                        onPreviewIntent={() => setPreviewItem(item)}
+                        onPlay={() => play(item)}
+                              embyUserId={embyUserId}
                       />
                     ))}
                   </div>
@@ -1030,7 +1031,8 @@ export function MediaPage() {
                 square={inMusicContext}
                 layout="grid"
                 onOpen={() => void openFocus(item)}
-                onPreviewIntent={() => setPreviewItem(item)}
+                onPlay={() => play(item)}
+                              embyUserId={embyUserId}
               />
             ))}
           </div>
@@ -1047,16 +1049,7 @@ export function MediaPage() {
         </Button>
       </Card>
 
-      <MediaPreview
-        item={previewItem}
-        userId={embyUserId}
-        open={!!previewItem}
-        onClose={() => setPreviewItem(null)}
-        onPlay={(it) => play(it)}
-        onMore={(it) => void openFocus(it)}
-      />
-
-      {watching && embyUserId && (
+            {watching && embyUserId && (
         <VideoPlayer
           item={watching}
           userId={embyUserId}
