@@ -8,7 +8,9 @@ import {
   displayTitle,
   embyBackdropUrl,
   embyBestLogoUrl,
+  embyEpisodeArtUrl,
   embyPosterUrl,
+  embyThumbUrl,
   playedPercent,
   remainingLabel,
   runtimeLabel,
@@ -41,7 +43,19 @@ export function ContinueHero({
   const runtime = runtimeLabel(item);
   const logo = embyBestLogoUrl(item, 160);
   const backdrop = embyBackdropUrl(item, 1280);
-  const poster = embyPosterUrl(item, 320);
+  /** TV episodes/series use landscape stills; movies use portrait posters. */
+  const isTv =
+    item.Type === 'Episode' ||
+    item.Type === 'Series' ||
+    item.Type === 'Season' ||
+    Boolean(item.SeriesName && item.Type !== 'Movie');
+  const primaryArt = isTv
+    ? item.Type === 'Episode'
+      ? embyEpisodeArtUrl(item, 720)
+      : embyThumbUrl(item, 720)
+    : embyPosterUrl(item, 400);
+  /** Poster fallback for backdrop onError (always a Primary). */
+  const posterFallback = embyPosterUrl(item, 400);
   const seriesOrTitle =
     item.Type === 'Episode' && item.SeriesName ? item.SeriesName : item.Name || 'Untitled';
   const sub = episodeLine(item);
@@ -68,24 +82,32 @@ export function ContinueHero({
             return;
           }
           el.dataset.fallback = '1';
-          el.src = poster;
+          el.src = posterFallback;
         }}
       />
       <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/65 to-black/25" />
       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/30" />
 
       <div className="relative z-10 flex flex-col sm:flex-row gap-4 sm:gap-6 p-4 sm:p-5 md:p-6 h-full min-h-[12.5rem] sm:min-h-[15.5rem]">
-        {/* Poster — desktop / large phones */}
+        {/* Primary art: landscape still for TV, portrait poster for movies */}
         <button
           type="button"
           onClick={onMore}
-          className="hidden xs:block sm:block shrink-0 w-[6.5rem] sm:w-[7.5rem] md:w-[8.5rem] self-end sm:self-center"
+          className={
+            isTv
+              ? 'hidden sm:block shrink-0 w-[11rem] md:w-[13.5rem] lg:w-[15rem] self-end sm:self-center'
+              : 'hidden sm:block shrink-0 w-[6.5rem] sm:w-[7.5rem] md:w-[8.5rem] self-end sm:self-center'
+          }
           aria-label={`Details for ${seriesOrTitle}`}
         >
           <img
-            src={poster}
+            src={primaryArt}
             alt=""
-            className="w-full aspect-[2/3] object-cover rounded-xl border border-white/15 shadow-lg shadow-black/40"
+            className={
+              isTv
+                ? 'w-full aspect-video object-cover rounded-xl border border-white/15 shadow-lg shadow-black/40'
+                : 'w-full aspect-[2/3] object-cover rounded-xl border border-white/15 shadow-lg shadow-black/40'
+            }
             loading="eager"
           />
         </button>
