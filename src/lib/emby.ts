@@ -177,27 +177,50 @@ export async function embyItems(
  * Client-side ordering safety net when Emby returns mixed order.
  * Prefers season → episode index, then track index, then numeric name.
  */
+function nameCompare(a: EmbyItem, b: EmbyItem): number {
+  const an = (a.Name || a.SeriesName || '').trim();
+  const bn = (b.Name || b.SeriesName || '').trim();
+  return an.localeCompare(bn, undefined, { numeric: true, sensitivity: 'base' });
+}
+
+/**
+ * Client-side ordering after Emby returns a page.
+ * - Episodes / seasons / album tracks → index order (then name)
+ * - Everything else (movies, series, artists, box sets, …) → alphabetical by name
+ *   so library roots stay A–Z instead of being reshuffled by year/index.
+ */
 export function sortMediaItems(items: EmbyItem[]): EmbyItem[] {
   return [...items].sort((a, b) => {
-    const ap = a.ParentIndexNumber;
-    const bp = b.ParentIndexNumber;
-    if (ap != null && bp != null && ap !== bp) return ap - bp;
+    const ta = (a.Type || '').toLowerCase();
+    const tb = (b.Type || '').toLowerCase();
 
-    const ai = a.IndexNumber;
-    const bi = b.IndexNumber;
-    if (ai != null && bi != null && ai !== bi) return ai - bi;
-    // Prefer items that have an index over those that don't
-    if (ai != null && bi == null) return -1;
-    if (ai == null && bi != null) return 1;
+    const aEpisodic =
+      ta === 'episode' ||
+      ta === 'season' ||
+      (ta === 'audio' && a.IndexNumber != null) ||
+      (a.ParentIndexNumber != null && a.IndexNumber != null && ta !== 'movie' && ta !== 'series');
+    const bEpisodic =
+      tb === 'episode' ||
+      tb === 'season' ||
+      (tb === 'audio' && b.IndexNumber != null) ||
+      (b.ParentIndexNumber != null && b.IndexNumber != null && tb !== 'movie' && tb !== 'series');
 
-    const ay = a.ProductionYear;
-    const by = b.ProductionYear;
-    if (ay != null && by != null && ay !== by) return ay - by;
+    if (aEpisodic && bEpisodic) {
+      const ap = a.ParentIndexNumber;
+      const bp = b.ParentIndexNumber;
+      if (ap != null && bp != null && ap !== bp) return ap - bp;
 
-    return (a.Name || '').localeCompare(b.Name || '', undefined, {
-      numeric: true,
-      sensitivity: 'base',
-    });
+      const ai = a.IndexNumber;
+      const bi = b.IndexNumber;
+      if (ai != null && bi != null && ai !== bi) return ai - bi;
+      if (ai != null && bi == null) return -1;
+      if (ai == null && bi != null) return 1;
+      return nameCompare(a, b);
+    }
+
+    // Prefer keeping episodic items in index groups only when both are episodic.
+    // Movies, Series, MusicArtist, BoxSet, folders at library root → A–Z.
+    return nameCompare(a, b);
   });
 }
 
@@ -209,18 +232,32 @@ export function embySortByForParent(opts: {
   const type = (opts.parentType || '').toLowerCase();
   const col = (opts.collectionType || '').toLowerCase();
 
-  // Inside a series → seasons; inside a season → episodes; albums → tracks
-  if (type === 'series' || type === 'season' || type === 'musicalbum' || type === 'folder') {
+  // Inside a series → seasons; inside a season → episodes; album → tracks
+  if (type === 'series' || type === 'season' || type === 'musicalbum') {
     return 'IndexNumber,SortName';
   }
+  // Box set: often watched in release order; still secondary by name
   if (type === 'boxset') return 'ProductionYear,SortName';
 
-  // Library roots
-  if (col === 'music' || col === 'musicvideos') return 'IndexNumber,SortName';
-  if (col === 'tvshows' || col === 'movies' || col === 'homevideos') return 'SortName';
+  // Generic folders under a library (genre packs, etc.) → alphabetical
+  if (type === 'folder' || type === 'collectionfolder') return 'SortName';
 
-  // Default: try index first (safe for episode-like folders), then name
-  return 'IndexNumber,SortName';
+  // Library roots — always A–Z by SortName (movies, TV, music artists, playlists, …)
+  if (
+    col === 'movies' ||
+    col === 'tvshows' ||
+    col === 'homevideos' ||
+    col === 'music' ||
+    col === 'musicvideos' ||
+    col === 'boxsets' ||
+    col === 'playlists' ||
+    col === 'folders'
+  ) {
+    return 'SortName';
+  }
+
+  // Unknown parent: alphabetical is safer than index (avoids scrambled movie grids)
+  return 'SortName';
 }
 
 export async function embyChildren(
