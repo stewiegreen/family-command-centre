@@ -36,11 +36,13 @@ export function ComicContinueHero({
   memberId,
   onResume,
   onMore,
+  onOpenSeries,
 }: {
   book: KomgaBook;
   memberId?: string;
   onResume: () => void;
   onMore: () => void;
+  onOpenSeries?: () => void;
 }) {
   const pct = bookProgressPercent(book);
   const series =
@@ -89,9 +91,19 @@ export function ComicContinueHero({
             Continue reading
           </p>
 
-          <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-fg tracking-tight leading-tight line-clamp-2">
-            {series}
-          </h2>
+          {onOpenSeries ? (
+            <button
+              type="button"
+              onClick={onOpenSeries}
+              className="text-left text-xl sm:text-2xl md:text-3xl font-bold text-fg tracking-tight leading-tight line-clamp-2 hover:underline hover:text-accent decoration-accent/40 underline-offset-2"
+            >
+              {series}
+            </button>
+          ) : (
+            <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-fg tracking-tight leading-tight line-clamp-2">
+              {series}
+            </h2>
+          )}
           {issue ? (
             <p className="mt-1 text-sm sm:text-base text-fg-secondary line-clamp-1">{issue}</p>
           ) : null}
