@@ -82,87 +82,154 @@ export function MiniMusicPlayer() {
     try {
       // @ts-expect-error Chromium Document PiP
       const pipWin: Window = await window.documentPictureInPicture.requestWindow({
-        width: 380,
-        height: 132,
+        width: 360,
+        height: 128,
       });
       pipWindowRef.current = pipWin;
       setPipOpen(true);
+
+      let expanded = false;
+      const SIZE = {
+        compact: { w: 360, h: 128 },
+        expanded: { w: 300, h: 520 },
+      };
 
       const style = pipWin.document.createElement('style');
       style.textContent = `
         * { box-sizing: border-box; }
         html, body {
-          margin: 0; height: 100%;
-          background: transparent;
+          margin: 0; height: 100%; width: 100%;
+          background: #09090b;
           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
           color: #f4f4f5;
           -webkit-font-smoothing: antialiased;
+          overflow: hidden;
         }
-        .shell {
+        .root { height: 100%; width: 100%; position: relative; }
+
+        /* —— Compact bar —— */
+        .compact {
           height: 100%;
           display: flex;
           align-items: center;
-          gap: 12px;
-          padding: 10px 12px 10px 10px;
-          background: linear-gradient(145deg, rgba(36,36,42,0.97), rgba(18,18,22,0.98));
-          border: 1px solid rgba(255,255,255,0.08);
-          border-radius: 18px;
-          box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+          gap: 10px;
+          padding: 10px;
+          background: linear-gradient(145deg, rgba(36,36,42,0.98), rgba(18,18,22,0.99));
         }
-        .art {
-          width: 96px; height: 96px;
+        .compact .art {
+          width: 88px; height: 88px;
           border-radius: 12px;
           object-fit: cover;
           background: #1c1c22;
           flex-shrink: 0;
-          box-shadow: 0 6px 18px rgba(0,0,0,0.4);
+          cursor: pointer;
+          box-shadow: 0 4px 14px rgba(0,0,0,0.4);
         }
-        .art-ph {
-          width: 96px; height: 96px;
-          border-radius: 12px;
-          background: linear-gradient(135deg, #064e3b, #27272a);
+        .compact .main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+        .compact .title {
+          font-size: 14px; font-weight: 650;
+          white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .compact .sub {
+          font-size: 11px; color: rgba(255,255,255,0.5);
+          white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .compact .transport {
+          display: flex; align-items: center; justify-content: center; gap: 2px;
+        }
+        .compact .progress-row {
+          display: grid;
+          grid-template-columns: 32px 1fr 36px;
+          align-items: center; gap: 6px;
+        }
+
+        /* —— Expanded sheet (scaled Greenamp) —— */
+        .expanded {
+          height: 100%;
+          display: none;
+          flex-direction: column;
+          padding: 10px 14px 12px;
+          background: linear-gradient(180deg, rgba(30,30,36,0.98), rgba(9,9,11,1));
+          overflow: hidden;
+        }
+        .expanded .top {
+          display: flex; justify-content: center; padding-bottom: 6px;
+        }
+        .expanded .collapse {
+          appearance: none; border: 0; background: transparent;
+          color: rgba(255,255,255,0.4); cursor: pointer;
+          display: flex; flex-direction: column; align-items: center; gap: 2px;
+          font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+        }
+        .expanded .collapse:hover { color: rgba(255,255,255,0.75); }
+        .expanded .art-wrap {
+          width: 100%;
+          max-width: 200px;
+          margin: 0 auto;
+          aspect-ratio: 1;
+          border-radius: 14px;
+          overflow: hidden;
+          box-shadow: 0 12px 36px rgba(0,0,0,0.5);
+          border: 1px solid rgba(255,255,255,0.08);
+          cursor: pointer;
           flex-shrink: 0;
         }
-        .main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
-        .title {
-          font-size: 15px; font-weight: 650; letter-spacing: -0.01em;
+        .expanded .art-wrap img {
+          width: 100%; height: 100%; object-fit: cover; display: block;
+        }
+        .expanded .meta {
+          text-align: center; margin-top: 14px; min-width: 0;
+        }
+        .expanded .title {
+          font-size: 16px; font-weight: 700; letter-spacing: -0.01em;
+          line-height: 1.25;
+          display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
+        .expanded .artist {
+          margin-top: 4px; font-size: 13px; color: rgba(255,255,255,0.6);
           white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-          line-height: 1.2;
         }
-        .sub {
-          font-size: 12px; color: rgba(255,255,255,0.5);
+        .expanded .album {
+          margin-top: 2px; font-size: 11px; color: rgba(255,255,255,0.35);
           white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-          line-height: 1.2;
         }
-        .transport {
-          display: flex; align-items: center; justify-content: center; gap: 4px;
-          margin-top: 2px;
+        .expanded .progress-row {
+          display: grid;
+          grid-template-columns: 34px 1fr 34px;
+          align-items: center; gap: 8px;
+          margin-top: 14px;
         }
+        .expanded .transport {
+          display: flex; align-items: center; justify-content: center; gap: 6px;
+          margin-top: 12px;
+        }
+        .expanded .expand-hint {
+          margin-top: auto;
+          padding-top: 10px;
+          display: flex; flex-direction: column; align-items: center;
+          color: rgba(255,255,255,0.3);
+          font-size: 10px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase;
+        }
+
+        /* Shared controls */
         .tbtn {
           appearance: none; border: 0; background: transparent;
           color: rgba(255,255,255,0.88);
-          width: 34px; height: 34px; border-radius: 999px;
+          width: 32px; height: 32px; border-radius: 999px;
           display: grid; place-items: center; cursor: pointer;
-          transition: background 0.12s, color 0.12s;
         }
         .tbtn:hover { background: rgba(255,255,255,0.1); color: #fff; }
         .tbtn.play {
-          width: 38px; height: 38px;
-          background: rgba(255,255,255,0.12);
+          width: 44px; height: 44px;
+          background: #fff; color: #18181b;
         }
-        .tbtn.play:hover { background: rgba(255,255,255,0.2); }
-        .tbtn svg { width: 16px; height: 16px; fill: currentColor; }
+        .tbtn.play:hover { background: #ecfdf5; }
+        .tbtn svg { width: 15px; height: 15px; fill: currentColor; }
         .tbtn.play svg { width: 18px; height: 18px; }
-        .progress-row {
-          display: grid;
-          grid-template-columns: 36px 1fr 40px;
-          align-items: center;
-          gap: 8px;
-          margin-top: 2px;
-        }
         .time {
           font-size: 10px; font-variant-numeric: tabular-nums;
-          color: rgba(255,255,255,0.4); letter-spacing: 0.02em;
+          color: rgba(255,255,255,0.4);
         }
         .time.right { text-align: right; }
         .bar {
@@ -175,46 +242,76 @@ export function MiniMusicPlayer() {
           background: #34d399; border-radius: 999px;
           pointer-events: none;
         }
+        .mode-compact .compact { display: flex; }
+        .mode-compact .expanded { display: none; }
+        .mode-expanded .compact { display: none; }
+        .mode-expanded .expanded { display: flex; }
       `;
       pipWin.document.head.appendChild(style);
 
       const root = pipWin.document.createElement('div');
-      root.className = 'shell';
+      root.className = 'root mode-compact';
       root.innerHTML = `
-        <img class="art" alt="" />
-        <div class="main">
-          <div class="title"></div>
-          <div class="sub"></div>
+        <div class="compact">
+          <img class="art c-art" alt="" title="Expand" />
+          <div class="main">
+            <div class="title c-title"></div>
+            <div class="sub c-sub"></div>
+            <div class="transport">
+              <button type="button" class="tbtn prev" aria-label="Previous">
+                <svg viewBox="0 0 24 24"><path d="M6 6h2v12H6V6zm3.5 6 8.5 6V6l-8.5 6z"/></svg>
+              </button>
+              <button type="button" class="tbtn play" aria-label="Play/Pause">
+                <svg class="icon-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7L8 5z"/></svg>
+                <svg class="icon-pause" viewBox="0 0 24 24" style="display:none"><path d="M6 5h4v14H6V5zm8 0h4v14h-4V5z"/></svg>
+              </button>
+              <button type="button" class="tbtn next" aria-label="Next">
+                <svg viewBox="0 0 24 24"><path d="M16 6h2v12h-2V6zM6 18l8.5-6L6 6v12z"/></svg>
+              </button>
+            </div>
+            <div class="progress-row">
+              <span class="time elapsed">0:00</span>
+              <div class="bar" data-seek><div class="bar-fill"></div></div>
+              <span class="time right remain">-0:00</span>
+            </div>
+          </div>
+        </div>
+        <div class="expanded">
+          <div class="top">
+            <button type="button" class="collapse" aria-label="Collapse">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+              Mini
+            </button>
+          </div>
+          <div class="art-wrap"><img class="e-art" alt="" /></div>
+          <div class="meta">
+            <div class="title e-title"></div>
+            <div class="artist e-artist"></div>
+            <div class="album e-album"></div>
+          </div>
+          <div class="progress-row">
+            <span class="time elapsed e-elapsed">0:00</span>
+            <div class="bar" data-seek><div class="bar-fill e-fill"></div></div>
+            <span class="time right remain e-remain">0:00</span>
+          </div>
           <div class="transport">
-            <button type="button" class="tbtn prev" aria-label="Previous" title="Previous">
+            <button type="button" class="tbtn prev" aria-label="Previous">
               <svg viewBox="0 0 24 24"><path d="M6 6h2v12H6V6zm3.5 6 8.5 6V6l-8.5 6z"/></svg>
             </button>
-            <button type="button" class="tbtn play" aria-label="Play/Pause" title="Play/Pause">
-              <svg class="icon-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7L8 5z"/></svg>
-              <svg class="icon-pause" viewBox="0 0 24 24" style="display:none"><path d="M6 5h4v14H6V5zm8 0h4v14h-4V5z"/></svg>
+            <button type="button" class="tbtn play e-play" aria-label="Play/Pause">
+              <svg class="e-icon-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7L8 5z"/></svg>
+              <svg class="e-icon-pause" viewBox="0 0 24 24" style="display:none"><path d="M6 5h4v14H6V5zm8 0h4v14h-4V5z"/></svg>
             </button>
-            <button type="button" class="tbtn next" aria-label="Next" title="Next">
+            <button type="button" class="tbtn next" aria-label="Next">
               <svg viewBox="0 0 24 24"><path d="M16 6h2v12h-2V6zM6 18l8.5-6L6 6v12z"/></svg>
             </button>
           </div>
-          <div class="progress-row">
-            <span class="time elapsed">0:00</span>
-            <div class="bar" role="slider" aria-label="Seek"><div class="bar-fill"></div></div>
-            <span class="time right remain">-0:00</span>
+          <div class="expand-hint">
+            <span>Queue in GreenHQ</span>
           </div>
         </div>
       `;
       pipWin.document.body.appendChild(root);
-
-      const artEl = root.querySelector('.art') as HTMLImageElement;
-      const titleEl = root.querySelector('.title') as HTMLElement;
-      const subEl = root.querySelector('.sub') as HTMLElement;
-      const playIcon = root.querySelector('.icon-play') as SVGElement;
-      const pauseIcon = root.querySelector('.icon-pause') as SVGElement;
-      const fillEl = root.querySelector('.bar-fill') as HTMLElement;
-      const elapsedEl = root.querySelector('.elapsed') as HTMLElement;
-      const remainEl = root.querySelector('.remain') as HTMLElement;
-      const barEl = root.querySelector('.bar') as HTMLElement;
 
       const fmt = (sec: number) => {
         if (!Number.isFinite(sec) || sec < 0) return '0:00';
@@ -223,42 +320,91 @@ export function MiniMusicPlayer() {
         return m + ':' + String(s).padStart(2, '0');
       };
 
-      (root.querySelector('.prev') as HTMLButtonElement).onclick = () => mpRef.current.previous();
-      (root.querySelector('.next') as HTMLButtonElement).onclick = () => mpRef.current.next();
-      (root.querySelector('.play') as HTMLButtonElement).onclick = () => mpRef.current.togglePlay();
-      barEl.onclick = (e) => {
-        const m = mpRef.current;
-        if (!m.duration) return;
-        const rect = barEl.getBoundingClientRect();
-        const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-        m.seek(pct * m.duration);
+      const setExpanded = (v: boolean) => {
+        expanded = v;
+        root.className = v ? 'root mode-expanded' : 'root mode-compact';
+        const sz = v ? SIZE.expanded : SIZE.compact;
+        try {
+          pipWin.resizeTo(sz.w, sz.h);
+        } catch {
+          /* some browsers block resizeTo */
+        }
       };
+
+      const wireTransport = (scope: ParentNode) => {
+        scope.querySelectorAll('.prev').forEach((el) => {
+          (el as HTMLButtonElement).onclick = () => mpRef.current.previous();
+        });
+        scope.querySelectorAll('.next').forEach((el) => {
+          (el as HTMLButtonElement).onclick = () => mpRef.current.next();
+        });
+        scope.querySelectorAll('.play').forEach((el) => {
+          (el as HTMLButtonElement).onclick = () => mpRef.current.togglePlay();
+        });
+        scope.querySelectorAll('[data-seek]').forEach((el) => {
+          (el as HTMLElement).onclick = (e) => {
+            const m = mpRef.current;
+            if (!m.duration) return;
+            const rect = (el as HTMLElement).getBoundingClientRect();
+            const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+            m.seek(pct * m.duration);
+          };
+        });
+      };
+      wireTransport(root);
+
+      (root.querySelector('.c-art') as HTMLElement).onclick = () => setExpanded(true);
+      (root.querySelector('.collapse') as HTMLElement).onclick = () => setExpanded(false);
+      (root.querySelector('.art-wrap') as HTMLElement).onclick = () => setExpanded(false);
 
       const render = () => {
         const m = mpRef.current;
         const track = m.currentTrack;
         if (!track) return;
-        const art =
-          embyPosterUrl(m.album?.ImageTags?.Primary ? m.album : track, 192) ||
-          embyPosterUrl(track, 192);
-        if (art && artEl.src !== art) artEl.src = art;
-        titleEl.textContent = displayTitle(track);
-        const artist = albumArtistLine(track) || track.AlbumArtist || track.Artists?.[0] || '';
+        const artUrl =
+          embyPosterUrl(m.album?.ImageTags?.Primary ? m.album : track, 320) ||
+          embyPosterUrl(track, 320);
+        const title = displayTitle(track);
+        const artist =
+          albumArtistLine(track) || track.AlbumArtist || track.Artists?.[0] || '';
         const album = track.Album || m.album?.Name || '';
-        subEl.textContent = [artist, album].filter(Boolean).join(' – ') || ' ';
-        if (m.isPlaying) {
-          playIcon.style.display = 'none';
-          pauseIcon.style.display = 'block';
-        } else {
-          playIcon.style.display = 'block';
-          pauseIcon.style.display = 'none';
-        }
+        const sub = [artist, album].filter(Boolean).join(' · ');
+
+        root.querySelectorAll('.c-art, .e-art').forEach((img) => {
+          const el = img as HTMLImageElement;
+          if (artUrl && el.src !== artUrl) el.src = artUrl;
+        });
+        const cTitle = root.querySelector('.c-title') as HTMLElement;
+        const cSub = root.querySelector('.c-sub') as HTMLElement;
+        const eTitle = root.querySelector('.e-title') as HTMLElement;
+        const eArtist = root.querySelector('.e-artist') as HTMLElement;
+        const eAlbum = root.querySelector('.e-album') as HTMLElement;
+        if (cTitle) cTitle.textContent = title;
+        if (cSub) cSub.textContent = sub;
+        if (eTitle) eTitle.textContent = title;
+        if (eArtist) eArtist.textContent = artist;
+        if (eAlbum) eAlbum.textContent = album;
+
+        const playing = m.isPlaying;
+        root.querySelectorAll('.icon-play, .e-icon-play').forEach((el) => {
+          (el as HTMLElement).style.display = playing ? 'none' : 'block';
+        });
+        root.querySelectorAll('.icon-pause, .e-icon-pause').forEach((el) => {
+          (el as HTMLElement).style.display = playing ? 'block' : 'none';
+        });
+
         const dur = m.duration || 0;
         const pos = m.position || 0;
         const pct = dur > 0 ? Math.min(100, (pos / dur) * 100) : 0;
-        fillEl.style.width = pct + '%';
-        elapsedEl.textContent = fmt(pos);
-        remainEl.textContent = dur > 0 ? '-' + fmt(Math.max(0, dur - pos)) : '-0:00';
+        root.querySelectorAll('.bar-fill').forEach((el) => {
+          (el as HTMLElement).style.width = pct + '%';
+        });
+        root.querySelectorAll('.elapsed').forEach((el) => {
+          (el as HTMLElement).textContent = fmt(pos);
+        });
+        root.querySelectorAll('.remain').forEach((el) => {
+          (el as HTMLElement).textContent = dur > 0 ? fmt(dur) : '0:00';
+        });
       };
 
       render();
