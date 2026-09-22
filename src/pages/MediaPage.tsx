@@ -405,7 +405,42 @@ export function MediaPage() {
             limit: 48,
             parentType: level.item.Type,
           });
-          setDetailItems(sortMediaItems(items));
+          const sorted = sortMediaItems(items);
+          // Album folder → skip grid; open the same page as Play album
+          const tracks = sorted.filter(isAudioItem);
+          const albumLike =
+            isAlbumItem(level.item) ||
+            level.item.Type === 'MusicAlbum' ||
+            level.item.Type === 'Album' ||
+            (tracks.length > 0 && tracks.length >= sorted.length * 0.8);
+          if (albumLike && tracks.length > 0) {
+            setDetailItems([]);
+            setDetailTotal(0);
+            let fullTracks = tracks;
+            try {
+              const full = await embyItems(embyUserId, {
+                parentId: level.item.Id,
+                recursive: false,
+                sortBy: 'IndexNumber,SortName',
+                sortOrder: 'Ascending',
+                limit: 500,
+              });
+              const ft = sortMediaItems(full.items).filter(isAudioItem);
+              if (ft.length) fullTracks = ft;
+            } catch {
+              /* keep first page */
+            }
+            setAlbumUi({
+              album: level.item,
+              tracks: fullTracks,
+              startIndex: 0,
+              autoplay: false,
+            });
+            // Pop this folder so Back from album returns to parent (artist/library)
+            setBrowseStack((s) => (s.length > 1 ? s.slice(0, -1) : s));
+            return;
+          }
+          setDetailItems(sorted);
           setDetailTotal(total);
         }
       } catch (e) {
@@ -451,12 +486,13 @@ export function MediaPage() {
   }, [browseOrigin]);
 
   const openFocus = async (item: EmbyItem) => {
-    if (isAlbumItem(item) || item.Type === 'MusicAlbum') {
+    // Albums (incl. Emby Type=Folder under music) → one page: AlbumPlayer
+    if (isAlbumItem(item) || item.Type === 'MusicAlbum' || item.Type === 'Album') {
       void openAlbum(item, { autoplay: false });
       return;
     }
     if (isAudioItem(item)) {
-      // Single track: if we can resolve parent album, open album player on that track
+      // Single track → same album page, focused on that track
       if (item.AlbumId && embyUserId) {
         try {
           const album = await embyItem(embyUserId, item.AlbumId);
@@ -470,21 +506,49 @@ export function MediaPage() {
           const tracks = sortMediaItems(items).filter(isAudioItem);
           const startIndex = Math.max(0, tracks.findIndex((t) => t.Id === item.Id));
           if (tracks.length) {
-            music.playTracks({
-              tracks,
+            setAlbumUi({
               album,
+              tracks,
               startIndex: startIndex < 0 ? 0 : startIndex,
               autoplay: true,
-              embyUserId,
             });
             return;
           }
         } catch {
-          /* fall through to video-style play */
+          /* fall through */
         }
+      }
+      // Lone track with no album: still use global player, not video
+      if (embyUserId) {
+        music.playTracks({
+          tracks: [item],
+          startIndex: 0,
+          autoplay: true,
+          embyUserId,
+        });
+        return;
       }
       setWatching(item);
       return;
+    }
+    // Folder under music library: if children are tracks, treat as album page
+    if (item.Type === 'Folder' && embyUserId && inMusicContext) {
+      try {
+        const { items } = await embyItems(embyUserId, {
+          parentId: item.Id,
+          recursive: false,
+          sortBy: 'IndexNumber,SortName',
+          sortOrder: 'Ascending',
+          limit: 500,
+        });
+        const tracks = sortMediaItems(items).filter(isAudioItem);
+        if (tracks.length > 0 && tracks.length >= items.length * 0.8) {
+          void openAlbum(item, { autoplay: false });
+          return;
+        }
+      } catch {
+        /* fall through to folder browse */
+      }
     }
     if (item.Type === 'Series' || item.Type === 'Season' || item.Type === 'Folder' || item.Type === 'BoxSet' || item.Type === 'MusicArtist') {
       // Remember Home vs Libraries so Back can leave browse correctly
