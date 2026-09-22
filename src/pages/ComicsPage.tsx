@@ -145,6 +145,8 @@ function BookCard({
   onOpenSeries,
   hero,
   expandable = false,
+  /** Emphasize issue title over series (Recently added rail). */
+  issueFirst = false,
 }: {
   book: KomgaBook;
   memberId?: string;
@@ -153,6 +155,7 @@ function BookCard({
   onOpenSeries?: () => void;
   hero?: boolean;
   expandable?: boolean;
+  issueFirst?: boolean;
 }) {
   const pct = bookProgressPercent(book);
   const [expanded, setExpanded] = useState(false);
@@ -277,7 +280,40 @@ function BookCard({
             ) : undefined
           }
         />
-        {series && onOpenSeries ? (
+        {issueFirst ? (
+          <div className="mt-2 min-w-0">
+            <p className="text-sm font-semibold text-fg line-clamp-2 leading-snug">
+              {issue || bookTitle(book)}
+            </p>
+            {series ? (
+              <p className="mt-0.5 text-[11px] text-muted line-clamp-1">
+                {onOpenSeries ? (
+                  <span
+                    role="link"
+                    tabIndex={0}
+                    className="hover:underline hover:text-accent cursor-pointer"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onOpenSeries();
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onOpenSeries();
+                      }
+                    }}
+                  >
+                    {series}
+                  </span>
+                ) : (
+                  series
+                )}
+              </p>
+            ) : null}
+          </div>
+        ) : series && onOpenSeries ? (
           <p className="mt-2 text-sm font-semibold text-fg line-clamp-2 leading-snug">
             <span
               role="link"
@@ -392,7 +428,33 @@ function BookCard({
               expanded ? 'opacity-0 h-0 overflow-hidden pointer-events-none' : 'opacity-100',
             )}
           >
-            {series && onOpenSeries ? (
+            {issueFirst ? (
+              <div className="mt-2 min-w-0">
+                <p className="text-sm font-semibold text-fg line-clamp-2 leading-snug">
+                  {issue || bookTitle(book)}
+                </p>
+                {series ? (
+                  <p className="mt-0.5 text-[11px] text-muted line-clamp-1">
+                    {onOpenSeries ? (
+                      <span
+                        role="link"
+                        tabIndex={0}
+                        className="hover:underline hover:text-accent cursor-pointer"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          onOpenSeries();
+                        }}
+                      >
+                        {series}
+                      </span>
+                    ) : (
+                      series
+                    )}
+                  </p>
+                ) : null}
+              </div>
+            ) : series && onOpenSeries ? (
               <p className="mt-2 text-sm font-semibold text-fg line-clamp-2 leading-snug">
                 <span
                   role="link"
@@ -1663,6 +1725,7 @@ export function ComicsPage() {
                       book={b}
                       memberId={memberId}
                       expandable
+                      issueFirst
                       onOpen={() => void openBookDetail(b)}
                       onResume={() => startReading(b)}
                       onOpenSeries={

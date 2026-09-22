@@ -148,7 +148,23 @@ export async function komgaOnDeck(size = 12, memberId?: string): Promise<KomgaBo
   return data?.content || [];
 }
 
+/**
+ * Recently added *books* (individual issues), not series.
+ * Prefer sort by createdDate so each new file appears as its own comic.
+ */
 export async function komgaLatestBooks(size = 12, memberId?: string): Promise<KomgaBook[]> {
+  try {
+    const data = await proxyGet<PageResult<KomgaBook>>('v1/books', {
+      size,
+      page: 0,
+      sort: 'createdDate,desc',
+      memberId,
+    });
+    const books = data?.content || [];
+    if (books.length) return books;
+  } catch {
+    /* fall through to /books/latest */
+  }
   const data = await proxyGet<PageResult<KomgaBook>>('v1/books/latest', { size, memberId });
   return data?.content || [];
 }
