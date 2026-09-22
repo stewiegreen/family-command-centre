@@ -88,7 +88,6 @@ export function MiniMusicPlayer() {
       pipWindowRef.current = pipWin;
       setPipOpen(true);
 
-      let expanded = false;
       const SIZE = {
         compact: { w: 360, h: 128 },
         expanded: { w: 300, h: 520 },
@@ -321,7 +320,6 @@ export function MiniMusicPlayer() {
       };
 
       const setExpanded = (v: boolean) => {
-        expanded = v;
         root.className = v ? 'root mode-expanded' : 'root mode-compact';
         const sz = v ? SIZE.expanded : SIZE.compact;
         try {
