@@ -363,7 +363,7 @@ export function MusicPlayer() {
               Now playing
             </button>
             <div className="flex-1 min-h-0">
-              <MusicQueue embedded />
+              <MusicQueue />
             </div>
           </div>
         </div>

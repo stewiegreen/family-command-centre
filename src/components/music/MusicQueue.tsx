@@ -12,7 +12,8 @@ import { cn } from '../../lib/cn';
  * Queue list for Greenamp expanded sheet.
  * Parent owns scrolling — no nested overflow here.
  */
-export function MusicQueue({ className }: { className?: string }) {
+export function MusicQueue({ className, embedded: _embedded }: { className?: string; embedded?: boolean }) {
+  void _embedded;
   const music = useMusicPlayer();
 
   if (!music.queue.length) {
