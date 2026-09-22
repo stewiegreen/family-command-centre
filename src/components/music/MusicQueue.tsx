@@ -1,5 +1,4 @@
 import { ListMusic, X } from 'lucide-react';
-import { useEffect, useRef } from 'react';
 import { useMusicPlayer } from '../../context/MusicPlayerContext';
 import {
   albumArtistLine,
@@ -9,13 +8,12 @@ import {
 } from '../../lib/emby';
 import { cn } from '../../lib/cn';
 
+/**
+ * Queue list for Greenamp expanded sheet.
+ * Parent owns scrolling — no nested overflow here.
+ */
 export function MusicQueue({ className }: { className?: string }) {
   const music = useMusicPlayer();
-  const activeRef = useRef<HTMLLIElement | null>(null);
-
-  useEffect(() => {
-    activeRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-  }, [music.queueIndex]);
 
   if (!music.queue.length) {
     return (
@@ -32,7 +30,7 @@ export function MusicQueue({ className }: { className?: string }) {
   }
 
   return (
-    <div className={cn('flex flex-col min-h-0 h-full', className)}>
+    <div className={cn('flex flex-col', className)}>
       <div className="flex items-center gap-2 px-1 pb-3 shrink-0">
         <ListMusic className="w-3.5 h-3.5 text-emerald-400/80" />
         <h3 className="text-[11px] font-bold uppercase tracking-[0.12em] text-white/50">
@@ -42,13 +40,14 @@ export function MusicQueue({ className }: { className?: string }) {
           {music.queue.length}
         </span>
       </div>
-      <ul className="flex-1 overflow-y-auto overscroll-contain space-y-0.5 min-h-0 pr-1 -mr-1 scrollbar-thin">
+      <ul className="space-y-0.5">
         {music.queue.map((t, i) => {
           const active = i === music.queueIndex;
           const art = embyPosterUrl(t, 80);
-          const artist = albumArtistLine(t) || t.AlbumArtist || t.Artists?.[0] || '';
+          const artist =
+            albumArtistLine(t) || t.AlbumArtist || t.Artists?.[0] || '';
           return (
-            <li key={`${t.Id}-${i}`} ref={active ? activeRef : undefined}>
+            <li key={`${t.Id}-${i}`}>
               <div
                 className={cn(
                   'group flex items-center gap-2.5 rounded-xl pl-1.5 pr-1 py-1.5 transition-colors duration-150',
