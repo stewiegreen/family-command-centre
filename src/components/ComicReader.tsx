@@ -182,7 +182,7 @@ export function ComicReader({ book, memberId, onClose, onOpenBook }: Props) {
   const [imgError, setImgError] = useState(false);
   const [nextChapter, setNextChapter] = useState<KomgaBook | null>(null);
   const [showEndOverlay, setShowEndOverlay] = useState(false);
-  const [uiVisible, setUiVisible] = useState(true);
+  const [uiVisible, setUiVisible] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
   const [prefs, setPrefs] = useState<ReaderPrefs>(() => prefsForBook(memberId, book));
@@ -258,9 +258,9 @@ export function ComicReader({ book, memberId, onClose, onOpenBook }: Props) {
       setPageIndex(clamped);
       setImgError(false);
       scheduleProgress(clamped, list);
-      bumpUi();
+      // Do not reveal chrome on page turns (keyboard / edge tap / swipe)
     },
-    [scheduleProgress, bumpUi],
+    [scheduleProgress],
   );
 
   const goNext = useCallback(() => {
@@ -270,14 +270,12 @@ export function ComicReader({ book, memberId, onClose, onOpenBook }: Props) {
     if (list.length && cur + step >= list.length) {
       // Past the last page → end-of-issue overlay (series continuity)
       setShowEndOverlay(true);
-      // Snap to last page and mark progress complete
       if (cur < list.length - 1) goTo(list.length - 1);
       else void flushProgress(list.length - 1, list);
-      bumpUi();
       return;
     }
     goTo(cur + step);
-  }, [goTo, prefs.viewMode, flushProgress, bumpUi]);
+  }, [goTo, prefs.viewMode, flushProgress]);
 
   const goPrev = useCallback(() => {
     setShowEndOverlay(false);
@@ -340,7 +338,6 @@ export function ComicReader({ book, memberId, onClose, onOpenBook }: Props) {
         pageIndexRef.current = idx;
         setPageIndex(idx);
         setLoading(false);
-        bumpUi();
 
         void komgaSiblingBook(book.id, 'next', memberId).then((sib) => {
           if (!cancelled) setNextChapter(sib);
@@ -495,10 +492,13 @@ export function ComicReader({ book, memberId, onClose, onOpenBook }: Props) {
     else (rtl ? goNext : goPrev)();
   };
 
-  /** Stage click zones: left/right navigate, center toggles chrome */
+  /**
+   * Komga-style zones:
+   * - Left / right → page turn only (no chrome)
+   * - Center → toggle menu/chrome
+   */
   const onStageClick = (e: ReactMouseEvent<HTMLDivElement>) => {
     if (prefs.viewMode === 'vertical') {
-      bumpUi();
       setUiVisible((v) => !v);
       return;
     }
@@ -510,8 +510,15 @@ export function ComicReader({ book, memberId, onClose, onOpenBook }: Props) {
     } else if (x > 0.72) {
       rtl ? goPrev() : goNext();
     } else {
-      setUiVisible((v) => !v);
-      if (!uiVisible) bumpUi();
+      setUiVisible((v) => {
+        if (v) {
+          if (hideUiTimer.current) clearTimeout(hideUiTimer.current);
+          setSettingsOpen(false);
+          setInfoOpen(false);
+          return false;
+        }
+        return true;
+      });
     }
   };
 
@@ -544,7 +551,6 @@ export function ComicReader({ book, memberId, onClose, onOpenBook }: Props) {
     <div
       ref={rootRef}
       className="fixed inset-0 z-[200] flex flex-col bg-black text-white"
-      onMouseMove={bumpUi}
     >
       {/* Top chrome */}
       <div
