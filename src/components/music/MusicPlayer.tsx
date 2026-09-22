@@ -1,7 +1,7 @@
 /**
- * Expanded Greenamp — slides up from the mini player as a sheet.
- * Top: now playing (art / viz, progress, controls).
- * Scroll down: queue. Playback stays on MusicPlayerContext.
+ * Expanded Greenamp — same width/corner as the mini player.
+ * Grows upward (or downward from top corners) without blocking GreenHQ.
+ * Scroll inside for queue. Playback stays on MusicPlayerContext.
  */
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -29,40 +29,62 @@ import { MusicQueue } from './MusicQueue';
 import { MusicVisualizer } from './MusicVisualizer';
 
 type VisualMode = 'art' | 'viz';
+type Corner = 'br' | 'bl' | 'tr' | 'tl';
+
+const CORNER_CLASS: Record<Corner, string> = {
+  br: 'bottom-3 right-3 left-auto top-auto',
+  bl: 'bottom-3 left-3 right-auto top-auto',
+  tr: 'top-3 right-3 left-auto bottom-auto',
+  tl: 'top-3 left-3 right-auto bottom-auto',
+};
+
+function loadCorner(): Corner {
+  try {
+    const c = localStorage.getItem('greenhq-music-corner');
+    if (c === 'br' || c === 'bl' || c === 'tr' || c === 'tl') return c;
+  } catch {
+    /* ignore */
+  }
+  return 'br';
+}
+
+/** Bottom corners grow upward; top corners grow downward. */
+function isBottomCorner(c: Corner): boolean {
+  return c === 'br' || c === 'bl';
+}
 
 export function MusicPlayer() {
   const music = useMusicPlayer();
   const open = Boolean(music.expanded && music.currentTrack);
   const [visualMode, setVisualMode] = useState<VisualMode>('art');
+  const [corner, setCorner] = useState<Corner>(() => loadCorner());
   const [entered, setEntered] = useState(false);
-  const scrollRef = useRef<HTMLDivElement | null>(null);
   const queueAnchorRef = useRef<HTMLDivElement | null>(null);
+
+  // Stay in sync if user dragged the mini to another corner while collapsed
+  useEffect(() => {
+    if (!open) return;
+    setCorner(loadCorner());
+  }, [open]);
 
   useEffect(() => {
     if (!open) {
       setEntered(false);
       return;
     }
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    // Next frame → CSS transition in
     const id = requestAnimationFrame(() => setEntered(true));
-    return () => {
-      cancelAnimationFrame(id);
-      document.body.style.overflow = prev;
-    };
+    return () => cancelAnimationFrame(id);
   }, [open]);
 
   useEffect(() => {
     if (!music.expanded) setVisualMode('art');
   }, [music.expanded]);
 
-  // If opened via queue button, scroll queue into view once sheet is up
   useEffect(() => {
     if (!open || !entered || !music.queueOpen) return;
     const t = window.setTimeout(() => {
       queueAnchorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 280);
+    }, 260);
     return () => window.clearTimeout(t);
   }, [open, entered, music.queueOpen]);
 
@@ -75,123 +97,118 @@ export function MusicPlayer() {
   const albumName = track.Album || music.album?.Name || '';
   const artItem =
     music.album && music.album.ImageTags?.Primary ? music.album : track;
-  const art = embyPosterUrl(artItem, 900) || embyPosterUrl(track, 900);
+  const art = embyPosterUrl(artItem, 700) || embyPosterUrl(track, 700);
   const artAtmosphere =
-    embyPosterUrl(artItem, 120) || embyPosterUrl(track, 120) || art;
+    embyPosterUrl(artItem, 100) || embyPosterUrl(track, 100) || art;
   const artKey = artItem.Id || track.Id;
+  const bottom = isBottomCorner(corner);
 
   const minimize = () => {
     setEntered(false);
-    // Let slide-down finish before unmounting expanded state
-    window.setTimeout(() => music.setExpanded(false), 220);
+    window.setTimeout(() => music.setExpanded(false), 200);
   };
 
   const body = (
     <div
-      className="fixed inset-0 z-[100] flex items-end justify-center"
+      className={cn(
+        'fixed z-[95] pointer-events-none',
+        'pb-[env(safe-area-inset-bottom)]',
+        CORNER_CLASS[corner],
+      )}
       role="dialog"
-      aria-modal="true"
-      aria-label="Greenamp music player"
+      aria-label="Greenamp expanded"
     >
-      {/* Scrim */}
-      <button
-        type="button"
-        className={cn(
-          'absolute inset-0 bg-black/55 transition-opacity duration-200',
-          entered ? 'opacity-100' : 'opacity-0',
-        )}
-        aria-label="Minimize player"
-        onClick={minimize}
-      />
-
-      {/* Sheet */}
       <div
         className={cn(
-          'relative z-10 w-full sm:max-w-md md:max-w-lg',
-          'max-h-[min(94vh,860px)]',
-          'rounded-t-[1.75rem] overflow-hidden',
-          'border border-white/[0.08] border-b-0',
-          'shadow-[0_-12px_48px_rgba(0,0,0,0.55)]',
-          'flex flex-col',
-          'bg-zinc-950',
-          'transition-transform duration-300 ease-out',
-          entered ? 'translate-y-0' : 'translate-y-full',
+          'pointer-events-auto',
+          'w-[min(100vw-1.5rem,22rem)] sm:w-[22rem]',
+          'max-h-[min(78vh,640px)]',
+          'flex flex-col overflow-hidden',
+          'rounded-2xl border border-white/[0.09]',
+          'bg-zinc-950/95 backdrop-blur-xl',
+          'shadow-2xl shadow-black/60 ring-1 ring-black/40',
+          'transition-all duration-300 ease-out origin-bottom',
+          bottom ? 'origin-bottom' : 'origin-top',
+          entered
+            ? 'opacity-100 scale-100 translate-y-0'
+            : bottom
+              ? 'opacity-0 scale-95 translate-y-3'
+              : 'opacity-0 scale-95 -translate-y-3',
         )}
       >
         {/* Atmosphere */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden>
+        <div className="absolute inset-0 overflow-hidden pointer-events-none rounded-2xl" aria-hidden>
           {artAtmosphere ? (
             <img
               key={artKey}
               src={artAtmosphere}
               alt=""
-              className="absolute inset-0 w-full h-full object-cover scale-150 blur-3xl opacity-[0.38] saturate-150"
+              className="absolute inset-0 w-full h-full object-cover scale-150 blur-2xl opacity-35 saturate-150"
             />
           ) : null}
-          <div className="absolute inset-0 bg-gradient-to-b from-zinc-950/30 via-zinc-950/75 to-zinc-950" />
+          <div className="absolute inset-0 bg-gradient-to-b from-zinc-950/40 via-zinc-950/80 to-zinc-950" />
         </div>
 
-        {/* Grab + chrome */}
-        <div className="relative z-10 shrink-0 pt-2.5 pb-1">
+        {/* Collapse control */}
+        <div className="relative z-10 shrink-0 flex items-center justify-between px-2 pt-2">
           <button
             type="button"
             onClick={minimize}
-            className="mx-auto block w-full flex flex-col items-center gap-1 py-1 text-white/40 hover:text-white/70"
-            aria-label="Minimize"
+            className="flex items-center gap-1 px-2 py-1 rounded-lg text-white/45 hover:text-white hover:bg-white/10 text-xs font-medium"
+            aria-label="Collapse to mini player"
           >
-            <span className="w-10 h-1 rounded-full bg-white/25" />
-            <ChevronDown className="w-5 h-5" />
+            <ChevronDown className={cn('w-4 h-4', !bottom && 'rotate-180')} />
+            Mini
+          </button>
+          <div className="flex items-center rounded-full bg-black/35 p-0.5 ring-1 ring-white/10">
+            <button
+              type="button"
+              onClick={() => setVisualMode('art')}
+              className={cn(
+                'p-1.5 rounded-full transition-colors',
+                visualMode === 'art' ? 'bg-white/15 text-white' : 'text-white/40',
+              )}
+              aria-label="Album art"
+            >
+              <Image className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setVisualMode('viz')}
+              className={cn(
+                'p-1.5 rounded-full transition-colors',
+                visualMode === 'viz'
+                  ? 'bg-emerald-500/25 text-emerald-200'
+                  : 'text-white/40',
+              )}
+              aria-label="Visualizer"
+            >
+              <Activity className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={() =>
+              queueAnchorRef.current?.scrollIntoView({
+                behavior: 'smooth',
+                block: 'start',
+              })
+            }
+            className="flex items-center gap-1 px-2 py-1 rounded-lg text-white/45 hover:text-white hover:bg-white/10 text-xs font-medium"
+          >
+            <ListMusic className="w-3.5 h-3.5" />
+            Queue
           </button>
         </div>
 
-        {/* Scroll: now playing → queue */}
-        <div
-          ref={scrollRef}
-          className="relative z-10 flex-1 min-h-0 overflow-y-auto overscroll-contain"
-        >
-          {/* —— Now playing —— */}
-          <div className="px-6 sm:px-8 pb-6 flex flex-col items-center">
-            {/* Art / Viz toggle */}
-            <div className="self-end mb-3 flex items-center rounded-full bg-black/30 p-0.5 ring-1 ring-white/10">
-              <button
-                type="button"
-                onClick={() => setVisualMode('art')}
-                className={cn(
-                  'flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors',
-                  visualMode === 'art'
-                    ? 'bg-white/15 text-white'
-                    : 'text-white/45 hover:text-white/80',
-                )}
-                aria-pressed={visualMode === 'art'}
-              >
-                <Image className="w-3.5 h-3.5" />
-                Art
-              </button>
-              <button
-                type="button"
-                onClick={() => setVisualMode('viz')}
-                className={cn(
-                  'flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors',
-                  visualMode === 'viz'
-                    ? 'bg-emerald-500/25 text-emerald-200'
-                    : 'text-white/45 hover:text-white/80',
-                )}
-                aria-pressed={visualMode === 'viz'}
-              >
-                <Activity className="w-3.5 h-3.5" />
-                Viz
-              </button>
-            </div>
-
-            <div className="w-full max-w-[min(100%,18.5rem)] aspect-square">
+        {/* Scroll body: now playing → queue */}
+        <div className="relative z-10 flex-1 min-h-0 overflow-y-auto overscroll-contain">
+          <div className="px-5 pt-2 pb-5 flex flex-col items-center">
+            <div className="w-full max-w-[15.5rem] aspect-square">
               {visualMode === 'art' ? (
                 <div
                   key={`art-${artKey}`}
-                  className={cn(
-                    'w-full h-full rounded-2xl overflow-hidden',
-                    'border border-white/10 bg-zinc-900',
-                    'shadow-[0_20px_60px_-12px_rgba(0,0,0,0.75)]',
-                  )}
+                  className="w-full h-full rounded-xl overflow-hidden border border-white/10 bg-zinc-900 shadow-lg shadow-black/40"
                 >
                   {art ? (
                     <img src={art} alt="" className="w-full h-full object-cover" />
@@ -204,19 +221,19 @@ export function MusicPlayer() {
               )}
             </div>
 
-            <div className="w-full mt-7 text-center space-y-1.5">
-              <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight leading-snug line-clamp-2">
+            <div className="w-full mt-5 text-center space-y-1">
+              <h2 className="text-lg font-bold text-white tracking-tight leading-snug line-clamp-2">
                 {title}
               </h2>
               {artist ? (
-                <p className="text-sm text-white/65 font-medium line-clamp-1">{artist}</p>
+                <p className="text-sm text-white/60 line-clamp-1">{artist}</p>
               ) : null}
               {albumName ? (
-                <p className="text-xs text-white/40 line-clamp-1">{albumName}</p>
+                <p className="text-[11px] text-white/35 line-clamp-1">{albumName}</p>
               ) : null}
             </div>
 
-            <div className="w-full mt-6">
+            <div className="w-full mt-4">
               <MusicProgress
                 position={music.position}
                 duration={music.duration}
@@ -224,22 +241,20 @@ export function MusicPlayer() {
               />
             </div>
 
-            <div className="flex items-center justify-center gap-3 mt-5 w-full">
+            <div className="flex items-center justify-center gap-2 mt-4 w-full">
               <button
                 type="button"
                 onClick={music.toggleShuffle}
                 className={cn(
-                  'p-2 rounded-full transition-colors',
-                  music.shuffle
-                    ? 'text-emerald-300'
-                    : 'text-white/35 hover:text-white/80',
+                  'p-1.5 rounded-full',
+                  music.shuffle ? 'text-emerald-300' : 'text-white/30 hover:text-white/70',
                 )}
                 aria-label="Shuffle"
               >
-                <Shuffle className="w-4 h-4" />
+                <Shuffle className="w-3.5 h-3.5" />
               </button>
               <MusicControls
-                size="lg"
+                size="md"
                 isPlaying={music.isPlaying}
                 onPrev={music.previous}
                 onToggle={music.togglePlay}
@@ -249,32 +264,32 @@ export function MusicPlayer() {
                 type="button"
                 onClick={music.cycleRepeat}
                 className={cn(
-                  'p-2 rounded-full transition-colors',
+                  'p-1.5 rounded-full',
                   music.repeat !== 'off'
                     ? 'text-emerald-300'
-                    : 'text-white/35 hover:text-white/80',
+                    : 'text-white/30 hover:text-white/70',
                 )}
                 aria-label="Repeat"
               >
                 {music.repeat === 'one' ? (
-                  <Repeat1 className="w-4 h-4" />
+                  <Repeat1 className="w-3.5 h-3.5" />
                 ) : (
-                  <Repeat className="w-4 h-4" />
+                  <Repeat className="w-3.5 h-3.5" />
                 )}
               </button>
             </div>
 
-            <div className="flex items-center gap-2.5 w-full max-w-[14rem] mt-5">
+            <div className="flex items-center gap-2 w-full max-w-[12rem] mt-3">
               <button
                 type="button"
                 onClick={music.toggleMute}
-                className="p-1.5 rounded-lg text-white/50 hover:text-white hover:bg-white/10"
+                className="p-1 text-white/40 hover:text-white"
                 aria-label={music.muted ? 'Unmute' : 'Mute'}
               >
                 {music.muted || music.volume <= 0 ? (
-                  <VolumeX className="w-4 h-4" />
+                  <VolumeX className="w-3.5 h-3.5" />
                 ) : (
-                  <Volume2 className="w-4 h-4" />
+                  <Volume2 className="w-3.5 h-3.5" />
                 )}
               </button>
               <input
@@ -286,8 +301,8 @@ export function MusicPlayer() {
                 onChange={(e) => music.setVolume(Number(e.target.value))}
                 className={cn(
                   'flex-1 h-1 appearance-none rounded-full bg-white/12 cursor-pointer',
-                  '[&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3',
-                  '[&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full',
+                  '[&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2.5',
+                  '[&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:rounded-full',
                   '[&::-webkit-slider-thumb]:bg-white',
                 )}
                 aria-label="Volume"
@@ -295,29 +310,14 @@ export function MusicPlayer() {
             </div>
 
             {music.error ? (
-              <p className="mt-3 text-xs text-red-400/90 text-center">{music.error}</p>
+              <p className="mt-2 text-[11px] text-red-400 text-center">{music.error}</p>
             ) : null}
-
-            {/* Hint to scroll */}
-            <button
-              type="button"
-              onClick={() =>
-                queueAnchorRef.current?.scrollIntoView({
-                  behavior: 'smooth',
-                  block: 'start',
-                })
-              }
-              className="mt-8 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-white/35 hover:text-white/60"
-            >
-              <ListMusic className="w-3.5 h-3.5" />
-              Queue · scroll
-            </button>
           </div>
 
-          {/* —— Queue (revealed on scroll) —— */}
+          {/* Queue — scroll to reveal */}
           <div
             ref={queueAnchorRef}
-            className="px-4 sm:px-6 pb-10 pt-2 border-t border-white/[0.06] bg-black/20 min-h-[40vh]"
+            className="px-3 pb-5 pt-3 border-t border-white/[0.07] bg-black/25 min-h-[12rem]"
           >
             <MusicQueue />
           </div>
