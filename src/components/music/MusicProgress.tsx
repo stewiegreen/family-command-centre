@@ -14,12 +14,15 @@ export function MusicProgress({
   onSeek,
   compact,
   className,
+  /** onDark = mini/player overlays; onSurface = in-page album (theme tokens) */
+  tone = 'onDark',
 }: {
   position: number;
   duration: number;
   onSeek?: (seconds: number) => void;
   compact?: boolean;
   className?: string;
+  tone?: 'onDark' | 'onSurface';
 }) {
   const [dragging, setDragging] = useState(false);
   const [draft, setDraft] = useState(0);
@@ -42,7 +45,12 @@ export function MusicProgress({
   return (
     <div className={cn('flex items-center gap-2 min-w-0', className)}>
       {!compact && (
-        <span className="text-[10px] tabular-nums text-white/50 w-8 text-right shrink-0">
+        <span
+          className={cn(
+            'text-[10px] tabular-nums w-8 text-right shrink-0',
+            tone === 'onDark' ? 'text-white/50' : 'text-muted',
+          )}
+        >
           {formatTime(shown)}
         </span>
       )}
@@ -70,18 +78,30 @@ export function MusicProgress({
           else commit(v);
         }}
         className={cn(
-          'flex-1 min-w-0 h-1 appearance-none rounded-full bg-white/15 cursor-pointer',
+          'flex-1 min-w-0 h-1 appearance-none rounded-full cursor-pointer',
+          tone === 'onDark' ? 'bg-white/15' : 'bg-border',
           '[&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:h-2.5',
-          '[&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white',
+          '[&::-webkit-slider-thumb]:rounded-full',
+          tone === 'onDark'
+            ? '[&::-webkit-slider-thumb]:bg-white'
+            : '[&::-webkit-slider-thumb]:bg-fg',
           '[&::-webkit-slider-thumb]:shadow',
         )}
         style={{
-          background: `linear-gradient(to right, rgb(52 211 153) ${pct}%, rgba(255,255,255,0.15) ${pct}%)`,
+          background:
+            tone === 'onDark'
+              ? `linear-gradient(to right, rgb(52 211 153) ${pct}%, rgba(255,255,255,0.15) ${pct}%)`
+              : `linear-gradient(to right, rgb(16 185 129) ${pct}%, var(--color-border, rgba(0,0,0,0.12)) ${pct}%)`,
         }}
         aria-label="Seek"
       />
       {!compact && (
-        <span className="text-[10px] tabular-nums text-white/50 w-8 shrink-0">
+        <span
+          className={cn(
+            'text-[10px] tabular-nums w-8 shrink-0',
+            tone === 'onDark' ? 'text-white/50' : 'text-muted',
+          )}
+        >
           {formatTime(duration)}
         </span>
       )}

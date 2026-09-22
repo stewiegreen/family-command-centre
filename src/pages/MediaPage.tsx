@@ -764,6 +764,22 @@ export function MediaPage() {
     );
   }
 
+  // Album page stays inside Media shell (nav/header visible)
+  if (albumUi && embyUserId) {
+    return (
+      <div className="p-4 lg:p-6 max-w-7xl mx-auto pb-24">
+        <AlbumPlayer
+          album={albumUi.album}
+          tracks={albumUi.tracks}
+          userId={embyUserId}
+          startIndex={albumUi.startIndex}
+          autoplay={albumUi.autoplay}
+          onClose={() => setAlbumUi(null)}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="p-4 lg:p-6 max-w-7xl mx-auto space-y-5">
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
@@ -1121,18 +1137,7 @@ export function MediaPage() {
           Open Comics
         </Button>
       </Card>
-{albumUi && embyUserId && (
-        <AlbumPlayer
-          album={albumUi.album}
-          tracks={albumUi.tracks}
-          userId={embyUserId}
-          startIndex={albumUi.startIndex}
-          autoplay={albumUi.autoplay}
-          onClose={() => setAlbumUi(null)}
-        />
-      )}
-
-      {watching && embyUserId && (
+{watching && embyUserId && (
         <VideoPlayer
           item={watching}
           userId={embyUserId}

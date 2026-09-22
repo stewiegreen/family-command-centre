@@ -1,12 +1,14 @@
 /**
- * Album / now-playing sheet — large-art player (Spotify-style) + track list.
- * Audio is owned by MusicPlayerContext; closing this sheet does not stop playback.
+ * Album page — lives inside GreenHQ Media (nav/header stay visible).
+ *
+ * Layout (desktop): sticky art + controls left, track list right (Spotify-like).
+ * Mobile: art/meta on top, tracks below.
+ * Color: GreenHQ surfaces + restrained art wash — not a full-screen black takeover.
+ * Audio still owned by MusicPlayerContext.
  */
 import { useEffect, useMemo } from 'react';
-import { createPortal } from 'react-dom';
 import {
   ArrowLeft,
-  ListMusic,
   Loader2,
   Pause,
   Play,
@@ -38,8 +40,7 @@ type Props = {
 };
 
 function trackLabel(t: EmbyItem, i: number): string {
-  const n = t.IndexNumber ?? i + 1;
-  return String(n);
+  return String(t.IndexNumber ?? i + 1);
 }
 
 export function AlbumPlayer({
@@ -53,9 +54,10 @@ export function AlbumPlayer({
   const music = useMusicPlayer();
   const tracks = useMemo(() => rawTracks.filter(isAudioItem), [rawTracks]);
 
-  const art = embyPosterUrl(album, 900) || embyPosterUrl(album, 600);
-  const artBlur = embyPosterUrl(album, 120) || art;
+  const art = embyPosterUrl(album, 640) || embyPosterUrl(album, 400);
+  const artBlur = embyPosterUrl(album, 80) || art;
   const albumArtist = albumArtistLine(album);
+  const year = album.ProductionYear;
 
   useEffect(() => {
     if (!tracks.length || !userId) return;
@@ -91,7 +93,8 @@ export function AlbumPlayer({
     null;
   const nowTitle = nowTrack ? displayTitle(nowTrack) : displayTitle(album);
   const nowArtist =
-    (nowTrack && (albumArtistLine(nowTrack) || nowTrack.AlbumArtist || nowTrack.Artists?.[0])) ||
+    (nowTrack &&
+      (albumArtistLine(nowTrack) || nowTrack.AlbumArtist || nowTrack.Artists?.[0])) ||
     albumArtist ||
     '';
 
@@ -110,236 +113,233 @@ export function AlbumPlayer({
     }
   };
 
-  const body = (
-    <div className="fixed inset-0 z-[80] text-white flex flex-col overflow-hidden">
-      {/* Atmosphere from album art */}
-      {artBlur ? (
-        <img
-          src={artBlur}
-          alt=""
-          className="absolute inset-0 w-full h-full object-cover scale-125 blur-3xl opacity-40 saturate-150"
-          aria-hidden
-        />
-      ) : null}
-      <div className="absolute inset-0 bg-zinc-950/80" />
-      <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-zinc-950/70 to-zinc-950" />
+  const totalLabel = useMemo(() => {
+    const ticks = tracks.reduce((s, t) => s + (t.RunTimeTicks || 0), 0);
+    if (!ticks) return `${tracks.length} tracks`;
+    return `${tracks.length} tracks · ${formatTicksDuration(ticks)}`;
+  }, [tracks]);
 
-      {/* Top bar */}
-      <div className="relative z-10 flex items-center gap-3 px-3 sm:px-5 py-3 shrink-0">
+  return (
+    <div className="relative -mx-1 sm:mx-0 rounded-2xl overflow-hidden border border-border bg-surface-1 shadow-lg">
+      {/* Soft art wash — contained, not full viewport */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden>
+        {artBlur ? (
+          <img
+            src={artBlur}
+            alt=""
+            className="absolute -top-8 left-0 right-0 h-72 w-full object-cover scale-125 blur-2xl opacity-30 saturate-150"
+          />
+        ) : null}
+        <div className="absolute inset-0 bg-gradient-to-b from-surface-1/40 via-surface-1/90 to-surface-1" />
+      </div>
+
+      {/* Header — back stays in Media */}
+      <div className="relative z-10 flex items-center gap-2 px-3 sm:px-4 py-2.5 border-b border-border/60">
         <button
           type="button"
           onClick={onClose}
-          className="p-2 rounded-full text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+          className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-sm font-semibold text-fg-secondary hover:text-fg hover:bg-nav-hover transition-colors"
           aria-label="Back"
         >
-          <ArrowLeft className="w-5 h-5" />
+          <ArrowLeft className="w-4 h-4" />
+          <span className="hidden sm:inline">Back</span>
         </button>
-        <div className="min-w-0 flex-1 text-center">
-          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-white/40 truncate">
-            Playing from album
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted truncate">
+            Album
           </p>
-          <p className="text-sm font-semibold text-white/90 truncate">{displayTitle(album)}</p>
+          <p className="text-sm font-semibold text-fg truncate">{displayTitle(album)}</p>
         </div>
-        <button
-          type="button"
-          onClick={() => {
-            music.setQueueOpen(true);
-            music.setExpanded(true);
-          }}
-          className="p-2 rounded-full text-white/50 hover:text-white hover:bg-white/10"
-          aria-label="Open Greenamp"
-          title="Open Greenamp"
-        >
-          <ListMusic className="w-5 h-5" />
-        </button>
-        {music.loading ? <Loader2 className="w-4 h-4 animate-spin text-white/50" /> : null}
+        {music.loading ? (
+          <Loader2 className="w-4 h-4 animate-spin text-muted shrink-0" />
+        ) : null}
       </div>
 
-      {/* Scrollable content */}
-      <div className="relative z-10 flex-1 overflow-y-auto overscroll-contain">
-        <div className="max-w-lg mx-auto px-5 sm:px-8 pt-2 pb-10 space-y-6">
-          {/* Hero art */}
+      {/* Body: stacked mobile, split desktop */}
+      <div className="relative z-10 flex flex-col lg:flex-row lg:items-start gap-0 lg:gap-6 p-4 sm:p-5 lg:p-6">
+        {/* Left: art + now playing + transport */}
+        <div className="w-full lg:w-[min(100%,18rem)] xl:w-80 shrink-0 flex flex-col items-center lg:items-stretch lg:sticky lg:top-2">
           <div
             className={cn(
-              'mx-auto w-full max-w-[min(100%,20rem)] sm:max-w-[22rem]',
-              'aspect-square rounded-2xl overflow-hidden',
-              'shadow-[0_24px_80px_-16px_rgba(0,0,0,0.85)]',
-              'ring-1 ring-white/10 bg-zinc-900',
+              'w-full max-w-[14rem] sm:max-w-[16rem] lg:max-w-none mx-auto',
+              'aspect-square rounded-xl overflow-hidden',
+              'bg-surface-2 border border-border',
+              'shadow-md shadow-black/20',
             )}
           >
             {art ? (
               <img src={art} alt="" className="w-full h-full object-cover" />
             ) : (
-              <div className="w-full h-full bg-gradient-to-br from-emerald-900/40 to-zinc-800" />
+              <div className="w-full h-full bg-gradient-to-br from-emerald-900/30 to-surface-2" />
             )}
           </div>
 
-          {/* Now playing meta */}
-          <div className="text-left sm:text-center space-y-1 px-1">
-            <h1 className="text-2xl sm:text-[1.75rem] font-bold tracking-tight leading-tight line-clamp-2">
-              {nowTitle}
+          <div className="w-full mt-4 text-center lg:text-left space-y-1">
+            <h1 className="text-lg sm:text-xl font-bold text-fg tracking-tight leading-snug line-clamp-2">
+              {displayTitle(album)}
             </h1>
-            {nowArtist ? (
-              <p className="text-base text-white/60 font-medium line-clamp-1">{nowArtist}</p>
+            {albumArtist ? (
+              <p className="text-sm text-fg-secondary line-clamp-1">{albumArtist}</p>
             ) : null}
+            <p className="text-xs text-muted">
+              {[year, totalLabel].filter(Boolean).join(' · ')}
+            </p>
           </div>
 
-          {/* Progress */}
-          <div className="px-0.5">
+          {/* Now-playing strip */}
+          <div className="w-full mt-4 rounded-xl bg-surface-2/80 border border-border px-3 py-3 space-y-2">
+            <div className="min-w-0">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">
+                {playingHere ? 'Now playing' : 'Selected'}
+              </p>
+              <p className="text-sm font-semibold text-fg truncate">{nowTitle}</p>
+              {nowArtist ? (
+                <p className="text-xs text-fg-secondary truncate">{nowArtist}</p>
+              ) : null}
+            </div>
             <MusicProgress
               position={music.position}
               duration={music.duration}
               onSeek={music.seek}
+              tone="onSurface"
             />
+            <div className="flex items-center justify-center gap-1 pt-0.5">
+              <button
+                type="button"
+                onClick={music.toggleShuffle}
+                className={cn(
+                  'p-2 rounded-full transition-colors',
+                  music.shuffle
+                    ? 'text-emerald-600 dark:text-emerald-400'
+                    : 'text-muted hover:text-fg',
+                )}
+                aria-label="Shuffle"
+              >
+                <Shuffle className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={music.previous}
+                className="p-2 rounded-full text-fg-secondary hover:text-fg hover:bg-nav-hover"
+                aria-label="Previous"
+              >
+                <SkipBack className="w-5 h-5 fill-current" />
+              </button>
+              <button
+                type="button"
+                onClick={music.togglePlay}
+                className="mx-1 p-3 rounded-full bg-fg text-surface-1 hover:opacity-90 shadow-md"
+                aria-label={music.isPlaying ? 'Pause' : 'Play'}
+              >
+                {music.isPlaying ? (
+                  <Pause className="w-5 h-5 fill-current" />
+                ) : (
+                  <Play className="w-5 h-5 fill-current ml-0.5" />
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={music.next}
+                className="p-2 rounded-full text-fg-secondary hover:text-fg hover:bg-nav-hover"
+                aria-label="Next"
+              >
+                <SkipForward className="w-5 h-5 fill-current" />
+              </button>
+              <button
+                type="button"
+                onClick={music.cycleRepeat}
+                className={cn(
+                  'p-2 rounded-full transition-colors',
+                  music.repeat !== 'off'
+                    ? 'text-emerald-600 dark:text-emerald-400'
+                    : 'text-muted hover:text-fg',
+                )}
+                aria-label="Repeat"
+              >
+                {music.repeat === 'one' ? (
+                  <Repeat1 className="w-4 h-4" />
+                ) : (
+                  <Repeat className="w-4 h-4" />
+                )}
+              </button>
+            </div>
+            {music.error ? (
+              <p className="text-[11px] text-red-500 text-center">{music.error}</p>
+            ) : null}
           </div>
+        </div>
 
-          {/* Transport — large play like reference */}
-          <div className="flex items-center justify-center gap-5 sm:gap-6">
+        {/* Right: track list */}
+        <div className="flex-1 min-w-0 mt-5 lg:mt-0">
+          <div className="flex items-center justify-between gap-2 mb-2 px-0.5">
+            <h2 className="text-xs font-bold uppercase tracking-[0.12em] text-muted">
+              Tracks
+            </h2>
             <button
               type="button"
-              onClick={music.toggleShuffle}
-              className={cn(
-                'p-2 rounded-full transition-colors',
-                music.shuffle ? 'text-emerald-300' : 'text-white/35 hover:text-white/80',
-              )}
-              aria-label="Shuffle"
+              onClick={() => playFrom(0)}
+              className="inline-flex items-center gap-1.5 rounded-full bg-accent text-accent-ink px-3 py-1.5 text-xs font-bold hover:bg-accent-hover"
             >
-              <Shuffle className="w-5 h-5" />
-            </button>
-            <button
-              type="button"
-              onClick={() => music.previous()}
-              className="p-2 rounded-full text-white/85 hover:text-white hover:bg-white/10 transition-colors"
-              aria-label="Previous"
-            >
-              <SkipBack className="w-7 h-7 fill-current" />
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                if (!tracks.length) return;
-                if (!music.currentTrack || music.album?.Id !== album.Id) {
-                  music.playTracks({
-                    tracks,
-                    album,
-                    startIndex: 0,
-                    autoplay: true,
-                    embyUserId: userId,
-                  });
-                } else {
-                  music.togglePlay();
-                }
-              }}
-              className={cn(
-                'w-16 h-16 rounded-full flex items-center justify-center',
-                'bg-white text-zinc-900 shadow-lg shadow-black/40',
-                'hover:scale-105 active:scale-95 transition-transform',
-              )}
-              aria-label={playingHere ? 'Pause' : 'Play'}
-            >
-              {playingHere ? (
-                <Pause className="w-7 h-7 fill-current" />
-              ) : (
-                <Play className="w-7 h-7 fill-current ml-0.5" />
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={() => music.next()}
-              className="p-2 rounded-full text-white/85 hover:text-white hover:bg-white/10 transition-colors"
-              aria-label="Next"
-            >
-              <SkipForward className="w-7 h-7 fill-current" />
-            </button>
-            <button
-              type="button"
-              onClick={music.cycleRepeat}
-              className={cn(
-                'p-2 rounded-full transition-colors',
-                music.repeat !== 'off' ? 'text-emerald-300' : 'text-white/35 hover:text-white/80',
-              )}
-              aria-label="Repeat"
-            >
-              {music.repeat === 'one' ? (
-                <Repeat1 className="w-5 h-5" />
-              ) : (
-                <Repeat className="w-5 h-5" />
-              )}
+              <Play className="w-3.5 h-3.5 fill-current" />
+              Play album
             </button>
           </div>
-
-          {music.error ? (
-            <p className="text-xs text-red-400 text-center px-2">{music.error}</p>
-          ) : null}
-
-          {/* Track list */}
-          <div className="pt-2">
-            <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-white/35 mb-2 px-1">
-              {tracks.length} tracks
-            </p>
-            <ul className="rounded-2xl overflow-hidden border border-white/[0.06] bg-black/25">
-              {tracks.map((t, i) => {
-                const isActive = activeId === t.Id;
-                return (
-                  <li key={t.Id}>
-                    <button
-                      type="button"
-                      onClick={() => playFrom(i)}
+          <ul className="rounded-xl border border-border bg-surface-2/50 overflow-hidden divide-y divide-border/70">
+            {tracks.map((t, i) => {
+              const isActive = t.Id === activeId;
+              return (
+                <li key={t.Id || i}>
+                  <button
+                    type="button"
+                    onClick={() => playFrom(i)}
+                    className={cn(
+                      'w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors',
+                      isActive ? 'bg-emerald-500/10' : 'hover:bg-nav-hover',
+                    )}
+                  >
+                    <span
                       className={cn(
-                        'w-full flex items-center gap-3 px-3 py-3 text-left transition-colors',
-                        isActive ? 'bg-white/[0.08]' : 'hover:bg-white/[0.04]',
-                        i > 0 && 'border-t border-white/[0.05]',
+                        'w-6 text-center text-xs tabular-nums shrink-0',
+                        isActive
+                          ? 'text-emerald-600 dark:text-emerald-400 font-bold'
+                          : 'text-muted',
                       )}
                     >
+                      {isActive && playingHere ? (
+                        <span className="inline-flex gap-0.5 justify-center items-end h-3">
+                          <span className="w-0.5 h-2 bg-emerald-500 animate-pulse rounded-full" />
+                          <span className="w-0.5 h-3 bg-emerald-500 animate-pulse rounded-full [animation-delay:100ms]" />
+                          <span className="w-0.5 h-1.5 bg-emerald-500 animate-pulse rounded-full [animation-delay:200ms]" />
+                        </span>
+                      ) : (
+                        trackLabel(t, i)
+                      )}
+                    </span>
+                    <span className="min-w-0 flex-1">
                       <span
                         className={cn(
-                          'w-7 text-center text-xs tabular-nums shrink-0',
-                          isActive ? 'text-emerald-300 font-bold' : 'text-white/35',
+                          'block text-sm truncate',
+                          isActive ? 'text-fg font-semibold' : 'text-fg',
                         )}
                       >
-                        {isActive && playingHere ? (
-                          <span className="inline-flex gap-0.5 justify-center items-end h-3">
-                            <span className="w-0.5 h-2 bg-emerald-300 animate-pulse rounded-full" />
-                            <span className="w-0.5 h-3 bg-emerald-300 animate-pulse rounded-full [animation-delay:100ms]" />
-                            <span className="w-0.5 h-1.5 bg-emerald-300 animate-pulse rounded-full [animation-delay:200ms]" />
-                          </span>
-                        ) : (
-                          trackLabel(t, i)
-                        )}
+                        {displayTitle(t)}
                       </span>
-                      <span className="min-w-0 flex-1">
-                        <span
-                          className={cn(
-                            'block text-sm truncate',
-                            isActive ? 'text-emerald-100 font-semibold' : 'text-white/90',
-                          )}
-                        >
-                          {displayTitle(t)}
+                      {albumArtistLine(t) && albumArtistLine(t) !== albumArtist ? (
+                        <span className="block text-[11px] text-muted truncate">
+                          {albumArtistLine(t)}
                         </span>
-                        {albumArtistLine(t) && albumArtistLine(t) !== albumArtist ? (
-                          <span className="block text-[11px] text-white/40 truncate">
-                            {albumArtistLine(t)}
-                          </span>
-                        ) : (
-                          <span className="block text-[11px] text-white/35 truncate">
-                            {albumArtist || ' '}
-                          </span>
-                        )}
-                      </span>
-                      <span className="text-[11px] text-white/35 tabular-nums shrink-0">
-                        {formatTicksDuration(t.RunTimeTicks)}
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
+                      ) : null}
+                    </span>
+                    <span className="text-[11px] text-muted tabular-nums shrink-0">
+                      {formatTicksDuration(t.RunTimeTicks)}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
         </div>
       </div>
     </div>
   );
-
-  if (typeof document === 'undefined') return body;
-  return createPortal(body, document.body);
 }
