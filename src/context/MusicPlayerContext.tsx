@@ -162,6 +162,7 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
   }));
   const stateRef = useRef(state);
   stateRef.current = state;
+  const nextRef = useRef<() => void>(() => {});
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -397,6 +398,8 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
     }));
     void loadStream(track, s.embyUserId);
   }, [loadStream]);
+  nextRef.current = next;
+
 
   const previous = useCallback(() => {
     const s = stateRef.current;
