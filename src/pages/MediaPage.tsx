@@ -35,12 +35,10 @@ import {
   displayTitle,
   embyBackdropUrl,
   embyBestLogoUrl,
-  embyArtistAlbums,
   embyChildren,
   embyItem,
   embyItems,
   embyLatest,
-  embyMusicArtists,
   embyNextUp,
   embyPosterUrl,
   isAlbumItem,
@@ -391,60 +389,17 @@ export function MediaPage() {
       setDetailStart(0);
       try {
         if (level.kind === 'library') {
-          const ct = (level.view.CollectionType || '').toLowerCase();
-          // Music libraries: Album Artists from Emby metadata (MusicArtist), not FS folders
-          if (ct === 'music' || ct === 'musicvideos') {
-            const artists = await embyMusicArtists(embyUserId, level.view.Id, {
-              limit: 48,
-              startIndex: 0,
-            });
-            if (artists.items.length) {
-              setDetailItems(sortMediaItems(artists.items));
-              setDetailTotal(artists.total);
-            } else {
-              // Fallback: library children (folder layout)
-              const sortBy = embySortByForParent({ collectionType: level.view.CollectionType });
-              const { items, total } = await embyItems(embyUserId, {
-                parentId: level.view.Id,
-                recursive: false,
-                sortBy,
-                sortOrder: 'Ascending',
-                limit: 48,
-                startIndex: 0,
-              });
-              setDetailItems(sortMediaItems(items));
-              setDetailTotal(total);
-            }
-          } else {
-            const sortBy = embySortByForParent({ collectionType: level.view.CollectionType });
-            const { items, total } = await embyItems(embyUserId, {
-              parentId: level.view.Id,
-              recursive: false,
-              sortBy,
-              sortOrder: 'Ascending',
-              limit: 48,
-              startIndex: 0,
-            });
-            setDetailItems(sortMediaItems(items));
-            setDetailTotal(total);
-          }
-        } else if (level.item.Type === 'MusicArtist') {
-          // Artist → albums via MusicAlbum (Album Artist relationship)
-          const albums = await embyArtistAlbums(embyUserId, level.item.Id, {
+          const sortBy = embySortByForParent({ collectionType: level.view.CollectionType });
+          const { items, total } = await embyItems(embyUserId, {
+            parentId: level.view.Id,
+            recursive: false,
+            sortBy,
+            sortOrder: 'Ascending',
             limit: 48,
             startIndex: 0,
           });
-          if (albums.items.length) {
-            setDetailItems(sortMediaItems(albums.items));
-            setDetailTotal(albums.total);
-          } else {
-            const { items, total } = await embyChildren(embyUserId, level.item.Id, {
-              limit: 48,
-              parentType: level.item.Type,
-            });
-            setDetailItems(sortMediaItems(items));
-            setDetailTotal(total);
-          }
+          setDetailItems(sortMediaItems(items));
+          setDetailTotal(total);
         } else {
           const { items, total } = await embyChildren(embyUserId, level.item.Id, {
             limit: 48,
@@ -630,66 +585,20 @@ export function MediaPage() {
     setDetailLoading(true);
     const next = detailStart + 48;
     try {
-      let items: EmbyItem[] = [];
-      let total = 0;
-      if (browse.kind === 'library') {
-        const ct = (browse.view.CollectionType || '').toLowerCase();
-        if (ct === 'music' || ct === 'musicvideos') {
-          const r = await embyMusicArtists(embyUserId, parentId, {
-            limit: 48,
-            startIndex: next,
-          });
-          items = r.items;
-          total = r.total;
-          if (!items.length && next === 0) {
-            const sortBy = embySortByForParent({ collectionType: browse.view.CollectionType });
-            const r2 = await embyItems(embyUserId, {
-              parentId,
-              recursive: false,
-              sortBy,
-              sortOrder: 'Ascending',
-              limit: 48,
-              startIndex: next,
-            });
-            items = r2.items;
-            total = r2.total;
-          }
-        } else {
-          const sortBy = embySortByForParent({ collectionType: browse.view.CollectionType });
-          const r = await embyItems(embyUserId, {
-            parentId,
-            recursive: false,
-            sortBy,
-            sortOrder: 'Ascending',
-            limit: 48,
-            startIndex: next,
-          });
-          items = r.items;
-          total = r.total;
-        }
-      } else if (browse.kind === 'folder' && browse.item.Type === 'MusicArtist') {
-        const r = await embyArtistAlbums(embyUserId, parentId, {
-          limit: 48,
-          startIndex: next,
-        });
-        items = r.items;
-        total = r.total;
-      } else {
-        const sortBy =
-          browse.kind === 'folder'
+      const sortBy =
+        browse.kind === 'library'
+          ? embySortByForParent({ collectionType: browse.view.CollectionType })
+          : browse.kind === 'folder'
             ? embySortByForParent({ parentType: browse.item.Type })
             : 'IndexNumber,SortName';
-        const r = await embyItems(embyUserId, {
-          parentId,
-          recursive: false,
-          sortBy,
-          sortOrder: 'Ascending',
-          limit: 48,
-          startIndex: next,
-        });
-        items = r.items;
-        total = r.total;
-      }
+      const { items, total } = await embyItems(embyUserId, {
+        parentId,
+        recursive: false,
+        sortBy,
+        sortOrder: 'Ascending',
+        limit: 48,
+        startIndex: next,
+      });
       setDetailItems((prev) => sortMediaItems([...prev, ...items]));
       setDetailTotal(total);
       setDetailStart(next);
