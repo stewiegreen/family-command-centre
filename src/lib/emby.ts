@@ -4,7 +4,7 @@ import type { Settings } from '../types';
 const PROXY = '/api/emby';
 
 const DETAIL_FIELDS =
-  'Overview,UserData,PrimaryImageAspectRatio,SeriesName,ProductionYear,ChildCount,RecursiveItemCount,RunTimeTicks,OfficialRating,Genres,CommunityRating,ParentId,SeasonName,IndexNumber,ParentIndexNumber,ParentLogoItemId,ParentLogoImageTag,ParentBackdropItemId,ParentBackdropImageTags,SeriesPrimaryImageTag,SeriesId';
+  'Overview,UserData,PrimaryImageAspectRatio,SeriesName,ProductionYear,ChildCount,RecursiveItemCount,RunTimeTicks,OfficialRating,Genres,CommunityRating,ParentId,SeasonName,IndexNumber,ParentIndexNumber,ParentLogoItemId,ParentLogoImageTag,ParentBackdropItemId,ParentBackdropImageTags,SeriesPrimaryImageTag,SeriesId,AlbumArtist,Artists,Album,AlbumId';
 
 export type EmbyUserData = {
   PlaybackPositionTicks?: number;
@@ -289,6 +289,58 @@ export async function embyChildren(
     total: result.total,
   };
 }
+
+/**
+ * Album artists for a music library — Emby MusicArtist entities, not filesystem folders.
+ * Uses IncludeItemTypes=MusicArtist (Album Artist metadata). Falls back to empty if none.
+ */
+export async function embyMusicArtists(
+  userId: string,
+  libraryId: string,
+  opts: { limit?: number; startIndex?: number } = {},
+): Promise<{ items: EmbyItem[]; total: number }> {
+  return embyItems(userId, {
+    parentId: libraryId,
+    includeItemTypes: 'MusicArtist',
+    recursive: true,
+    sortBy: 'SortName',
+    sortOrder: 'Ascending',
+    limit: opts.limit ?? 48,
+    startIndex: opts.startIndex ?? 0,
+  });
+}
+
+/**
+ * Albums for a MusicArtist (Album Artist). Prefers MusicAlbum items.
+ */
+export async function embyArtistAlbums(
+  userId: string,
+  artistId: string,
+  opts: { limit?: number; startIndex?: number } = {},
+): Promise<{ items: EmbyItem[]; total: number }> {
+  // Direct children first
+  const direct = await embyItems(userId, {
+    parentId: artistId,
+    includeItemTypes: 'MusicAlbum',
+    recursive: false,
+    sortBy: 'ProductionYear,SortName',
+    sortOrder: 'Ascending',
+    limit: opts.limit ?? 48,
+    startIndex: opts.startIndex ?? 0,
+  });
+  if (direct.items.length) return direct;
+  // Some libraries only link albums via recursive query
+  return embyItems(userId, {
+    parentId: artistId,
+    includeItemTypes: 'MusicAlbum',
+    recursive: true,
+    sortBy: 'ProductionYear,SortName',
+    sortOrder: 'Ascending',
+    limit: opts.limit ?? 48,
+    startIndex: opts.startIndex ?? 0,
+  });
+}
+
 
 export async function embySearch(
   userId: string,
@@ -877,5 +929,6 @@ export function isAudioItem(item: EmbyItem): boolean {
 }
 
 export function isAlbumItem(item: EmbyItem): boolean {
-  return item.Type === 'MusicAlbum';
+  const ty = item.Type || '';
+  return ty === 'MusicAlbum' || ty === 'Album';
 }
