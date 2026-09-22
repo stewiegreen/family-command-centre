@@ -151,6 +151,8 @@ export type EmbyItemsQuery = {
   filters?: string;
   limit?: number;
   startIndex?: number;
+  /** Emby: "AlbumArtist" | "Artist" — filters MusicArtist list */
+  artistType?: 'AlbumArtist' | 'Artist';
 };
 
 export async function embyItems(
@@ -169,6 +171,7 @@ export async function embyItems(
     StartIndex: q.startIndex ?? 0,
     Fields: DETAIL_FIELDS,
     EnableUserData: 'true',
+    ArtistType: q.artistType,
   });
   return { items: data.Items || [], total: data.TotalRecordCount ?? data.Items?.length ?? 0 };
 }
@@ -291,22 +294,52 @@ export async function embyChildren(
 }
 
 /**
- * Album artists for a music library — Emby MusicArtist entities, not filesystem folders.
- * Uses IncludeItemTypes=MusicArtist (Album Artist metadata). Falls back to empty if none.
+ * Album Artists for a music library (Emby AlbumArtist metadata — not track Artists,
+ * not filesystem folders).
+ *
+ * Tries /Artists/AlbumArtists first, then Items with ArtistType=AlbumArtist.
  */
 export async function embyMusicArtists(
   userId: string,
   libraryId: string,
   opts: { limit?: number; startIndex?: number } = {},
 ): Promise<{ items: EmbyItem[]; total: number }> {
+  const limit = opts.limit ?? 48;
+  const startIndex = opts.startIndex ?? 0;
+
+  // Preferred: dedicated Album Artists endpoint
+  try {
+    const data = await proxyGet<EmbyItemsResponse>('Artists/AlbumArtists', {
+      UserId: userId,
+      ParentId: libraryId,
+      SortBy: 'SortName',
+      SortOrder: 'Ascending',
+      Limit: limit,
+      StartIndex: startIndex,
+      Fields: DETAIL_FIELDS,
+      EnableUserData: 'true',
+    });
+    const items = data.Items || [];
+    if (items.length || (data.TotalRecordCount ?? 0) > 0) {
+      return {
+        items,
+        total: data.TotalRecordCount ?? items.length,
+      };
+    }
+  } catch {
+    /* older servers may lack this route */
+  }
+
+  // Fallback: MusicArtist filtered to AlbumArtist only
   return embyItems(userId, {
     parentId: libraryId,
     includeItemTypes: 'MusicArtist',
+    artistType: 'AlbumArtist',
     recursive: true,
     sortBy: 'SortName',
     sortOrder: 'Ascending',
-    limit: opts.limit ?? 48,
-    startIndex: opts.startIndex ?? 0,
+    limit,
+    startIndex,
   });
 }
 
