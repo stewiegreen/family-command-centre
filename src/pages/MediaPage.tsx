@@ -201,7 +201,7 @@ export function MediaPage() {
   const [focus, setFocus] = useState<EmbyItem | null>(null);
   const [focusLoading, setFocusLoading] = useState(false);
   const [watching, setWatching] = useState<EmbyItem | null>(null);
-  /** Album sheet UI only — audio lives in MusicPlayerContext. */
+  /** Full album page (Media only) — separate from mini expand corner sheet. */
   const [albumUi, setAlbumUi] = useState<{
     album: EmbyItem;
     tracks: EmbyItem[];
@@ -228,16 +228,14 @@ export function MediaPage() {
           pushBrowse({ kind: 'folder', item: full, title: full.Name || 'Album' });
           return;
         }
-        // Global music session — keeps playing when leaving Media
         const startIndex = opts?.startIndex ?? 0;
         const autoplay = opts?.autoplay ?? true;
-        // UI sheet; AlbumPlayer hands tracks to MusicPlayerContext (single audio owner)
         setAlbumUi({ album: full, tracks, startIndex, autoplay });
       } catch (e) {
         console.warn('openAlbum failed', e);
       }
     },
-    [embyUserId, music],
+    [embyUserId],
   );
 
   const [recommendTarget, setRecommendTarget] = useState<EmbyItem | null>(null);
@@ -994,6 +992,7 @@ export function MediaPage() {
                         square={inMusicContext && item.Type !== 'Episode'}
                         layout="grid"
                         onOpen={() => void openFocus(item)}
+                        onPlay={() => play(item)}
                       />
                     ))}
                   </div>
@@ -1042,6 +1041,7 @@ export function MediaPage() {
                 square={inMusicContext}
                 layout="grid"
                 onOpen={() => void openFocus(item)}
+                onPlay={() => play(item)}
               />
             ))}
           </div>
@@ -1057,8 +1057,7 @@ export function MediaPage() {
           Open Comics
         </Button>
       </Card>
-
-                  {albumUi && embyUserId && (
+{albumUi && embyUserId && (
         <AlbumPlayer
           album={albumUi.album}
           tracks={albumUi.tracks}

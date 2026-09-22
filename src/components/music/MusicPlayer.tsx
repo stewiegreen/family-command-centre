@@ -1,6 +1,6 @@
 /**
- * Expanded Greenamp — same width/corner as mini player.
- * One scroll surface: now-playing page (full panel height) then queue below.
+ * Expanded Greenamp mini player — corner sheet (art / viz + queue).
+ * Does not replace the full AlbumPlayer page used from Media.
  * Does not block GreenHQ navigation.
  */
 import { useEffect, useRef, useState } from 'react';
@@ -52,6 +52,7 @@ function isBottomCorner(c: Corner): boolean {
   return c === 'br' || c === 'bl';
 }
 
+/** Expanded mini player — corner sheet with art + queue scroll. */
 export function MusicPlayer() {
   const music = useMusicPlayer();
   const open = Boolean(music.expanded && music.currentTrack);
@@ -80,7 +81,6 @@ export function MusicPlayer() {
     if (!music.expanded) setVisualMode('art');
   }, [music.expanded]);
 
-  // Opened via queue button → jump to queue page
   useEffect(() => {
     if (!open || !entered || !music.queueOpen) return;
     const t = window.setTimeout(() => {
@@ -89,7 +89,6 @@ export function MusicPlayer() {
     return () => window.clearTimeout(t);
   }, [open, entered, music.queueOpen]);
 
-  // Reset scroll to now-playing when opening
   useEffect(() => {
     if (!open || !entered) return;
     if (music.queueOpen) return;
@@ -138,7 +137,6 @@ export function MusicPlayer() {
         className={cn(
           'pointer-events-auto relative',
           'w-[min(100vw-1.5rem,22rem)] sm:w-[22rem]',
-          /* Shorter so queue stays below the fold */
           'h-[min(68vh,520px)]',
           'flex flex-col overflow-hidden',
           'rounded-2xl border border-white/[0.09]',
@@ -153,7 +151,6 @@ export function MusicPlayer() {
               : 'opacity-0 scale-95 -translate-y-3',
         )}
       >
-        {/* Atmosphere */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none rounded-2xl" aria-hidden>
           {artAtmosphere ? (
             <img
@@ -166,7 +163,6 @@ export function MusicPlayer() {
           <div className="absolute inset-0 bg-gradient-to-b from-zinc-950/40 via-zinc-950/85 to-zinc-950" />
         </div>
 
-        {/* Chrome */}
         <div className="relative z-10 shrink-0 flex items-center justify-between px-2 pt-2 pb-1">
           <button
             type="button"
@@ -213,17 +209,12 @@ export function MusicPlayer() {
           </button>
         </div>
 
-        {/* Single scroll surface — now-playing is one full “page”, queue is next */}
         <div
           ref={scrollRef}
           className="relative z-10 flex-1 min-h-0 overflow-y-auto overscroll-y-contain scroll-smooth"
           style={{ WebkitOverflowScrolling: 'touch' }}
         >
-          {/* Page 1: now playing — fills the scrollport */}
-          <div
-            ref={nowRef}
-            className="min-h-full flex flex-col px-5 pt-1 pb-2 box-border"
-          >
+          <div ref={nowRef} className="min-h-full flex flex-col px-5 pt-1 pb-2 box-border">
             <div className="flex-1 flex flex-col items-center justify-center min-h-0">
               <div className="w-full max-w-[13.5rem] aspect-square shrink-0">
                 {visualMode === 'art' ? (
@@ -329,13 +320,8 @@ export function MusicPlayer() {
                   aria-label="Volume"
                 />
               </div>
-
-              {music.error ? (
-                <p className="mt-2 text-[11px] text-red-400 text-center">{music.error}</p>
-              ) : null}
             </div>
 
-            {/* Chevron cue — queue below */}
             <button
               type="button"
               onClick={scrollToQueue}
@@ -349,7 +335,6 @@ export function MusicPlayer() {
             </button>
           </div>
 
-          {/* Page 2: queue */}
           <div
             ref={queueAnchorRef}
             className="min-h-full flex flex-col px-3 pt-2 pb-4 box-border bg-black/20 border-t border-white/[0.06]"
