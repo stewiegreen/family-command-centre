@@ -339,20 +339,53 @@ export function MiniMusicPlayer() {
           display: flex; align-items: center; justify-content: center; gap: 8px;
           margin-top: 8px;
         }
-        .expanded .queue-hint {
+        .expanded .pane-nav {
           margin-top: auto;
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 6px;
+          padding: 6px 4px 4px;
+          width: 100%;
+          flex-shrink: 0;
+        }
+        .expanded .pane-nav-btn {
           display: flex; flex-direction: column; align-items: center; gap: 2px;
-          padding: 8px 0 4px;
+          padding: 6px 4px;
           color: rgba(255,255,255,0.4);
           font-size: 10px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
-          cursor: pointer; border: 0; background: transparent; width: 100%;
+          cursor: pointer; border: 0; background: transparent;
+          border-radius: 10px;
         }
-        .expanded .queue-hint:hover { color: rgba(255,255,255,0.75); }
-        .expanded .queue-section {
+        .expanded .pane-nav-btn:hover {
+          color: rgba(255,255,255,0.85);
+          background: rgba(255,255,255,0.06);
+        }
+        .expanded .pane-nav-btn svg {
+          width: 18px; height: 18px;
+        }
+        .expanded .queue-section,
+        .expanded .artist-section {
           min-height: 100%;
           scroll-snap-align: start;
           scroll-snap-stop: always;
           padding-top: 8px;
+        }
+        .expanded .artist-section {
+          padding-left: 4px; padding-right: 4px;
+        }
+        .expanded .artist-placeholder {
+          margin-top: 24px;
+          text-align: center;
+          color: rgba(255,255,255,0.4);
+          font-size: 12px;
+          line-height: 1.45;
+          padding: 0 12px;
+        }
+        .expanded .artist-placeholder strong {
+          display: block;
+          color: rgba(255,255,255,0.7);
+          font-size: 13px;
+          margin-bottom: 6px;
         }
         .expanded .queue-head {
           display: flex; align-items: center; justify-content: space-between; gap: 6px;
@@ -490,14 +523,27 @@ export function MiniMusicPlayer() {
                   <svg viewBox="0 0 24 24"><path d="M16 6h2v12h-2V6zM6 18l8.5-6L6 6v12z"/></svg>
                 </button>
               </div>
-              <button type="button" class="queue-hint" aria-label="Show queue">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
-                Queue
-              </button>
+              <div class="pane-nav">
+                <button type="button" class="pane-nav-btn queue-hint" aria-label="Show queue">
+                  <span>Queue</span>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+                </button>
+                <button type="button" class="pane-nav-btn artist-hint" aria-label="Browse artist">
+                  <span>Artist</span>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+                </button>
+              </div>
             </div>
             <div class="queue-section">
               <div class="queue-head"><span>Up next</span></div>
               <div class="queue-list"></div>
+            </div>
+            <div class="artist-section">
+              <div class="queue-head"><span>Artist</span></div>
+              <div class="artist-placeholder">
+                <strong class="artist-pane-name">Artist</strong>
+                Browse albums and tracks here without leaving the player.
+              </div>
             </div>
           </div>
         </div>
@@ -563,10 +609,17 @@ export function MiniMusicPlayer() {
       // Art stays decorative in expanded — collapse via Mini only
       const scrollEl = root.querySelector('.scroll') as HTMLElement;
       const queueHint = root.querySelector('.queue-hint') as HTMLElement | null;
+      const artistHint = root.querySelector('.artist-hint') as HTMLElement | null;
       if (queueHint && scrollEl) {
         queueHint.onclick = () => {
           const qs = root.querySelector('.queue-section') as HTMLElement | null;
           qs?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        };
+      }
+      if (artistHint && scrollEl) {
+        artistHint.onclick = () => {
+          const as = root.querySelector('.artist-section') as HTMLElement | null;
+          as?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         };
       }
 
@@ -641,6 +694,8 @@ export function MiniMusicPlayer() {
         if (eTitle) eTitle.textContent = title;
         if (eArtist) eArtist.textContent = artist;
         if (eAlbum) eAlbum.textContent = album;
+        const artistPaneName = root.querySelector('.artist-pane-name') as HTMLElement | null;
+        if (artistPaneName) artistPaneName.textContent = artist || 'Artist';
 
         const playing = m.isPlaying;
         root.querySelectorAll('.icon-play, .e-icon-play').forEach((el) => {
