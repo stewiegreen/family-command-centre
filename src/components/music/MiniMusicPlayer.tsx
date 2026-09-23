@@ -14,7 +14,17 @@ import {
   X,
 } from 'lucide-react';
 import { useMusicPlayer } from '../../context/MusicPlayerContext';
-import { albumArtistLine, displayTitle, embyPosterUrl } from '../../lib/emby';
+import {
+  albumArtistLine,
+  displayTitle,
+  embyAlbumsByArtistName,
+  embyChildren,
+  embyMusicSearch,
+  embyPosterUrl,
+  isAlbumItem,
+  isAudioItem,
+  type EmbyItem,
+} from '../../lib/emby';
 import { cn } from '../../lib/cn';
 import { MusicControls } from './MusicControls';
 import { MusicProgress } from './MusicProgress';
@@ -376,20 +386,30 @@ export function MiniMusicPlayer() {
         }
         .expanded .artist-section {
           padding-left: 4px; padding-right: 4px;
+          display: flex; flex-direction: column; gap: 8px;
         }
-        .expanded .artist-placeholder {
-          margin-top: 24px;
-          text-align: center;
-          color: rgba(255,255,255,0.4);
-          font-size: 12px;
-          line-height: 1.45;
-          padding: 0 12px;
-        }
-        .expanded .artist-placeholder strong {
-          display: block;
-          color: rgba(255,255,255,0.7);
+        .expanded .artist-search {
+          width: 100%;
+          box-sizing: border-box;
+          border: 1px solid rgba(255,255,255,0.12);
+          background: rgba(255,255,255,0.06);
+          color: #f4f4f5;
+          border-radius: 10px;
+          padding: 8px 10px;
           font-size: 13px;
-          margin-bottom: 6px;
+          outline: none;
+        }
+        .expanded .artist-search::placeholder { color: rgba(255,255,255,0.35); }
+        .expanded .artist-search:focus {
+          border-color: rgba(var(--pip-r), var(--pip-g), var(--pip-b), 0.55);
+        }
+        .expanded .artist-status {
+          font-size: 11px; color: rgba(255,255,255,0.4);
+          padding: 4px 2px;
+        }
+        .expanded .artist-list {
+          display: flex; flex-direction: column; gap: 2px;
+          padding-bottom: 12px;
         }
         .expanded .queue-head {
           display: flex; align-items: center; justify-content: space-between; gap: 6px;
@@ -533,11 +553,16 @@ export function MiniMusicPlayer() {
               <div class="queue-list"></div>
             </div>
             <div class="artist-section">
-              <div class="queue-head"><span>Artist</span></div>
-              <div class="artist-placeholder">
-                <strong class="artist-pane-name">Artist</strong>
-                Browse albums and tracks here without leaving the player.
-              </div>
+              <div class="queue-head"><span class="artist-pane-name">Artist</span></div>
+              <input
+                type="search"
+                class="artist-search"
+                placeholder="Search albums & tracks…"
+                autocomplete="off"
+                spellcheck="false"
+              />
+              <div class="artist-status">Albums by this artist</div>
+              <div class="artist-list"></div>
             </div>
           </div>
           <div class="pane-nav">
@@ -624,6 +649,175 @@ export function MiniMusicPlayer() {
         artistHint.onclick = () => {
           const as = root.querySelector('.artist-section') as HTMLElement | null;
           as?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          void loadArtistAlbums();
+        };
+      }
+
+      const artistListEl = root.querySelector('.artist-list') as HTMLElement | null;
+      const artistStatusEl = root.querySelector('.artist-status') as HTMLElement | null;
+      const artistSearchEl = root.querySelector('.artist-search') as HTMLInputElement | null;
+      let artistLoadToken = 0;
+      let searchTimer: ReturnType<typeof setTimeout> | null = null;
+      let lastArtistLoaded = '';
+
+      const playAlbumFromPip = async (album: EmbyItem) => {
+        const m = mpRef.current;
+        const userId = m.embyUserId;
+        if (!userId) return;
+        if (artistStatusEl) artistStatusEl.textContent = 'Loading album…';
+        try {
+          const { items } = await embyChildren(userId, album.Id, {
+            limit: 500,
+            parentType: album.Type,
+          });
+          const tracks = items.filter(isAudioItem);
+          if (!tracks.length) {
+            if (artistStatusEl) artistStatusEl.textContent = 'No tracks on this album';
+            return;
+          }
+          m.playTracks({
+            tracks,
+            album,
+            startIndex: 0,
+            autoplay: true,
+            embyUserId: userId,
+          });
+          if (artistStatusEl) artistStatusEl.textContent = 'Playing · ' + displayTitle(album);
+        } catch {
+          if (artistStatusEl) artistStatusEl.textContent = 'Could not load album';
+        }
+      };
+
+      const playTrackFromPip = (track: EmbyItem) => {
+        const m = mpRef.current;
+        const userId = m.embyUserId;
+        if (!userId) return;
+        m.playTracks({
+          tracks: [track],
+          album: m.album,
+          startIndex: 0,
+          autoplay: true,
+          embyUserId: userId,
+        });
+      };
+
+      const renderArtistRows = (items: EmbyItem[], emptyMsg: string) => {
+        if (!artistListEl) return;
+        artistListEl.innerHTML = '';
+        if (!items.length) {
+          const empty = pipWin.document.createElement('p');
+          empty.className = 'artist-status';
+          empty.textContent = emptyMsg;
+          artistListEl.appendChild(empty);
+          return;
+        }
+        items.forEach((item) => {
+          const row = pipWin.document.createElement('button');
+          row.type = 'button';
+          row.className = 'q-row';
+          const artUrl = embyPosterUrl(item, 72) || '';
+          const title = displayTitle(item);
+          const sub =
+            isAlbumItem(item)
+              ? [item.ProductionYear, albumArtistLine(item) || item.AlbumArtist]
+                  .filter(Boolean)
+                  .join(' · ')
+              : isAudioItem(item)
+                ? [albumArtistLine(item) || item.AlbumArtist, item.Album]
+                    .filter(Boolean)
+                    .join(' · ')
+                : item.Type || '';
+          row.innerHTML =
+            (artUrl
+              ? '<img class="q-art" src="' + artUrl.replace(/"/g, '') + '" alt="" />'
+              : '<div class="q-art"></div>') +
+            '<div class="q-meta"><div class="q-title"></div><div class="q-sub"></div></div>';
+          (row.querySelector('.q-title') as HTMLElement).textContent = title;
+          (row.querySelector('.q-sub') as HTMLElement).textContent = sub;
+          if (isAlbumItem(item)) {
+            row.onclick = () => void playAlbumFromPip(item);
+          } else if (isAudioItem(item)) {
+            row.onclick = () => playTrackFromPip(item);
+          } else {
+            // MusicArtist — load that artist's albums
+            row.onclick = () => {
+              const name = item.Name || '';
+              if (artistSearchEl) artistSearchEl.value = '';
+              void loadAlbumsForName(name);
+            };
+          }
+          artistListEl.appendChild(row);
+        });
+      };
+
+      const loadAlbumsForName = async (name: string) => {
+        const m = mpRef.current;
+        const userId = m.embyUserId;
+        if (!userId || !name) return;
+        const token = ++artistLoadToken;
+        if (artistStatusEl) artistStatusEl.textContent = 'Loading albums…';
+        try {
+          const albums = await embyAlbumsByArtistName(userId, name, 48);
+          if (token !== artistLoadToken) return;
+          lastArtistLoaded = name;
+          if (artistStatusEl) {
+            artistStatusEl.textContent = albums.length
+              ? 'Albums by ' + name
+              : 'No albums found for ' + name;
+          }
+          renderArtistRows(albums, 'No albums found');
+        } catch {
+          if (token !== artistLoadToken) return;
+          if (artistStatusEl) artistStatusEl.textContent = 'Could not load artist';
+          renderArtistRows([], 'Could not load artist');
+        }
+      };
+
+      const loadArtistAlbums = async () => {
+        const m = mpRef.current;
+        const track = m.currentTrack;
+        const name =
+          (track && (albumArtistLine(track) || track.AlbumArtist || track.Artists?.[0])) ||
+          (m.album && albumArtistLine(m.album)) ||
+          '';
+        if (!name) {
+          if (artistStatusEl) artistStatusEl.textContent = 'No artist on this track';
+          renderArtistRows([], 'Play a track to browse by artist');
+          return;
+        }
+        if (name === lastArtistLoaded && artistListEl && artistListEl.children.length) return;
+        await loadAlbumsForName(name);
+      };
+
+      if (artistSearchEl) {
+        artistSearchEl.oninput = () => {
+          const q = artistSearchEl.value.trim();
+          if (searchTimer) clearTimeout(searchTimer);
+          searchTimer = setTimeout(async () => {
+            const m = mpRef.current;
+            const userId = m.embyUserId;
+            if (!userId) return;
+            if (!q) {
+              lastArtistLoaded = '';
+              void loadArtistAlbums();
+              return;
+            }
+            const token = ++artistLoadToken;
+            if (artistStatusEl) artistStatusEl.textContent = 'Searching…';
+            try {
+              const hits = await embyMusicSearch(userId, q, 40);
+              if (token !== artistLoadToken) return;
+              if (artistStatusEl) {
+                artistStatusEl.textContent = hits.length
+                  ? 'Results for “' + q + '”'
+                  : 'No results';
+              }
+              renderArtistRows(hits, 'No results');
+            } catch {
+              if (token !== artistLoadToken) return;
+              if (artistStatusEl) artistStatusEl.textContent = 'Search failed';
+            }
+          }, 320);
         };
       }
 
@@ -700,6 +894,16 @@ export function MiniMusicPlayer() {
         if (eAlbum) eAlbum.textContent = album;
         const artistPaneName = root.querySelector('.artist-pane-name') as HTMLElement | null;
         if (artistPaneName) artistPaneName.textContent = artist || 'Artist';
+        // Refresh artist albums when the playing artist changes (if search empty)
+        if (
+          artist &&
+          artist !== lastArtistLoaded &&
+          artistSearchEl &&
+          !artistSearchEl.value.trim()
+        ) {
+          // Defer so we don't block the render tick
+          setTimeout(() => void loadArtistAlbums(), 0);
+        }
 
         const playing = m.isPlaying;
         root.querySelectorAll('.icon-play, .e-icon-play').forEach((el) => {

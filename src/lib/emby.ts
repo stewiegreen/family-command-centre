@@ -155,6 +155,8 @@ export type EmbyItemsQuery = {
   artistType?: 'AlbumArtist' | 'Artist';
   /** Emby NameStartsWith — A–Z letter buckets */
   nameStartsWith?: string;
+  /** Emby Artists filter (name) */
+  artists?: string;
 };
 
 export async function embyItems(
@@ -175,6 +177,7 @@ export async function embyItems(
     EnableUserData: 'true',
     ArtistType: q.artistType,
     NameStartsWith: q.nameStartsWith,
+    Artists: q.artists,
   });
   return { items: data.Items || [], total: data.TotalRecordCount ?? data.Items?.length ?? 0 };
 }
@@ -394,6 +397,65 @@ export async function embySearch(
   });
   return items;
 }
+
+/** Search music only (albums, tracks, artists). */
+export async function embyMusicSearch(
+  userId: string,
+  term: string,
+  limit = 40,
+): Promise<EmbyItem[]> {
+  const t = term.trim();
+  if (!t) return [];
+  const { items } = await embyItems(userId, {
+    searchTerm: t,
+    recursive: true,
+    includeItemTypes: 'MusicAlbum,Audio,MusicArtist',
+    limit,
+    sortBy: 'SortName',
+  });
+  return items;
+}
+
+/** Albums for an album-artist name (folder-style libraries without MusicArtist ids). */
+export async function embyAlbumsByArtistName(
+  userId: string,
+  artistName: string,
+  limit = 48,
+): Promise<EmbyItem[]> {
+  const name = artistName.trim();
+  if (!name) return [];
+  // Prefer Artists filter when supported
+  try {
+    const byArtist = await embyItems(userId, {
+      recursive: true,
+      includeItemTypes: 'MusicAlbum',
+      artists: name,
+      sortBy: 'ProductionYear,SortName',
+      sortOrder: 'Ascending',
+      limit,
+    });
+    if (byArtist.items.length) return byArtist.items;
+  } catch {
+    /* fall through */
+  }
+  const { items } = await embyItems(userId, {
+    searchTerm: name,
+    recursive: true,
+    includeItemTypes: 'MusicAlbum',
+    sortBy: 'ProductionYear,SortName',
+    sortOrder: 'Ascending',
+    limit,
+  });
+  // Prefer albums whose AlbumArtist matches
+  const lower = name.toLowerCase();
+  const matched = items.filter((it) => {
+    const aa = (it.AlbumArtist || '').toLowerCase();
+    const arts = (it.Artists || []).map((a) => a.toLowerCase());
+    return aa === lower || arts.includes(lower) || aa.includes(lower);
+  });
+  return matched.length ? matched : items;
+}
+
 
 export async function embyPublicInfo(): Promise<EmbyPublicInfo> {
   return proxyGet<EmbyPublicInfo>('System/Info/Public');
