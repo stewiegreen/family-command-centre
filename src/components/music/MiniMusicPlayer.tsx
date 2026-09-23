@@ -81,17 +81,27 @@ export function MiniMusicPlayer() {
     if (!('documentPictureInPicture' in window)) return;
     try {
       // @ts-expect-error Chromium Document PiP
+      const SIZE = {
+        // Compact: slightly wider/taller bar so art + controls fit without feeling cramped
+        compact: { w: 440, h: 148 },
+        // Expanded: tight height so now-playing fills the window; queue is just below the fold
+        expanded: { w: 320, h: 420 },
+      };
+
+      // @ts-expect-error Chromium Document PiP
       const pipWin: Window = await window.documentPictureInPicture.requestWindow({
-        width: 440,
-        height: 148,
+        width: SIZE.compact.w,
+        height: SIZE.compact.h,
       });
       pipWindowRef.current = pipWin;
       setPipOpen(true);
 
-      const SIZE = {
-        compact: { w: 440, h: 148 },
-        expanded: { w: 320, h: 560 },
-      };
+      // Chromium often ignores requestWindow size or reuses last PiP size — force compact
+      try {
+        pipWin.resizeTo(SIZE.compact.w, SIZE.compact.h);
+      } catch {
+        /* ignore */
+      }
 
       /** Average / dominant-ish color from album art (canvas sample). */
       const sampleArtColor = (url: string): Promise<{ r: number; g: number; b: number } | null> =>
@@ -139,7 +149,22 @@ export function MiniMusicPlayer() {
                 resolve(null);
                 return;
               }
-              resolve({ r: Math.round(r / n), g: Math.round(g / n), b: Math.round(b / n) });
+              // Boost saturation slightly so the wash reads clearly against black
+              let rr = r / n, gg = g / n, bb = b / n;
+              const avg = (rr + gg + bb) / 3;
+              const boost = 1.35;
+              rr = Math.max(0, Math.min(255, avg + (rr - avg) * boost));
+              gg = Math.max(0, Math.min(255, avg + (gg - avg) * boost));
+              bb = Math.max(0, Math.min(255, avg + (bb - avg) * boost));
+              // Floor brightness so dark covers still tint
+              const maxc = Math.max(rr, gg, bb);
+              if (maxc < 90) {
+                const scale = 90 / maxc;
+                rr = Math.min(255, rr * scale);
+                gg = Math.min(255, gg * scale);
+                bb = Math.min(255, bb * scale);
+              }
+              resolve({ r: Math.round(rr), g: Math.round(gg), b: Math.round(bb) });
             } catch {
               resolve(null);
             }
@@ -486,6 +511,13 @@ export function MiniMusicPlayer() {
           pipWin.resizeTo(sz.w, sz.h);
         } catch {
           /* some browsers block resizeTo */
+        }
+        // Always land on now-playing (not queue) when expanding
+        if (v) {
+          requestAnimationFrame(() => {
+            const scroll = root.querySelector('.scroll') as HTMLElement | null;
+            if (scroll) scroll.scrollTop = 0;
+          });
         }
       };
 
