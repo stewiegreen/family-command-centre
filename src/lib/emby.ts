@@ -398,6 +398,108 @@ export async function embySearch(
   return items;
 }
 
+
+/**
+ * Artist list for the player: prefer music-library folders (folder layout),
+ * then Emby MusicArtist / AlbumArtists.
+ */
+export async function embyMusicArtistList(
+  userId: string,
+  limit = 300,
+): Promise<EmbyItem[]> {
+  const views = await embyViews(userId);
+  const music = views.find((v) => {
+    const ct = (v.CollectionType || '').toLowerCase();
+    return ct === 'music' || ct === 'musicvideos';
+  });
+
+  if (music) {
+    // Folder-style: top-level children are artist folders
+    const folders = await embyItems(userId, {
+      parentId: music.Id,
+      recursive: false,
+      sortBy: 'SortName',
+      sortOrder: 'Ascending',
+      limit,
+    });
+    if (folders.items.length) return folders.items;
+
+    // Metadata artists for this library
+    try {
+      const meta = await embyMusicArtists(userId, music.Id, { limit, startIndex: 0 });
+      if (meta.items.length) return meta.items;
+    } catch {
+      /* ignore */
+    }
+  }
+
+  // Global MusicArtist fallback
+  const { items } = await embyItems(userId, {
+    recursive: true,
+    includeItemTypes: 'MusicArtist',
+    sortBy: 'SortName',
+    sortOrder: 'Ascending',
+    limit,
+  });
+  return items;
+}
+
+/** Albums under an artist folder or MusicArtist id. */
+export async function embyAlbumsForArtistItem(
+  userId: string,
+  artist: EmbyItem,
+  limit = 80,
+): Promise<EmbyItem[]> {
+  // MusicArtist id path
+  if (artist.Type === 'MusicArtist') {
+    const { items } = await embyArtistAlbums(userId, artist.Id, { limit });
+    if (items.length) return items;
+  }
+  // Folder / generic: direct children that look like albums
+  const children = await embyItems(userId, {
+    parentId: artist.Id,
+    recursive: false,
+    sortBy: 'ProductionYear,SortName',
+    sortOrder: 'Ascending',
+    limit,
+  });
+  const albums = children.items.filter(
+    (it) =>
+      isAlbumItem(it) ||
+      it.Type === 'Folder' ||
+      it.Type === 'MusicAlbum' ||
+      (it.ChildCount != null && it.ChildCount > 0),
+  );
+  if (albums.length) return albums;
+  return children.items;
+}
+
+/** Tracks for an album (MusicAlbum or folder). */
+export async function embyAlbumTracks(
+  userId: string,
+  albumId: string,
+): Promise<EmbyItem[]> {
+  const { items } = await embyItems(userId, {
+    parentId: albumId,
+    recursive: false,
+    sortBy: 'IndexNumber,SortName',
+    sortOrder: 'Ascending',
+    limit: 500,
+  });
+  let tracks = items.filter(isAudioItem);
+  if (tracks.length) return tracks;
+  // Some libraries nest tracks one level deeper
+  const deep = await embyItems(userId, {
+    parentId: albumId,
+    recursive: true,
+    includeItemTypes: 'Audio',
+    sortBy: 'IndexNumber,SortName',
+    sortOrder: 'Ascending',
+    limit: 500,
+  });
+  return deep.items.filter(isAudioItem);
+}
+
 /** Search music only (albums, tracks, artists). */
 export async function embyMusicSearch(
   userId: string,

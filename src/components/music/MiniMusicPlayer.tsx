@@ -17,8 +17,9 @@ import { useMusicPlayer } from '../../context/MusicPlayerContext';
 import {
   albumArtistLine,
   displayTitle,
-  embyAlbumsByArtistName,
-  embyChildren,
+  embyAlbumTracks,
+  embyAlbumsForArtistItem,
+  embyMusicArtistList,
   embyMusicSearch,
   embyPosterUrl,
   isAlbumItem,
@@ -561,7 +562,7 @@ export function MiniMusicPlayer() {
                 autocomplete="off"
                 spellcheck="false"
               />
-              <div class="artist-status">Albums by this artist</div>
+              <div class="artist-status">Artists</div>
               <div class="artist-list"></div>
             </div>
           </div>
@@ -656,21 +657,17 @@ export function MiniMusicPlayer() {
       const artistListEl = root.querySelector('.artist-list') as HTMLElement | null;
       const artistStatusEl = root.querySelector('.artist-status') as HTMLElement | null;
       const artistSearchEl = root.querySelector('.artist-search') as HTMLInputElement | null;
+      let artistView: 'artists' | 'albums' = 'artists';
       let artistLoadToken = 0;
       let searchTimer: ReturnType<typeof setTimeout> | null = null;
-      let lastArtistLoaded = '';
 
       const playAlbumFromPip = async (album: EmbyItem) => {
         const m = mpRef.current;
         const userId = m.embyUserId;
         if (!userId) return;
-        if (artistStatusEl) artistStatusEl.textContent = 'Loading album…';
+        if (artistStatusEl) artistStatusEl.textContent = 'Loading tracks…';
         try {
-          const { items } = await embyChildren(userId, album.Id, {
-            limit: 500,
-            parentType: album.Type,
-          });
-          const tracks = items.filter(isAudioItem);
+          const tracks = await embyAlbumTracks(userId, album.Id);
           if (!tracks.length) {
             if (artistStatusEl) artistStatusEl.textContent = 'No tracks on this album';
             return;
@@ -682,9 +679,13 @@ export function MiniMusicPlayer() {
             autoplay: true,
             embyUserId: userId,
           });
-          if (artistStatusEl) artistStatusEl.textContent = 'Playing · ' + displayTitle(album);
-        } catch {
-          if (artistStatusEl) artistStatusEl.textContent = 'Could not load album';
+          if (artistStatusEl) {
+            artistStatusEl.textContent =
+              'Playing · ' + displayTitle(album) + ' (' + tracks.length + ' tracks)';
+          }
+        } catch (err) {
+          console.warn('PiP album load failed', err);
+          if (artistStatusEl) artistStatusEl.textContent = 'Could not load album tracks';
         }
       };
 
@@ -717,16 +718,20 @@ export function MiniMusicPlayer() {
           row.className = 'q-row';
           const artUrl = embyPosterUrl(item, 72) || '';
           const title = displayTitle(item);
-          const sub =
-            isAlbumItem(item)
-              ? [item.ProductionYear, albumArtistLine(item) || item.AlbumArtist]
-                  .filter(Boolean)
-                  .join(' · ')
-              : isAudioItem(item)
-                ? [albumArtistLine(item) || item.AlbumArtist, item.Album]
-                    .filter(Boolean)
-                    .join(' · ')
-                : item.Type || '';
+          let sub = '';
+          if (artistView === 'artists') {
+            sub = item.Type === 'MusicArtist' ? 'Artist' : 'Folder';
+          } else if (isAlbumItem(item) || item.Type === 'Folder') {
+            sub = [item.ProductionYear, albumArtistLine(item) || item.AlbumArtist]
+              .filter(Boolean)
+              .join(' · ');
+          } else if (isAudioItem(item)) {
+            sub = [albumArtistLine(item) || item.AlbumArtist, item.Album]
+              .filter(Boolean)
+              .join(' · ');
+          } else {
+            sub = item.Type || '';
+          }
           row.innerHTML =
             (artUrl
               ? '<img class="q-art" src="' + artUrl.replace(/"/g, '') + '" alt="" />'
@@ -734,60 +739,114 @@ export function MiniMusicPlayer() {
             '<div class="q-meta"><div class="q-title"></div><div class="q-sub"></div></div>';
           (row.querySelector('.q-title') as HTMLElement).textContent = title;
           (row.querySelector('.q-sub') as HTMLElement).textContent = sub;
-          if (isAlbumItem(item)) {
-            row.onclick = () => void playAlbumFromPip(item);
+
+          if (artistView === 'artists') {
+            row.onclick = () => void openArtistAlbums(item);
           } else if (isAudioItem(item)) {
             row.onclick = () => playTrackFromPip(item);
           } else {
-            // MusicArtist — load that artist's albums
-            row.onclick = () => {
-              const name = item.Name || '';
-              if (artistSearchEl) artistSearchEl.value = '';
-              void loadAlbumsForName(name);
-            };
+            row.onclick = () => void playAlbumFromPip(item);
           }
           artistListEl.appendChild(row);
         });
       };
 
-      const loadAlbumsForName = async (name: string) => {
+      const loadArtistList = async () => {
         const m = mpRef.current;
         const userId = m.embyUserId;
-        if (!userId || !name) return;
+        if (!userId) {
+          if (artistStatusEl) artistStatusEl.textContent = 'Sign in to browse artists';
+          return;
+        }
         const token = ++artistLoadToken;
-        if (artistStatusEl) artistStatusEl.textContent = 'Loading albums…';
+        artistView = 'artists';
+        if (artistStatusEl) artistStatusEl.textContent = 'Loading artists…';
+        const paneName = root.querySelector('.artist-pane-name') as HTMLElement | null;
+        if (paneName) paneName.textContent = 'Artists';
         try {
-          const albums = await embyAlbumsByArtistName(userId, name, 48);
+          const artists = await embyMusicArtistList(userId, 400);
           if (token !== artistLoadToken) return;
-          lastArtistLoaded = name;
           if (artistStatusEl) {
-            artistStatusEl.textContent = albums.length
-              ? 'Albums by ' + name
-              : 'No albums found for ' + name;
+            artistStatusEl.textContent = artists.length
+              ? artists.length + ' artists'
+              : 'No artists found';
           }
-          renderArtistRows(albums, 'No albums found');
-        } catch {
+          renderArtistRows(artists, 'No artists found');
+        } catch (err) {
+          console.warn('PiP artist list failed', err);
           if (token !== artistLoadToken) return;
-          if (artistStatusEl) artistStatusEl.textContent = 'Could not load artist';
-          renderArtistRows([], 'Could not load artist');
+          if (artistStatusEl) artistStatusEl.textContent = 'Could not load artists';
+          renderArtistRows([], 'Could not load artists');
         }
       };
 
-      const loadArtistAlbums = async () => {
+      const openArtistAlbums = async (artist: EmbyItem) => {
         const m = mpRef.current;
-        const track = m.currentTrack;
-        const name =
-          (track && (albumArtistLine(track) || track.AlbumArtist || track.Artists?.[0])) ||
-          (m.album && albumArtistLine(m.album)) ||
-          '';
-        if (!name) {
-          if (artistStatusEl) artistStatusEl.textContent = 'No artist on this track';
-          renderArtistRows([], 'Play a track to browse by artist');
-          return;
+        const userId = m.embyUserId;
+        if (!userId) return;
+        const token = ++artistLoadToken;
+        artistView = 'albums';
+        const name = displayTitle(artist);
+        if (artistStatusEl) artistStatusEl.textContent = 'Loading albums…';
+        const paneName = root.querySelector('.artist-pane-name') as HTMLElement | null;
+        if (paneName) paneName.textContent = name;
+        try {
+          const albums = await embyAlbumsForArtistItem(userId, artist, 100);
+          if (token !== artistLoadToken) return;
+          if (artistStatusEl) {
+            artistStatusEl.textContent = albums.length
+              ? albums.length + ' albums · tap for tracks'
+              : 'No albums for ' + name;
+          }
+          // Back row
+          if (artistListEl) {
+            artistListEl.innerHTML = '';
+            const back = pipWin.document.createElement('button');
+            back.type = 'button';
+            back.className = 'q-row';
+            back.innerHTML =
+              '<div class="q-meta"><div class="q-title">← All artists</div><div class="q-sub">Back</div></div>';
+            back.onclick = () => {
+              if (artistSearchEl) artistSearchEl.value = '';
+              void loadArtistList();
+            };
+            artistListEl.appendChild(back);
+            if (!albums.length) {
+              const empty = pipWin.document.createElement('p');
+              empty.className = 'artist-status';
+              empty.textContent = 'No albums found';
+              artistListEl.appendChild(empty);
+              return;
+            }
+            albums.forEach((item) => {
+              const row = pipWin.document.createElement('button');
+              row.type = 'button';
+              row.className = 'q-row';
+              const artUrl = embyPosterUrl(item, 72) || '';
+              const title = displayTitle(item);
+              const sub = [item.ProductionYear, albumArtistLine(item) || item.AlbumArtist]
+                .filter(Boolean)
+                .join(' · ');
+              row.innerHTML =
+                (artUrl
+                  ? '<img class="q-art" src="' + artUrl.replace(/"/g, '') + '" alt="" />'
+                  : '<div class="q-art"></div>') +
+                '<div class="q-meta"><div class="q-title"></div><div class="q-sub"></div></div>';
+              (row.querySelector('.q-title') as HTMLElement).textContent = title;
+              (row.querySelector('.q-sub') as HTMLElement).textContent = sub;
+              row.onclick = () => void playAlbumFromPip(item);
+              artistListEl.appendChild(row);
+            });
+          }
+        } catch (err) {
+          console.warn('PiP albums failed', err);
+          if (token !== artistLoadToken) return;
+          if (artistStatusEl) artistStatusEl.textContent = 'Could not load albums';
         }
-        if (name === lastArtistLoaded && artistListEl && artistListEl.children.length) return;
-        await loadAlbumsForName(name);
       };
+
+      // Back-compat name used by artist button
+      const loadArtistAlbums = () => loadArtistList();
 
       if (artistSearchEl) {
         artistSearchEl.oninput = () => {
@@ -798,28 +857,72 @@ export function MiniMusicPlayer() {
             const userId = m.embyUserId;
             if (!userId) return;
             if (!q) {
-              lastArtistLoaded = '';
-              void loadArtistAlbums();
+              void loadArtistList();
               return;
             }
             const token = ++artistLoadToken;
+            artistView = 'artists';
             if (artistStatusEl) artistStatusEl.textContent = 'Searching…';
             try {
               const hits = await embyMusicSearch(userId, q, 40);
               if (token !== artistLoadToken) return;
+              // Prefer artists first, then albums, then tracks
+              const artists = hits.filter(
+                (h) => h.Type === 'MusicArtist' || h.Type === 'Folder',
+              );
+              const albums = hits.filter(isAlbumItem);
+              const tracks = hits.filter(isAudioItem);
+              const ordered = [...artists, ...albums, ...tracks];
               if (artistStatusEl) {
-                artistStatusEl.textContent = hits.length
+                artistStatusEl.textContent = ordered.length
                   ? 'Results for “' + q + '”'
                   : 'No results';
               }
-              renderArtistRows(hits, 'No results');
-            } catch {
+              // Search results: smart click handling
+              if (!artistListEl) return;
+              artistListEl.innerHTML = '';
+              if (!ordered.length) {
+                renderArtistRows([], 'No results');
+                return;
+              }
+              ordered.forEach((item) => {
+                const row = pipWin.document.createElement('button');
+                row.type = 'button';
+                row.className = 'q-row';
+                const artUrl = embyPosterUrl(item, 72) || '';
+                const title = displayTitle(item);
+                const sub = isAudioItem(item)
+                  ? [albumArtistLine(item) || item.AlbumArtist, item.Album]
+                      .filter(Boolean)
+                      .join(' · ')
+                  : isAlbumItem(item)
+                    ? [item.ProductionYear, albumArtistLine(item)].filter(Boolean).join(' · ')
+                    : item.Type || 'Artist';
+                row.innerHTML =
+                  (artUrl
+                    ? '<img class="q-art" src="' + artUrl.replace(/"/g, '') + '" alt="" />'
+                    : '<div class="q-art"></div>') +
+                  '<div class="q-meta"><div class="q-title"></div><div class="q-sub"></div></div>';
+                (row.querySelector('.q-title') as HTMLElement).textContent = title;
+                (row.querySelector('.q-sub') as HTMLElement).textContent = sub;
+                if (isAudioItem(item)) {
+                  row.onclick = () => playTrackFromPip(item);
+                } else if (isAlbumItem(item)) {
+                  row.onclick = () => void playAlbumFromPip(item);
+                } else {
+                  row.onclick = () => void openArtistAlbums(item);
+                }
+                artistListEl.appendChild(row);
+              });
+            } catch (err) {
+              console.warn('PiP search failed', err);
               if (token !== artistLoadToken) return;
               if (artistStatusEl) artistStatusEl.textContent = 'Search failed';
             }
           }, 320);
         };
       }
+
 
       const renderQueue = () => {
         const list = root.querySelector('.queue-list');
@@ -892,18 +995,7 @@ export function MiniMusicPlayer() {
         if (eTitle) eTitle.textContent = title;
         if (eArtist) eArtist.textContent = artist;
         if (eAlbum) eAlbum.textContent = album;
-        const artistPaneName = root.querySelector('.artist-pane-name') as HTMLElement | null;
-        if (artistPaneName) artistPaneName.textContent = artist || 'Artist';
-        // Refresh artist albums when the playing artist changes (if search empty)
-        if (
-          artist &&
-          artist !== lastArtistLoaded &&
-          artistSearchEl &&
-          !artistSearchEl.value.trim()
-        ) {
-          // Defer so we don't block the render tick
-          setTimeout(() => void loadArtistAlbums(), 0);
-        }
+        // Artist pane title is owned by loadArtistList / openArtistAlbums
 
         const playing = m.isPlaying;
         root.querySelectorAll('.icon-play, .e-icon-play').forEach((el) => {
