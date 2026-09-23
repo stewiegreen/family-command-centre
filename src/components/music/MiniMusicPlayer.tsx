@@ -90,7 +90,7 @@ export function MiniMusicPlayer() {
 
       const SIZE = {
         compact: { w: 440, h: 148 },
-        expanded: { w: 320, h: 580 },
+        expanded: { w: 320, h: 560 },
       };
 
       /** Average / dominant-ish color from album art (canvas sample). */
@@ -168,11 +168,14 @@ export function MiniMusicPlayer() {
           content: '';
           position: absolute; inset: 0;
           background:
-            radial-gradient(ellipse 90% 80% at 15% 40%,
-              rgba(var(--pip-r), var(--pip-g), var(--pip-b), 0.45), transparent 55%),
-            linear-gradient(145deg,
-              rgba(var(--pip-r), var(--pip-g), var(--pip-b), 0.22),
-              rgba(8, 8, 10, 0.95) 55%);
+            radial-gradient(ellipse 120% 90% at 20% 15%,
+              rgba(var(--pip-r), var(--pip-g), var(--pip-b), 0.72), transparent 52%),
+            radial-gradient(ellipse 80% 70% at 85% 80%,
+              rgba(var(--pip-r), var(--pip-g), var(--pip-b), 0.35), transparent 50%),
+            linear-gradient(180deg,
+              rgba(var(--pip-r), var(--pip-g), var(--pip-b), 0.38) 0%,
+              rgba(12, 12, 16, 0.55) 42%,
+              rgba(6, 6, 8, 0.97) 100%);
           pointer-events: none;
           z-index: 0;
         }
@@ -215,17 +218,17 @@ export function MiniMusicPlayer() {
           align-items: center; gap: 8px;
         }
 
-        /* —— Expanded —— */
+        /* —— Expanded (Greenamp-style: now-playing pane, then queue) —— */
         .expanded {
           height: 100%;
           display: none;
           flex-direction: column;
-          padding: 10px 12px 10px;
+          padding: 8px 10px 6px;
           overflow: hidden;
         }
         .expanded .top {
-          display: flex; justify-content: space-between; align-items: center;
-          padding-bottom: 6px; flex-shrink: 0;
+          display: flex; justify-content: flex-start; align-items: center;
+          padding-bottom: 4px; flex-shrink: 0;
         }
         .expanded .collapse {
           appearance: none; border: 0; background: transparent;
@@ -235,17 +238,31 @@ export function MiniMusicPlayer() {
         }
         .expanded .collapse:hover { color: rgba(255,255,255,0.85); }
         .expanded .scroll {
-          flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+          flex: 1; min-height: 0;
+          overflow-y: auto; overscroll-behavior: contain;
+          scroll-snap-type: y mandatory;
+          -webkit-overflow-scrolling: touch;
+        }
+        .expanded .now-pane {
+          min-height: 100%;
+          height: 100%;
+          scroll-snap-align: start;
+          scroll-snap-stop: always;
+          display: flex;
+          flex-direction: column;
+          align-items: stretch;
+          justify-content: flex-start;
+          padding-bottom: 4px;
         }
         .expanded .art-wrap {
           width: 100%;
-          max-width: 200px;
-          margin: 0 auto;
+          max-width: 180px;
+          margin: 4px auto 0;
           aspect-ratio: 1;
           border-radius: 14px;
           overflow: hidden;
           box-shadow: 0 12px 36px rgba(0,0,0,0.5);
-          border: 1px solid rgba(255,255,255,0.1);
+          border: 1px solid rgba(255,255,255,0.12);
           cursor: pointer;
           flex-shrink: 0;
         }
@@ -253,43 +270,56 @@ export function MiniMusicPlayer() {
           width: 100%; height: 100%; object-fit: cover; display: block;
         }
         .expanded .meta {
-          text-align: center; margin-top: 12px; min-width: 0; padding: 0 4px;
+          text-align: center; margin-top: 10px; min-width: 0; padding: 0 4px;
         }
         .expanded .title {
-          font-size: 16px; font-weight: 700; letter-spacing: -0.01em;
+          font-size: 15px; font-weight: 700; letter-spacing: -0.01em;
           line-height: 1.25;
           display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
           overflow: hidden;
         }
         .expanded .artist {
-          margin-top: 4px; font-size: 13px; color: rgba(255,255,255,0.65);
+          margin-top: 3px; font-size: 12px; color: rgba(255,255,255,0.7);
           white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
         .expanded .album {
-          margin-top: 2px; font-size: 11px; color: rgba(255,255,255,0.4);
+          margin-top: 2px; font-size: 11px; color: rgba(255,255,255,0.42);
           white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
         .expanded .progress-row {
           display: grid;
           grid-template-columns: 34px 1fr 34px;
           align-items: center; gap: 8px;
-          margin-top: 12px;
+          margin-top: 10px;
           padding: 0 4px;
         }
         .expanded .transport {
           display: flex; align-items: center; justify-content: center; gap: 8px;
-          margin-top: 10px;
+          margin-top: 8px;
         }
+        .expanded .queue-hint {
+          margin-top: auto;
+          display: flex; flex-direction: column; align-items: center; gap: 2px;
+          padding: 8px 0 4px;
+          color: rgba(255,255,255,0.4);
+          font-size: 10px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
+          cursor: pointer; border: 0; background: transparent; width: 100%;
+        }
+        .expanded .queue-hint:hover { color: rgba(255,255,255,0.75); }
         .expanded .queue-section {
-          margin-top: 14px;
-          padding-top: 10px;
-          border-top: 1px solid rgba(255,255,255,0.08);
+          min-height: 100%;
+          scroll-snap-align: start;
+          scroll-snap-stop: always;
+          padding-top: 8px;
         }
         .expanded .queue-head {
-          display: flex; align-items: center; gap: 6px;
+          display: flex; align-items: center; justify-content: space-between; gap: 6px;
           font-size: 10px; font-weight: 700; letter-spacing: 0.12em;
           text-transform: uppercase; color: rgba(255,255,255,0.45);
           margin-bottom: 8px; padding: 0 2px;
+          position: sticky; top: 0;
+          background: linear-gradient(180deg, rgba(8,8,10,0.92), rgba(8,8,10,0.75));
+          padding-top: 4px; padding-bottom: 6px;
         }
         .expanded .queue-list { display: flex; flex-direction: column; gap: 2px; }
         .expanded .q-row {
@@ -392,34 +422,39 @@ export function MiniMusicPlayer() {
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
               Mini
             </button>
-            <span style="font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:rgba(255,255,255,0.35)">Queue ↓</span>
           </div>
           <div class="scroll">
-            <div class="art-wrap"><img class="e-art" alt="" /></div>
-            <div class="meta">
-              <div class="title e-title"></div>
-              <div class="artist e-artist"></div>
-              <div class="album e-album"></div>
-            </div>
-            <div class="progress-row">
-              <span class="time elapsed e-elapsed">0:00</span>
-              <div class="bar" data-seek><div class="bar-fill e-fill"></div></div>
-              <span class="time right remain e-remain">0:00</span>
-            </div>
-            <div class="transport">
-              <button type="button" class="tbtn prev" aria-label="Previous">
-                <svg viewBox="0 0 24 24"><path d="M6 6h2v12H6V6zm3.5 6 8.5 6V6l-8.5 6z"/></svg>
-              </button>
-              <button type="button" class="tbtn play e-play" aria-label="Play/Pause">
-                <svg class="e-icon-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7L8 5z"/></svg>
-                <svg class="e-icon-pause" viewBox="0 0 24 24" style="display:none"><path d="M6 5h4v14H6V5zm8 0h4v14h-4V5z"/></svg>
-              </button>
-              <button type="button" class="tbtn next" aria-label="Next">
-                <svg viewBox="0 0 24 24"><path d="M16 6h2v12h-2V6zM6 18l8.5-6L6 6v12z"/></svg>
+            <div class="now-pane">
+              <div class="art-wrap"><img class="e-art" alt="" /></div>
+              <div class="meta">
+                <div class="title e-title"></div>
+                <div class="artist e-artist"></div>
+                <div class="album e-album"></div>
+              </div>
+              <div class="progress-row">
+                <span class="time elapsed e-elapsed">0:00</span>
+                <div class="bar" data-seek><div class="bar-fill e-fill"></div></div>
+                <span class="time right remain e-remain">0:00</span>
+              </div>
+              <div class="transport">
+                <button type="button" class="tbtn prev" aria-label="Previous">
+                  <svg viewBox="0 0 24 24"><path d="M6 6h2v12H6V6zm3.5 6 8.5 6V6l-8.5 6z"/></svg>
+                </button>
+                <button type="button" class="tbtn play e-play" aria-label="Play/Pause">
+                  <svg class="e-icon-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7L8 5z"/></svg>
+                  <svg class="e-icon-pause" viewBox="0 0 24 24" style="display:none"><path d="M6 5h4v14H6V5zm8 0h4v14h-4V5z"/></svg>
+                </button>
+                <button type="button" class="tbtn next" aria-label="Next">
+                  <svg viewBox="0 0 24 24"><path d="M16 6h2v12h-2V6zM6 18l8.5-6L6 6v12z"/></svg>
+                </button>
+              </div>
+              <button type="button" class="queue-hint" aria-label="Show queue">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+                Queue
               </button>
             </div>
             <div class="queue-section">
-              <div class="queue-head">Up next</div>
+              <div class="queue-head"><span>Up next</span></div>
               <div class="queue-list"></div>
             </div>
           </div>
@@ -478,7 +513,15 @@ export function MiniMusicPlayer() {
 
       (root.querySelector('.c-art') as HTMLElement).onclick = () => setExpanded(true);
       (root.querySelector('.collapse') as HTMLElement).onclick = () => setExpanded(false);
-      (root.querySelector('.art-wrap') as HTMLElement).onclick = () => setExpanded(false);
+      // Art stays decorative in expanded — collapse via Mini only
+      const scrollEl = root.querySelector('.scroll') as HTMLElement;
+      const queueHint = root.querySelector('.queue-hint') as HTMLElement | null;
+      if (queueHint && scrollEl) {
+        queueHint.onclick = () => {
+          const qs = root.querySelector('.queue-section') as HTMLElement | null;
+          qs?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        };
+      }
 
       const renderQueue = () => {
         const list = root.querySelector('.queue-list');
