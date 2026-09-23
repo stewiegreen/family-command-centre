@@ -95,12 +95,19 @@ export function MiniMusicPlayer() {
       pipWindowRef.current = pipWin;
       setPipOpen(true);
 
-      // Chromium often ignores requestWindow size or reuses last PiP size — force compact
-      try {
-        pipWin.resizeTo(SIZE.compact.w, SIZE.compact.h);
-      } catch {
-        /* ignore */
-      }
+      // Chromium often ignores requestWindow size or reuses last expanded size.
+      // Force the compact bar size repeatedly until it sticks.
+      const forceCompactSize = () => {
+        try {
+          pipWin.resizeTo(SIZE.compact.w, SIZE.compact.h);
+        } catch {
+          /* ignore */
+        }
+      };
+      forceCompactSize();
+      pipWin.requestAnimationFrame(forceCompactSize);
+      setTimeout(forceCompactSize, 50);
+      setTimeout(forceCompactSize, 200);
 
       /** Average / dominant-ish color from album art (canvas sample). */
       const sampleArtColor = (url: string): Promise<{ r: number; g: number; b: number } | null> =>
@@ -506,11 +513,16 @@ export function MiniMusicPlayer() {
       const setExpanded = (v: boolean) => {
         root.className = v ? 'root mode-expanded' : 'root mode-compact';
         const sz = v ? SIZE.expanded : SIZE.compact;
-        try {
-          pipWin.resizeTo(sz.w, sz.h);
-        } catch {
-          /* some browsers block resizeTo */
-        }
+        const apply = () => {
+          try {
+            pipWin.resizeTo(sz.w, sz.h);
+          } catch {
+            /* some browsers block resizeTo */
+          }
+        };
+        apply();
+        pipWin.requestAnimationFrame(apply);
+        setTimeout(apply, 50);
         // Always land on now-playing (not queue) when expanding
         if (v) {
           requestAnimationFrame(() => {
