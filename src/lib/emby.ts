@@ -153,6 +153,8 @@ export type EmbyItemsQuery = {
   startIndex?: number;
   /** Emby: "AlbumArtist" | "Artist" — filters MusicArtist list */
   artistType?: 'AlbumArtist' | 'Artist';
+  /** Emby NameStartsWith — A–Z letter buckets */
+  nameStartsWith?: string;
 };
 
 export async function embyItems(
@@ -172,6 +174,7 @@ export async function embyItems(
     Fields: DETAIL_FIELDS,
     EnableUserData: 'true',
     ArtistType: q.artistType,
+    NameStartsWith: q.nameStartsWith,
   });
   return { items: data.Items || [], total: data.TotalRecordCount ?? data.Items?.length ?? 0 };
 }

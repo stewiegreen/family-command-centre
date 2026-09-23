@@ -192,6 +192,8 @@ export function MediaPage() {
   const [detailTotal, setDetailTotal] = useState(0);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailStart, setDetailStart] = useState(0);
+  /** Music library A–Z strip (artists / folders). null = all. */
+  const [musicLetter, setMusicLetter] = useState<string | null>(null);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
   const [search, setSearch] = useState('');
@@ -390,6 +392,10 @@ export function MediaPage() {
       try {
         if (level.kind === 'library') {
           const sortBy = embySortByForParent({ collectionType: level.view.CollectionType });
+          const ct = (level.view.CollectionType || '').toLowerCase();
+          const musicLib = ct === 'music' || ct === 'musicvideos';
+          const letter =
+            musicLib && musicLetter && musicLetter !== '#' ? musicLetter : undefined;
           const { items, total } = await embyItems(embyUserId, {
             parentId: level.view.Id,
             recursive: false,
@@ -397,9 +403,17 @@ export function MediaPage() {
             sortOrder: 'Ascending',
             limit: 48,
             startIndex: 0,
+            nameStartsWith: letter,
           });
-          setDetailItems(sortMediaItems(items));
-          setDetailTotal(total);
+          let list = sortMediaItems(items);
+          if (musicLib && musicLetter === '#') {
+            list = list.filter((it) => {
+              const n = (it.Name || '').trim();
+              return n && !/^[A-Za-z]/.test(n);
+            });
+          }
+          setDetailItems(list);
+          setDetailTotal(musicLetter === '#' ? list.length : total);
         } else {
           const { items, total } = await embyChildren(embyUserId, level.item.Id, {
             limit: 48,
@@ -440,8 +454,20 @@ export function MediaPage() {
             setBrowseStack((s) => (s.length > 1 ? s.slice(0, -1) : s));
             return;
           }
-          setDetailItems(sorted);
-          setDetailTotal(total);
+          let folderList = sorted;
+          if (musicLetter && musicLetter !== '#') {
+            const L = musicLetter.toUpperCase();
+            folderList = sorted.filter((it) =>
+              (it.Name || '').trim().toUpperCase().startsWith(L),
+            );
+          } else if (musicLetter === '#') {
+            folderList = sorted.filter((it) => {
+              const n = (it.Name || '').trim();
+              return n && !/^[A-Za-z]/.test(n);
+            });
+          }
+          setDetailItems(folderList);
+          setDetailTotal(musicLetter ? folderList.length : total);
         }
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));
@@ -449,17 +475,28 @@ export function MediaPage() {
         setDetailLoading(false);
       }
     },
-    [embyUserId],
+    [embyUserId, musicLetter],
   );
 
+
+  // Clear letter when navigating to a different folder/library
+  useEffect(() => {
+    setMusicLetter(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- identity only
+  }, [
+    browse.kind,
+    browse.kind === 'library' ? browse.view.Id : '',
+    browse.kind === 'folder' ? browse.item.Id : '',
+  ]);
 
   // Whenever the top of the stack changes, show that level’s content
   useEffect(() => {
     if (tab !== 'libraries') return;
     void loadBrowseLevel(browse);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-load when stack identity changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- stack identity + letter
   }, [
     tab,
+    musicLetter,
     browse.kind,
     browse.kind === 'library' ? browse.view.Id : '',
     browse.kind === 'folder' ? browse.item.Id : '',
@@ -591,6 +628,16 @@ export function MediaPage() {
           : browse.kind === 'folder'
             ? embySortByForParent({ parentType: browse.item.Type })
             : 'IndexNumber,SortName';
+      const musicLib =
+        browse.kind === 'library' &&
+        ((browse.view.CollectionType || '').toLowerCase() === 'music' ||
+          (browse.view.CollectionType || '').toLowerCase() === 'musicvideos');
+      const letter =
+        musicLib && musicLetter && musicLetter !== '#' ? musicLetter : undefined;
+      if (musicLetter === '#') {
+        // Non-letter bucket is filtered client-side; don't page further blindly
+        return;
+      }
       const { items, total } = await embyItems(embyUserId, {
         parentId,
         recursive: false,
@@ -598,6 +645,7 @@ export function MediaPage() {
         sortOrder: 'Ascending',
         limit: 48,
         startIndex: next,
+        nameStartsWith: letter,
       });
       setDetailItems((prev) => sortMediaItems([...prev, ...items]));
       setDetailTotal(total);
@@ -607,7 +655,7 @@ export function MediaPage() {
     } finally {
       setDetailLoading(false);
     }
-  }, [embyUserId, detailLoading, detailItems.length, detailTotal, detailStart, browse]);
+  }, [embyUserId, detailLoading, detailItems.length, detailTotal, detailStart, browse, musicLetter]);
 
   useEffect(() => {
     const el = loadMoreRef.current;
@@ -1051,6 +1099,42 @@ export function MediaPage() {
                     </div>
                   )}
               </div>
+              {inMusicContext && browse.kind !== 'root' && (
+                <div className="sticky top-0 z-10 -mx-1 px-1 py-2 mb-3 bg-page/95 backdrop-blur-sm">
+                  <div className="flex flex-wrap gap-1">
+                    {['#', ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'].map((letter) => {
+                      const active = musicLetter === letter;
+                      return (
+                        <button
+                          key={letter}
+                          type="button"
+                          onClick={() =>
+                            setMusicLetter((prev) => (prev === letter ? null : letter))
+                          }
+                          className={
+                            'min-w-[1.75rem] h-7 px-1 rounded-lg text-xs font-bold transition-colors ' +
+                            (active
+                              ? 'bg-accent text-accent-ink'
+                              : 'bg-surface-2 text-muted hover:text-fg hover:bg-nav-hover')
+                          }
+                        >
+                          {letter}
+                        </button>
+                      );
+                    })}
+                    {musicLetter && (
+                      <button
+                        type="button"
+                        onClick={() => setMusicLetter(null)}
+                        className="h-7 px-2 rounded-lg text-xs font-semibold text-muted hover:text-fg"
+                      >
+                        All
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {detailLoading && !detailItems.length ? (
                 <div className="flex justify-center py-12 text-muted">
                   <Loader2 className="w-7 h-7 animate-spin" />
