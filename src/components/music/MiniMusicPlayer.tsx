@@ -84,7 +84,7 @@ export function MiniMusicPlayer() {
       // Compact must be forced on every open; expand only grows after a user gesture.
       const SIZE = {
         compact: { w: 420, h: 132 },
-        expanded: { w: 300, h: 400 },
+        expanded: { w: 300, h: 480 },
       };
 
       // @ts-expect-error Chromium Document PiP
@@ -294,7 +294,8 @@ export function MiniMusicPlayer() {
           flex-direction: column;
           align-items: stretch;
           justify-content: flex-start;
-          padding-bottom: 4px;
+          padding-bottom: 12px;
+          box-sizing: border-box;
         }
         .expanded .art-wrap {
           width: 100%;
@@ -340,13 +341,16 @@ export function MiniMusicPlayer() {
           margin-top: 8px;
         }
         .expanded .pane-nav {
-          margin-top: auto;
           display: grid;
           grid-template-columns: 1fr 1fr;
           gap: 6px;
-          padding: 6px 4px 4px;
+          padding: 8px 8px 10px;
           width: 100%;
           flex-shrink: 0;
+          position: relative;
+          z-index: 5;
+          background: linear-gradient(180deg, transparent, rgba(6,6,8,0.92) 28%, rgba(6,6,8,0.98));
+          border-top: 1px solid rgba(255,255,255,0.08);
         }
         .expanded .pane-nav-btn {
           display: flex; flex-direction: column; align-items: center; gap: 2px;
@@ -391,10 +395,10 @@ export function MiniMusicPlayer() {
           display: flex; align-items: center; justify-content: space-between; gap: 6px;
           font-size: 10px; font-weight: 700; letter-spacing: 0.12em;
           text-transform: uppercase; color: rgba(255,255,255,0.45);
-          margin-bottom: 8px; padding: 0 2px;
+          margin-bottom: 8px; padding: 6px 2px;
           position: sticky; top: 0;
-          background: linear-gradient(180deg, rgba(8,8,10,0.92), rgba(8,8,10,0.75));
-          padding-top: 4px; padding-bottom: 6px;
+          z-index: 1;
+          background: rgba(8,8,10,0.95);
         }
         .expanded .queue-list { display: flex; flex-direction: column; gap: 2px; }
         .expanded .q-row {
@@ -523,16 +527,6 @@ export function MiniMusicPlayer() {
                   <svg viewBox="0 0 24 24"><path d="M16 6h2v12h-2V6zM6 18l8.5-6L6 6v12z"/></svg>
                 </button>
               </div>
-              <div class="pane-nav">
-                <button type="button" class="pane-nav-btn queue-hint" aria-label="Show queue">
-                  <span>Queue</span>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
-                </button>
-                <button type="button" class="pane-nav-btn artist-hint" aria-label="Browse artist">
-                  <span>Artist</span>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
-                </button>
-              </div>
             </div>
             <div class="queue-section">
               <div class="queue-head"><span>Up next</span></div>
@@ -545,6 +539,16 @@ export function MiniMusicPlayer() {
                 Browse albums and tracks here without leaving the player.
               </div>
             </div>
+          </div>
+          <div class="pane-nav">
+            <button type="button" class="pane-nav-btn queue-hint" aria-label="Show queue">
+              <span>Queue</span>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+            </button>
+            <button type="button" class="pane-nav-btn artist-hint" aria-label="Browse artist">
+              <span>Artist</span>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+            </button>
           </div>
         </div>
       `;
