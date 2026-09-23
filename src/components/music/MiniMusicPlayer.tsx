@@ -80,7 +80,6 @@ export function MiniMusicPlayer() {
   const openPip = useCallback(async () => {
     if (!('documentPictureInPicture' in window)) return;
     try {
-      // @ts-expect-error Chromium Document PiP
       const SIZE = {
         // Compact: slightly wider/taller bar so art + controls fit without feeling cramped
         compact: { w: 440, h: 148 },
