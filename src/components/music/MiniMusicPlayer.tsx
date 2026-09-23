@@ -82,85 +82,161 @@ export function MiniMusicPlayer() {
     try {
       // @ts-expect-error Chromium Document PiP
       const pipWin: Window = await window.documentPictureInPicture.requestWindow({
-        width: 360,
-        height: 128,
+        width: 440,
+        height: 148,
       });
       pipWindowRef.current = pipWin;
       setPipOpen(true);
 
       const SIZE = {
-        compact: { w: 360, h: 128 },
-        expanded: { w: 300, h: 520 },
+        compact: { w: 440, h: 148 },
+        expanded: { w: 320, h: 580 },
       };
+
+      /** Average / dominant-ish color from album art (canvas sample). */
+      const sampleArtColor = (url: string): Promise<{ r: number; g: number; b: number } | null> =>
+        new Promise((resolve) => {
+          if (!url) {
+            resolve(null);
+            return;
+          }
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.onload = () => {
+            try {
+              const c = document.createElement('canvas');
+              const w = 24;
+              const h = 24;
+              c.width = w;
+              c.height = h;
+              const ctx = c.getContext('2d', { willReadFrequently: true });
+              if (!ctx) {
+                resolve(null);
+                return;
+              }
+              ctx.drawImage(img, 0, 0, w, h);
+              const data = ctx.getImageData(0, 0, w, h).data;
+              let r = 0;
+              let g = 0;
+              let b = 0;
+              let n = 0;
+              for (let i = 0; i < data.length; i += 4) {
+                const a = data[i + 3] ?? 0;
+                if (a < 128) continue;
+                const rr = data[i] ?? 0;
+                const gg = data[i + 1] ?? 0;
+                const bb = data[i + 2] ?? 0;
+                // Skip near-white / near-black for a more musical tint
+                const max = Math.max(rr, gg, bb);
+                const min = Math.min(rr, gg, bb);
+                if (max < 28 || min > 230) continue;
+                r += rr;
+                g += gg;
+                b += bb;
+                n++;
+              }
+              if (!n) {
+                resolve(null);
+                return;
+              }
+              resolve({ r: Math.round(r / n), g: Math.round(g / n), b: Math.round(b / n) });
+            } catch {
+              resolve(null);
+            }
+          };
+          img.onerror = () => resolve(null);
+          img.src = url;
+        });
 
       const style = pipWin.document.createElement('style');
       style.textContent = `
         * { box-sizing: border-box; }
         html, body {
           margin: 0; height: 100%; width: 100%;
-          background: #09090b;
+          background: #0a0a0c;
           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
           color: #f4f4f5;
           -webkit-font-smoothing: antialiased;
           overflow: hidden;
         }
-        .root { height: 100%; width: 100%; position: relative; }
+        .root {
+          height: 100%; width: 100%; position: relative;
+          --pip-r: 16; --pip-g: 185; --pip-b: 129;
+          --pip-bg: rgb(16, 16, 20);
+        }
+        .root::before {
+          content: '';
+          position: absolute; inset: 0;
+          background:
+            radial-gradient(ellipse 90% 80% at 15% 40%,
+              rgba(var(--pip-r), var(--pip-g), var(--pip-b), 0.45), transparent 55%),
+            linear-gradient(145deg,
+              rgba(var(--pip-r), var(--pip-g), var(--pip-b), 0.22),
+              rgba(8, 8, 10, 0.95) 55%);
+          pointer-events: none;
+          z-index: 0;
+        }
+
+        .compact, .expanded { position: relative; z-index: 1; }
 
         /* —— Compact bar —— */
         .compact {
           height: 100%;
           display: flex;
           align-items: center;
-          gap: 10px;
-          padding: 10px;
-          background: linear-gradient(145deg, rgba(36,36,42,0.98), rgba(18,18,22,0.99));
+          gap: 12px;
+          padding: 12px 14px 12px 12px;
         }
         .compact .art {
-          width: 88px; height: 88px;
-          border-radius: 12px;
+          width: 108px; height: 108px;
+          border-radius: 14px;
           object-fit: cover;
           background: #1c1c22;
           flex-shrink: 0;
           cursor: pointer;
-          box-shadow: 0 4px 14px rgba(0,0,0,0.4);
+          box-shadow: 0 6px 20px rgba(0,0,0,0.45);
+          border: 1px solid rgba(255,255,255,0.08);
         }
-        .compact .main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+        .compact .main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
         .compact .title {
-          font-size: 14px; font-weight: 650;
+          font-size: 15px; font-weight: 650;
           white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
         .compact .sub {
-          font-size: 11px; color: rgba(255,255,255,0.5);
+          font-size: 12px; color: rgba(255,255,255,0.55);
           white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
         .compact .transport {
-          display: flex; align-items: center; justify-content: center; gap: 2px;
+          display: flex; align-items: center; justify-content: center; gap: 4px;
         }
         .compact .progress-row {
           display: grid;
-          grid-template-columns: 32px 1fr 36px;
-          align-items: center; gap: 6px;
+          grid-template-columns: 34px 1fr 38px;
+          align-items: center; gap: 8px;
         }
 
-        /* —— Expanded sheet (scaled Greenamp) —— */
+        /* —— Expanded —— */
         .expanded {
           height: 100%;
           display: none;
           flex-direction: column;
-          padding: 10px 14px 12px;
-          background: linear-gradient(180deg, rgba(30,30,36,0.98), rgba(9,9,11,1));
+          padding: 10px 12px 10px;
           overflow: hidden;
         }
         .expanded .top {
-          display: flex; justify-content: center; padding-bottom: 6px;
+          display: flex; justify-content: space-between; align-items: center;
+          padding-bottom: 6px; flex-shrink: 0;
         }
         .expanded .collapse {
           appearance: none; border: 0; background: transparent;
-          color: rgba(255,255,255,0.4); cursor: pointer;
-          display: flex; flex-direction: column; align-items: center; gap: 2px;
-          font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+          color: rgba(255,255,255,0.45); cursor: pointer;
+          display: flex; align-items: center; gap: 4px;
+          font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
         }
-        .expanded .collapse:hover { color: rgba(255,255,255,0.75); }
+        .expanded .collapse:hover { color: rgba(255,255,255,0.85); }
+        .expanded .scroll {
+          flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+        }
         .expanded .art-wrap {
           width: 100%;
           max-width: 200px;
@@ -169,7 +245,7 @@ export function MiniMusicPlayer() {
           border-radius: 14px;
           overflow: hidden;
           box-shadow: 0 12px 36px rgba(0,0,0,0.5);
-          border: 1px solid rgba(255,255,255,0.08);
+          border: 1px solid rgba(255,255,255,0.1);
           cursor: pointer;
           flex-shrink: 0;
         }
@@ -177,7 +253,7 @@ export function MiniMusicPlayer() {
           width: 100%; height: 100%; object-fit: cover; display: block;
         }
         .expanded .meta {
-          text-align: center; margin-top: 14px; min-width: 0;
+          text-align: center; margin-top: 12px; min-width: 0; padding: 0 4px;
         }
         .expanded .title {
           font-size: 16px; font-weight: 700; letter-spacing: -0.01em;
@@ -186,60 +262,95 @@ export function MiniMusicPlayer() {
           overflow: hidden;
         }
         .expanded .artist {
-          margin-top: 4px; font-size: 13px; color: rgba(255,255,255,0.6);
+          margin-top: 4px; font-size: 13px; color: rgba(255,255,255,0.65);
           white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
         .expanded .album {
-          margin-top: 2px; font-size: 11px; color: rgba(255,255,255,0.35);
+          margin-top: 2px; font-size: 11px; color: rgba(255,255,255,0.4);
           white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
         .expanded .progress-row {
           display: grid;
           grid-template-columns: 34px 1fr 34px;
           align-items: center; gap: 8px;
-          margin-top: 14px;
+          margin-top: 12px;
+          padding: 0 4px;
         }
         .expanded .transport {
-          display: flex; align-items: center; justify-content: center; gap: 6px;
-          margin-top: 12px;
+          display: flex; align-items: center; justify-content: center; gap: 8px;
+          margin-top: 10px;
         }
-        .expanded .expand-hint {
-          margin-top: auto;
+        .expanded .queue-section {
+          margin-top: 14px;
           padding-top: 10px;
-          display: flex; flex-direction: column; align-items: center;
-          color: rgba(255,255,255,0.3);
-          font-size: 10px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase;
+          border-top: 1px solid rgba(255,255,255,0.08);
+        }
+        .expanded .queue-head {
+          display: flex; align-items: center; gap: 6px;
+          font-size: 10px; font-weight: 700; letter-spacing: 0.12em;
+          text-transform: uppercase; color: rgba(255,255,255,0.45);
+          margin-bottom: 8px; padding: 0 2px;
+        }
+        .expanded .queue-list { display: flex; flex-direction: column; gap: 2px; }
+        .expanded .q-row {
+          display: flex; align-items: center; gap: 8px;
+          padding: 6px 8px; border-radius: 10px;
+          cursor: pointer; border: 0; background: transparent;
+          color: inherit; text-align: left; width: 100%;
+        }
+        .expanded .q-row:hover { background: rgba(255,255,255,0.06); }
+        .expanded .q-row.active {
+          background: rgba(var(--pip-r), var(--pip-g), var(--pip-b), 0.2);
+          box-shadow: inset 0 0 0 1px rgba(var(--pip-r), var(--pip-g), var(--pip-b), 0.35);
+        }
+        .expanded .q-art {
+          width: 36px; height: 36px; border-radius: 8px; object-fit: cover;
+          background: #1c1c22; flex-shrink: 0;
+        }
+        .expanded .q-meta { min-width: 0; flex: 1; }
+        .expanded .q-title {
+          font-size: 12px; font-weight: 600;
+          white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .expanded .q-sub {
+          font-size: 10px; color: rgba(255,255,255,0.4);
+          white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .expanded .q-dur {
+          font-size: 10px; color: rgba(255,255,255,0.35);
+          font-variant-numeric: tabular-nums; flex-shrink: 0;
         }
 
-        /* Shared controls */
         .tbtn {
           appearance: none; border: 0; background: transparent;
-          color: rgba(255,255,255,0.88);
-          width: 32px; height: 32px; border-radius: 999px;
+          color: rgba(255,255,255,0.9);
+          width: 34px; height: 34px; border-radius: 999px;
           display: grid; place-items: center; cursor: pointer;
         }
         .tbtn:hover { background: rgba(255,255,255,0.1); color: #fff; }
         .tbtn.play {
-          width: 44px; height: 44px;
+          width: 46px; height: 46px;
           background: #fff; color: #18181b;
         }
-        .tbtn.play:hover { background: #ecfdf5; }
-        .tbtn svg { width: 15px; height: 15px; fill: currentColor; }
+        .tbtn.play:hover { background: #f0fdf4; }
+        .tbtn svg { width: 16px; height: 16px; fill: currentColor; }
         .tbtn.play svg { width: 18px; height: 18px; }
         .time {
           font-size: 10px; font-variant-numeric: tabular-nums;
-          color: rgba(255,255,255,0.4);
+          color: rgba(255,255,255,0.45);
         }
         .time.right { text-align: right; }
         .bar {
           position: relative; height: 4px; border-radius: 999px;
-          background: rgba(255,255,255,0.12); cursor: pointer;
+          background: rgba(255,255,255,0.14); cursor: pointer;
           overflow: hidden;
         }
         .bar-fill {
           position: absolute; left: 0; top: 0; bottom: 0;
-          background: #34d399; border-radius: 999px;
+          background: rgb(var(--pip-r), var(--pip-g), var(--pip-b));
+          border-radius: 999px;
           pointer-events: none;
+          box-shadow: 0 0 8px rgba(var(--pip-r), var(--pip-g), var(--pip-b), 0.45);
         }
         .mode-compact .compact { display: flex; }
         .mode-compact .expanded { display: none; }
@@ -271,42 +382,46 @@ export function MiniMusicPlayer() {
             <div class="progress-row">
               <span class="time elapsed">0:00</span>
               <div class="bar" data-seek><div class="bar-fill"></div></div>
-              <span class="time right remain">-0:00</span>
+              <span class="time right remain">0:00</span>
             </div>
           </div>
         </div>
         <div class="expanded">
           <div class="top">
             <button type="button" class="collapse" aria-label="Collapse">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
               Mini
             </button>
+            <span style="font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:rgba(255,255,255,0.35)">Queue ↓</span>
           </div>
-          <div class="art-wrap"><img class="e-art" alt="" /></div>
-          <div class="meta">
-            <div class="title e-title"></div>
-            <div class="artist e-artist"></div>
-            <div class="album e-album"></div>
-          </div>
-          <div class="progress-row">
-            <span class="time elapsed e-elapsed">0:00</span>
-            <div class="bar" data-seek><div class="bar-fill e-fill"></div></div>
-            <span class="time right remain e-remain">0:00</span>
-          </div>
-          <div class="transport">
-            <button type="button" class="tbtn prev" aria-label="Previous">
-              <svg viewBox="0 0 24 24"><path d="M6 6h2v12H6V6zm3.5 6 8.5 6V6l-8.5 6z"/></svg>
-            </button>
-            <button type="button" class="tbtn play e-play" aria-label="Play/Pause">
-              <svg class="e-icon-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7L8 5z"/></svg>
-              <svg class="e-icon-pause" viewBox="0 0 24 24" style="display:none"><path d="M6 5h4v14H6V5zm8 0h4v14h-4V5z"/></svg>
-            </button>
-            <button type="button" class="tbtn next" aria-label="Next">
-              <svg viewBox="0 0 24 24"><path d="M16 6h2v12h-2V6zM6 18l8.5-6L6 6v12z"/></svg>
-            </button>
-          </div>
-          <div class="expand-hint">
-            <span>Queue in GreenHQ</span>
+          <div class="scroll">
+            <div class="art-wrap"><img class="e-art" alt="" /></div>
+            <div class="meta">
+              <div class="title e-title"></div>
+              <div class="artist e-artist"></div>
+              <div class="album e-album"></div>
+            </div>
+            <div class="progress-row">
+              <span class="time elapsed e-elapsed">0:00</span>
+              <div class="bar" data-seek><div class="bar-fill e-fill"></div></div>
+              <span class="time right remain e-remain">0:00</span>
+            </div>
+            <div class="transport">
+              <button type="button" class="tbtn prev" aria-label="Previous">
+                <svg viewBox="0 0 24 24"><path d="M6 6h2v12H6V6zm3.5 6 8.5 6V6l-8.5 6z"/></svg>
+              </button>
+              <button type="button" class="tbtn play e-play" aria-label="Play/Pause">
+                <svg class="e-icon-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7L8 5z"/></svg>
+                <svg class="e-icon-pause" viewBox="0 0 24 24" style="display:none"><path d="M6 5h4v14H6V5zm8 0h4v14h-4V5z"/></svg>
+              </button>
+              <button type="button" class="tbtn next" aria-label="Next">
+                <svg viewBox="0 0 24 24"><path d="M16 6h2v12h-2V6zM6 18l8.5-6L6 6v12z"/></svg>
+              </button>
+            </div>
+            <div class="queue-section">
+              <div class="queue-head">Up next</div>
+              <div class="queue-list"></div>
+            </div>
           </div>
         </div>
       `;
@@ -317,6 +432,16 @@ export function MiniMusicPlayer() {
         const s = Math.floor(sec % 60);
         const m = Math.floor(sec / 60);
         return m + ':' + String(s).padStart(2, '0');
+      };
+
+      let lastArtUrl = '';
+      const applyTheme = (rgb: { r: number; g: number; b: number } | null) => {
+        const r = rgb?.r ?? 16;
+        const g = rgb?.g ?? 185;
+        const b = rgb?.b ?? 129;
+        root.style.setProperty('--pip-r', String(r));
+        root.style.setProperty('--pip-g', String(g));
+        root.style.setProperty('--pip-b', String(b));
       };
 
       const setExpanded = (v: boolean) => {
@@ -355,6 +480,45 @@ export function MiniMusicPlayer() {
       (root.querySelector('.collapse') as HTMLElement).onclick = () => setExpanded(false);
       (root.querySelector('.art-wrap') as HTMLElement).onclick = () => setExpanded(false);
 
+      const renderQueue = () => {
+        const list = root.querySelector('.queue-list');
+        if (!list) return;
+        const m = mpRef.current;
+        list.innerHTML = '';
+        if (!m.queue.length) {
+          const empty = pipWin.document.createElement('p');
+          empty.textContent = 'Queue is empty';
+          empty.style.cssText = 'font-size:12px;color:rgba(255,255,255,0.35);padding:8px;text-align:center';
+          list.appendChild(empty);
+          return;
+        }
+        m.queue.forEach((track, i) => {
+          const row = pipWin.document.createElement('button');
+          row.type = 'button';
+          row.className = 'q-row' + (i === m.queueIndex ? ' active' : '');
+          const artUrl =
+            embyPosterUrl(track, 72) ||
+            (m.album ? embyPosterUrl(m.album, 72) : '') ||
+            '';
+          const title = displayTitle(track);
+          const artist =
+            albumArtistLine(track) || track.AlbumArtist || track.Artists?.[0] || '';
+          row.innerHTML =
+            (artUrl
+              ? '<img class="q-art" src="' + artUrl.replace(/"/g, '') + '" alt="" />'
+              : '<div class="q-art"></div>') +
+            '<div class="q-meta"><div class="q-title"></div><div class="q-sub"></div></div>' +
+            '<span class="q-dur"></span>';
+          (row.querySelector('.q-title') as HTMLElement).textContent = title;
+          (row.querySelector('.q-sub') as HTMLElement).textContent = artist;
+          (row.querySelector('.q-dur') as HTMLElement).textContent = fmt(
+            (track.RunTimeTicks || 0) / 10_000_000,
+          );
+          row.onclick = () => mpRef.current.playTrackAt(i);
+          list.appendChild(row);
+        });
+      };
+
       const render = () => {
         const m = mpRef.current;
         const track = m.currentTrack;
@@ -367,6 +531,11 @@ export function MiniMusicPlayer() {
           albumArtistLine(track) || track.AlbumArtist || track.Artists?.[0] || '';
         const album = track.Album || m.album?.Name || '';
         const sub = [artist, album].filter(Boolean).join(' · ');
+
+        if (artUrl && artUrl !== lastArtUrl) {
+          lastArtUrl = artUrl;
+          void sampleArtColor(artUrl).then(applyTheme);
+        }
 
         root.querySelectorAll('.c-art, .e-art').forEach((img) => {
           const el = img as HTMLImageElement;
@@ -403,6 +572,15 @@ export function MiniMusicPlayer() {
         root.querySelectorAll('.remain').forEach((el) => {
           (el as HTMLElement).textContent = dur > 0 ? fmt(dur) : '0:00';
         });
+
+        if (root.classList.contains('mode-expanded')) {
+          const sig =
+            m.queue.map((x) => x.Id).join(',') + '|' + String(m.queueIndex);
+          if (sig !== (root as HTMLElement & { __qSig?: string }).__qSig) {
+            (root as HTMLElement & { __qSig?: string }).__qSig = sig;
+            renderQueue();
+          }
+        }
       };
 
       render();
