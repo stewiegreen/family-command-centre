@@ -80,34 +80,42 @@ export function MiniMusicPlayer() {
   const openPip = useCallback(async () => {
     if (!('documentPictureInPicture' in window)) return;
     try {
+      // Document PiP often restores the *last* window size (e.g. after expand).
+      // Compact must be forced on every open; expand only grows after a user gesture.
       const SIZE = {
-        // Compact: slightly wider/taller bar so art + controls fit without feeling cramped
-        compact: { w: 440, h: 148 },
-        // Expanded: tight height so now-playing fills the window; queue is just below the fold
-        expanded: { w: 320, h: 420 },
+        compact: { w: 420, h: 132 },
+        expanded: { w: 300, h: 400 },
       };
 
       // @ts-expect-error Chromium Document PiP
       const pipWin: Window = await window.documentPictureInPicture.requestWindow({
         width: SIZE.compact.w,
         height: SIZE.compact.h,
+        // Prefer a fresh placement at our size rather than restoring a tall expanded window
+        preferInitialWindowPlacement: true,
       });
       pipWindowRef.current = pipWin;
       setPipOpen(true);
 
-      // Chromium often ignores requestWindow size or reuses last expanded size.
-      // Force the compact bar size repeatedly until it sticks.
-      const forceCompactSize = () => {
+      let pipExpanded = false;
+      const applyPipSize = () => {
+        const sz = pipExpanded ? SIZE.expanded : SIZE.compact;
         try {
-          pipWin.resizeTo(SIZE.compact.w, SIZE.compact.h);
+          pipWin.resizeTo(sz.w, sz.h);
         } catch {
-          /* ignore */
+          /* Document PiP may ignore resizeTo in some builds */
         }
       };
-      forceCompactSize();
-      pipWin.requestAnimationFrame(forceCompactSize);
-      setTimeout(forceCompactSize, 50);
-      setTimeout(forceCompactSize, 200);
+      // Hammer the compact size — Chrome often applies the previous expand size first
+      applyPipSize();
+      pipWin.requestAnimationFrame(applyPipSize);
+      [30, 80, 160, 320, 600, 1000].forEach((ms) => setTimeout(applyPipSize, ms));
+      const sizeLock = pipWin.setInterval(() => {
+        if (pipExpanded) return;
+        // If still tall while compact, keep fighting
+        if (pipWin.innerHeight > SIZE.compact.h + 40) applyPipSize();
+      }, 400);
+      pipWin.addEventListener('pagehide', () => pipWin.clearInterval(sizeLock));
 
       /** Average / dominant-ish color from album art (canvas sample). */
       const sampleArtColor = (url: string): Promise<{ r: number; g: number; b: number } | null> =>
@@ -219,11 +227,14 @@ export function MiniMusicPlayer() {
           display: flex;
           align-items: center;
           gap: 12px;
-          padding: 12px 14px 12px 12px;
+          padding: 10px 12px;
+          /* If Chrome keeps a tall window, pin the bar to the top edge */
+          max-height: 132px;
+          box-sizing: border-box;
         }
         .compact .art {
-          width: 108px; height: 108px;
-          border-radius: 14px;
+          width: 96px; height: 96px;
+          border-radius: 12px;
           object-fit: cover;
           background: #1c1c22;
           flex-shrink: 0;
@@ -511,19 +522,12 @@ export function MiniMusicPlayer() {
       };
 
       const setExpanded = (v: boolean) => {
+        pipExpanded = v;
         root.className = v ? 'root mode-expanded' : 'root mode-compact';
-        const sz = v ? SIZE.expanded : SIZE.compact;
-        const apply = () => {
-          try {
-            pipWin.resizeTo(sz.w, sz.h);
-          } catch {
-            /* some browsers block resizeTo */
-          }
-        };
-        apply();
-        pipWin.requestAnimationFrame(apply);
-        setTimeout(apply, 50);
-        // Always land on now-playing (not queue) when expanding
+        applyPipSize();
+        pipWin.requestAnimationFrame(applyPipSize);
+        setTimeout(applyPipSize, 50);
+        setTimeout(applyPipSize, 200);
         if (v) {
           requestAnimationFrame(() => {
             const scroll = root.querySelector('.scroll') as HTMLElement | null;
