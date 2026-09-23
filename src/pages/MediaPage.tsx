@@ -1099,7 +1099,7 @@ export function MediaPage() {
                     </div>
                   )}
               </div>
-              {inMusicContext && browse.kind !== 'root' && (
+              {inMusicContext && (
                 <div className="sticky top-0 z-10 -mx-1 px-1 py-2 mb-3 bg-page/95 backdrop-blur-sm">
                   <div className="flex flex-wrap gap-1">
                     {['#', ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'].map((letter) => {
