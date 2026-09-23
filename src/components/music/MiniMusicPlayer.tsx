@@ -94,8 +94,9 @@ export function MiniMusicPlayer() {
       // Document PiP often restores the *last* window size (e.g. after expand).
       // Compact must be forced on every open; expand only grows after a user gesture.
       const SIZE = {
-        compact: { w: 420, h: 132 },
-        expanded: { w: 300, h: 480 },
+        // Compact bar — keep this stable so Mini always returns here
+        compact: { w: 440, h: 152 },
+        expanded: { w: 320, h: 480 },
       };
 
       // @ts-expect-error Chromium Document PiP
@@ -208,6 +209,10 @@ export function MiniMusicPlayer() {
           color: #f4f4f5;
           -webkit-font-smoothing: antialiased;
           overflow: hidden;
+          scrollbar-width: none;
+        }
+        html::-webkit-scrollbar, body::-webkit-scrollbar {
+          width: 0 !important; height: 0 !important; display: none;
         }
         .root {
           height: 100%; width: 100%; position: relative;
@@ -240,11 +245,11 @@ export function MiniMusicPlayer() {
           gap: 12px;
           padding: 10px 12px;
           /* If Chrome keeps a tall window, pin the bar to the top edge */
-          max-height: 132px;
+          max-height: 152px;
           box-sizing: border-box;
         }
         .compact .art {
-          width: 96px; height: 96px;
+          width: 112px; height: 112px;
           border-radius: 12px;
           object-fit: cover;
           background: #1c1c22;
@@ -295,6 +300,13 @@ export function MiniMusicPlayer() {
           overflow-y: auto; overscroll-behavior: contain;
           scroll-snap-type: y mandatory;
           -webkit-overflow-scrolling: touch;
+          scrollbar-width: none; /* Firefox */
+          -ms-overflow-style: none; /* legacy Edge */
+        }
+        .expanded .scroll::-webkit-scrollbar {
+          width: 0 !important;
+          height: 0 !important;
+          display: none;
         }
         .expanded .now-pane {
           min-height: 100%;
@@ -600,11 +612,25 @@ export function MiniMusicPlayer() {
       const setExpanded = (v: boolean) => {
         pipExpanded = v;
         root.className = v ? 'root mode-expanded' : 'root mode-compact';
-        applyPipSize();
-        pipWin.requestAnimationFrame(applyPipSize);
-        setTimeout(applyPipSize, 50);
-        setTimeout(applyPipSize, 200);
+        // Always snap to the canonical size for this mode (Mini = compact bar, not a shrunk expanded window)
+        const force = () => {
+          const sz = v ? SIZE.expanded : SIZE.compact;
+          try {
+            pipWin.resizeTo(sz.w, sz.h);
+          } catch {
+            /* ignore */
+          }
+        };
+        force();
+        pipWin.requestAnimationFrame(force);
+        [40, 100, 250, 500].forEach((ms) => setTimeout(force, ms));
         if (v) {
+          requestAnimationFrame(() => {
+            const scroll = root.querySelector('.scroll') as HTMLElement | null;
+            if (scroll) scroll.scrollTop = 0;
+          });
+        } else {
+          // Reset scroll so re-expand starts on now-playing
           requestAnimationFrame(() => {
             const scroll = root.querySelector('.scroll') as HTMLElement | null;
             if (scroll) scroll.scrollTop = 0;
