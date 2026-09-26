@@ -1453,12 +1453,26 @@ export function isValidGuess(word: string): boolean {
   return w.length === WORDLE_LEN && (GUESS_SET.has(w) || ANSWER_SET.has(w));
 }
 
+/**
+ * Deterministic answer from a seed (e.g. YYYY-MM-DD for daily).
+ * Uses a 32-bit mix so sequential date strings do not map to consecutive
+ * indices in the (alphabetical) answer list — otherwise you get long runs
+ * of words starting with the same letter.
+ */
 export function pickAnswer(seed?: string): string {
   if (!seed) {
     return WORDLE_ANSWERS[Math.floor(Math.random() * WORDLE_ANSWERS.length)]!;
   }
-  let h = 0;
-  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+  // FNV-1a then final mix (Murmur-style) for avalanche; keep unsigned throughout
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < seed.length; i++) {
+    h = Math.imul(h ^ seed.charCodeAt(i), 16777619) >>> 0;
+  }
+  h = (h ^ (h >>> 16)) >>> 0;
+  h = Math.imul(h, 0x7feb352d) >>> 0;
+  h = (h ^ (h >>> 15)) >>> 0;
+  h = Math.imul(h, 0x846ca68b) >>> 0;
+  h = (h ^ (h >>> 16)) >>> 0;
   return WORDLE_ANSWERS[h % WORDLE_ANSWERS.length]!;
 }
 
