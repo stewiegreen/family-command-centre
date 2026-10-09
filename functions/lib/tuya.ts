@@ -19,6 +19,10 @@ export interface TuyaEnv {
    */
   TUYA_BRIDGE_URL?: string;
   TUYA_BRIDGE_TOKEN?: string;
+  /** ms after lights come ON during which a start/unpause is ignored (default 15000; 0 = off) */
+  TUYA_COOLDOWN_AFTER_ON_MS?: string;
+  /** ms after lights go OFF during which another off is ignored (default 5000; 0 = off) */
+  TUYA_COOLDOWN_AFTER_OFF_MS?: string;
 }
 
 interface TuyaTokenResponse {
@@ -74,10 +78,15 @@ let cinema: CinemaState = {
   lastOnAt: 0,
 };
 
-/** Seconds after restore during which start/unpause is ignored */
-const COOLDOWN_AFTER_ON_MS = 60_000;
-/** Seconds after off during which another off is ignored */
-const COOLDOWN_AFTER_OFF_MS = 30_000;
+function cooldownMs(raw: string | undefined, fallback: number): number {
+  if (raw == null || raw.trim() === '') return fallback;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 ? n : fallback;
+}
+const cooldownAfterOn = (env: TuyaEnv) =>
+  cooldownMs(env.TUYA_COOLDOWN_AFTER_ON_MS, 15_000);
+const cooldownAfterOff = (env: TuyaEnv) =>
+  cooldownMs(env.TUYA_COOLDOWN_AFTER_OFF_MS, 5_000);
 
 export type LightsGate =
   | { allow: true }
@@ -129,16 +138,16 @@ export async function shouldTurnLightsOff(
   if (c.active) {
     return { allow: false, reason: 'already_cinema' };
   }
-  if (now - c.lastOnAt < COOLDOWN_AFTER_ON_MS) {
+  if (now - c.lastOnAt < cooldownAfterOn(env)) {
     return {
       allow: false,
-      reason: `cooldown_after_on_${Math.round((COOLDOWN_AFTER_ON_MS - (now - c.lastOnAt)) / 1000)}s`,
+      reason: `cooldown_after_on_${Math.round((cooldownAfterOn(env) - (now - c.lastOnAt)) / 1000)}s`,
     };
   }
-  if (now - c.lastOffAt < COOLDOWN_AFTER_OFF_MS) {
+  if (now - c.lastOffAt < cooldownAfterOff(env)) {
     return {
       allow: false,
-      reason: `cooldown_after_off_${Math.round((COOLDOWN_AFTER_OFF_MS - (now - c.lastOffAt)) / 1000)}s`,
+      reason: `cooldown_after_off_${Math.round((cooldownAfterOff(env) - (now - c.lastOffAt)) / 1000)}s`,
     };
   }
   return { allow: true };
@@ -155,7 +164,7 @@ export async function shouldRestoreLights(
     // Only restore if we actually turned off for a film
     return { allow: false, reason: 'not_in_cinema' };
   }
-  if (now - c.lastOnAt < 10_000) {
+  if (now - c.lastOnAt < Math.min(10_000, cooldownAfterOn(env))) {
     return { allow: false, reason: 'cooldown_duplicate_on' };
   }
   return { allow: true };
