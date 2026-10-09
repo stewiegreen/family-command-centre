@@ -12,6 +12,13 @@ export interface TuyaEnv {
   TUYA_DIM_PERCENT?: string;
   TUYA_DIM_STEP_MS?: string;
   TUYA_ON_PLAYBACK?: string;
+  /**
+   * Local bridge (see /bridge). When TUYA_BRIDGE_URL is set, all bulb
+   * commands go to the bridge on the home network instead of Tuya's cloud,
+   * so no Tuya IoT Core subscription is needed. Unset it to go back to cloud.
+   */
+  TUYA_BRIDGE_URL?: string;
+  TUYA_BRIDGE_TOKEN?: string;
 }
 
 interface TuyaTokenResponse {
@@ -76,60 +83,109 @@ export type LightsGate =
   | { allow: true }
   | { allow: false; reason: string };
 
+/**
+ * Worker isolates are not guaranteed to be the same between the "start" and
+ * "stop" webhooks, so an in-memory latch can silently reset and the lights
+ * never come back. In bridge mode the latch lives on the bridge (one
+ * long-running process); the in-memory copy is just a fallback.
+ */
+async function loadCinema(env: TuyaEnv): Promise<CinemaState> {
+  if (bridgeUrl(env)) {
+    try {
+      const d = (await bridgeFetch(env, '/state', {
+        method: 'GET',
+      })) as Partial<CinemaState>;
+      cinema = {
+        active: !!d.active,
+        lastOffAt: Number(d.lastOffAt) || 0,
+        lastOnAt: Number(d.lastOnAt) || 0,
+        sessionId: d.sessionId,
+      };
+    } catch (err) {
+      console.error('[lights] could not load cinema state from bridge', err);
+    }
+  }
+  return cinema;
+}
+
+async function saveCinema(env: TuyaEnv, next: CinemaState): Promise<void> {
+  cinema = next;
+  if (bridgeUrl(env)) {
+    try {
+      await bridgeFetch(env, '/state', { method: 'POST', body: next });
+    } catch (err) {
+      console.error('[lights] could not save cinema state to bridge', err);
+    }
+  }
+}
+
 /** Should we turn lights OFF for this playback start? */
-export function shouldTurnLightsOff(_sessionId?: string): LightsGate {
+export async function shouldTurnLightsOff(
+  env: TuyaEnv,
+  _sessionId?: string,
+): Promise<LightsGate> {
+  const c = await loadCinema(env);
   const now = Date.now();
-  if (cinema.active) {
+  if (c.active) {
     return { allow: false, reason: 'already_cinema' };
   }
-  if (now - cinema.lastOnAt < COOLDOWN_AFTER_ON_MS) {
+  if (now - c.lastOnAt < COOLDOWN_AFTER_ON_MS) {
     return {
       allow: false,
-      reason: `cooldown_after_on_${Math.round((COOLDOWN_AFTER_ON_MS - (now - cinema.lastOnAt)) / 1000)}s`,
+      reason: `cooldown_after_on_${Math.round((COOLDOWN_AFTER_ON_MS - (now - c.lastOnAt)) / 1000)}s`,
     };
   }
-  if (now - cinema.lastOffAt < COOLDOWN_AFTER_OFF_MS) {
+  if (now - c.lastOffAt < COOLDOWN_AFTER_OFF_MS) {
     return {
       allow: false,
-      reason: `cooldown_after_off_${Math.round((COOLDOWN_AFTER_OFF_MS - (now - cinema.lastOffAt)) / 1000)}s`,
+      reason: `cooldown_after_off_${Math.round((COOLDOWN_AFTER_OFF_MS - (now - c.lastOffAt)) / 1000)}s`,
     };
   }
   return { allow: true };
 }
 
 /** Should we restore lights for this pause/stop? */
-export function shouldRestoreLights(_sessionId?: string): LightsGate {
+export async function shouldRestoreLights(
+  env: TuyaEnv,
+  _sessionId?: string,
+): Promise<LightsGate> {
+  const c = await loadCinema(env);
   const now = Date.now();
-  if (!cinema.active) {
+  if (!c.active) {
     // Only restore if we actually turned off for a film
     return { allow: false, reason: 'not_in_cinema' };
   }
-  if (now - cinema.lastOnAt < 10_000) {
+  if (now - c.lastOnAt < 10_000) {
     return { allow: false, reason: 'cooldown_duplicate_on' };
   }
   return { allow: true };
 }
 
-export function markLightsOff(sessionId?: string): void {
-  cinema = {
+export async function markLightsOff(
+  env: TuyaEnv,
+  sessionId?: string,
+): Promise<void> {
+  const c = await loadCinema(env);
+  await saveCinema(env, {
     active: true,
     lastOffAt: Date.now(),
-    lastOnAt: cinema.lastOnAt,
+    lastOnAt: c.lastOnAt,
     sessionId,
-  };
+  });
 }
 
-export function markLightsRestored(): void {
-  cinema = {
+export async function markLightsRestored(env: TuyaEnv): Promise<void> {
+  const c = await loadCinema(env);
+  await saveCinema(env, {
     active: false,
-    lastOffAt: cinema.lastOffAt,
+    lastOffAt: c.lastOffAt,
     lastOnAt: Date.now(),
     sessionId: undefined,
-  };
+  });
 }
 
-export function getCinemaState(): CinemaState {
-  return { ...cinema };
+export async function getCinemaState(env: TuyaEnv): Promise<CinemaState> {
+  return { ...(await loadCinema(env)) };
 }
 
 
@@ -199,7 +255,41 @@ function brightnessFromStatus(items: TuyaStatusItem[]): number | undefined {
   return undefined;
 }
 
+function bridgeUrl(env: TuyaEnv): string | null {
+  const u = env.TUYA_BRIDGE_URL?.trim();
+  return u ? u.replace(/\/+$/, '') : null;
+}
+
+async function bridgeFetch(
+  env: TuyaEnv,
+  path: string,
+  init: { method: 'GET' | 'POST'; body?: unknown },
+): Promise<unknown> {
+  const base = bridgeUrl(env);
+  const token = env.TUYA_BRIDGE_TOKEN?.trim();
+  if (!base || !token) throw new Error('Lights bridge is not configured');
+  const response = await fetch(`${base}${path}`, {
+    method: init.method,
+    headers: {
+      'X-Bridge-Token': token,
+      ...(init.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+    },
+    body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
+  });
+  const data = (await response.json().catch(() => ({}))) as {
+    error?: string;
+  };
+  if (!response.ok) {
+    throw new Error(
+      `Lights bridge ${path} failed: ${data.error ?? response.statusText}`,
+    );
+  }
+  return data;
+}
+
 async function getToken(env: TuyaEnv): Promise<string> {
+  // Bridge mode has no cloud token; callers just pass this string along.
+  if (bridgeUrl(env)) return '';
   const clientId = env.TUYA_CLIENT_ID?.trim();
   const secret = env.TUYA_CLIENT_SECRET?.trim();
   if (!clientId || !secret) {
@@ -265,6 +355,13 @@ async function sendCommands(
   deviceId: string,
   commands: Array<{ code: string; value: unknown }>,
 ): Promise<void> {
+  if (bridgeUrl(env)) {
+    await bridgeFetch(env, '/command', {
+      method: 'POST',
+      body: { deviceId, commands },
+    });
+    return;
+  }
   const clientId = env.TUYA_CLIENT_ID?.trim();
   const secret = env.TUYA_CLIENT_SECRET?.trim();
   if (!clientId || !secret) {
@@ -307,6 +404,16 @@ async function readDeviceBrightness(
   token: string,
   deviceId: string,
 ): Promise<number | undefined> {
+  if (bridgeUrl(env)) {
+    const data = (await bridgeFetch(
+      env,
+      `/status/${encodeURIComponent(deviceId)}`,
+      { method: 'GET' },
+    )) as { brightnessPercent?: number | null };
+    return typeof data.brightnessPercent === 'number' && data.brightnessPercent > 0
+      ? clampPercent(data.brightnessPercent, 50)
+      : undefined;
+  }
   const path = `/v1.0/devices/${encodeURIComponent(deviceId)}/status`;
   const data = (await signedGet(env, token, path)) as TuyaStatusResponse;
   if (!data.success || !Array.isArray(data.result)) {
@@ -435,6 +542,9 @@ export async function turnPlaybackLightingOff(env: TuyaEnv): Promise<void> {
 }
 
 export function tuyaConfigured(env: TuyaEnv): boolean {
+  if (bridgeUrl(env)) {
+    return !!(env.TUYA_BRIDGE_TOKEN?.trim() && getDeviceIds(env).length);
+  }
   return !!(
     env.TUYA_CLIENT_ID?.trim() &&
     env.TUYA_CLIENT_SECRET?.trim() &&
@@ -456,10 +566,10 @@ export async function setLivingRoomLights(
   }
   if (power === 'off') {
     await dimPlaybackLightingToOff(env);
-    markLightsOff('manual');
+    await markLightsOff(env, 'manual');
   } else {
     await restorePlaybackLighting(env);
-    markLightsRestored();
+    await markLightsRestored(env);
   }
   return { power, devices: deviceIds.length };
 }
@@ -484,6 +594,6 @@ export async function setLivingRoomBrightness(
       await setBrightnessOne(env, token, deviceId, pct);
     }),
   );
-  markLightsRestored();
+  await markLightsRestored(env);
   return { percent: pct, devices: deviceIds.length };
 }

@@ -72,6 +72,8 @@ type Env = {
   TUYA_RESTORE_PERCENT?: string;
   TUYA_DIM_STEP_MS?: string;
   TUYA_ENDPOINT?: string;
+  TUYA_BRIDGE_URL?: string;
+  TUYA_BRIDGE_TOKEN?: string;
   /** Comma-separated substrings matched against Emby Session DeviceName / DeviceId / Client */
   EMBY_LIGHTS_DEVICE_MATCH?: string;
 };
@@ -419,16 +421,16 @@ export const onRequestPost: PagesFunction<Env> = async (
       lights.action = "skipped_intro";
       lights.detail = { runTimeTicks: ev.runTimeTicks };
     } else if (ev.kind === "start" || ev.kind === "unpause") {
-      const gate = shouldTurnLightsOff(ev.sessionId);
+      const gate = await shouldTurnLightsOff(env, ev.sessionId);
       if (!gate.allow) {
         lights.action = "skipped_cooldown";
-        lights.detail = { reason: gate.allow === false ? gate.reason : "blocked", cinema: getCinemaState() };
+        lights.detail = { reason: gate.allow === false ? gate.reason : "blocked", cinema: await getCinemaState(env) };
       } else {
         try {
           const detail = await dimPlaybackLightingToOff(env);
-          markLightsOff(ev.sessionId);
+          await markLightsOff(env, ev.sessionId);
           lights.action = "off";
-          lights.detail = { ...detail, cinema: getCinemaState() };
+          lights.detail = { ...detail, cinema: await getCinemaState(env) };
         } catch (err) {
           console.error("Tuya lights-off failed:", err);
           lights.action = "off";
@@ -436,16 +438,16 @@ export const onRequestPost: PagesFunction<Env> = async (
         }
       }
     } else if (ev.kind === "pause" || ev.kind === "stop") {
-      const gate = shouldRestoreLights(ev.sessionId);
+      const gate = await shouldRestoreLights(env, ev.sessionId);
       if (!gate.allow) {
         lights.action = "skipped_cooldown";
-        lights.detail = { reason: gate.allow === false ? gate.reason : "blocked", cinema: getCinemaState() };
+        lights.detail = { reason: gate.allow === false ? gate.reason : "blocked", cinema: await getCinemaState(env) };
       } else {
         try {
           const detail = await restorePlaybackLighting(env);
-          markLightsRestored();
+          await markLightsRestored(env);
           lights.action = "restore";
-          lights.detail = { ...detail, cinema: getCinemaState() };
+          lights.detail = { ...detail, cinema: await getCinemaState(env) };
         } catch (err) {
           console.error("Tuya restore failed:", err);
           lights.action = "restore";
@@ -781,12 +783,7 @@ export const onRequestGet: PagesFunction<Env> = async (
           env.EMBY_API_KEY
         ),
 
-      tuya:
-        !!(
-          env.TUYA_CLIENT_ID &&
-          env.TUYA_CLIENT_SECRET &&
-          env.TUYA_DEVICE_IDS
-        ),
+      tuya: tuyaConfigured(env),
     },
 
     hint:
