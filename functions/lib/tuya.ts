@@ -19,6 +19,8 @@ export interface TuyaEnv {
    */
   TUYA_BRIDGE_URL?: string;
   TUYA_BRIDGE_TOKEN?: string;
+  /** Seconds to fade the lights down before switching off (bridge mode only; default 2.5, 0 = instant off) */
+  TUYA_FADE_SECONDS?: string;
   /** ms after lights come ON during which a start/unpause is ignored (default 15000; 0 = off) */
   TUYA_COOLDOWN_AFTER_ON_MS?: string;
   /** ms after lights go OFF during which another off is ignored (default 5000; 0 = off) */
@@ -264,6 +266,13 @@ function brightnessFromStatus(items: TuyaStatusItem[]): number | undefined {
   return undefined;
 }
 
+function fadeSeconds(env: TuyaEnv): number {
+  const raw = env.TUYA_FADE_SECONDS;
+  if (raw == null || raw.trim() === '') return 2.5;
+  const n = Number(raw);
+  return Number.isFinite(n) ? Math.max(0, Math.min(30, n)) : 2.5;
+}
+
 function bridgeUrl(env: TuyaEnv): string | null {
   const u = env.TUYA_BRIDGE_URL?.trim();
   return u ? u.replace(/\/+$/, '') : null;
@@ -482,6 +491,19 @@ export async function dimPlaybackLightingToOff(env: TuyaEnv): Promise<{
         }
       } catch {
         saved[deviceId] = lastBrightnessPct[deviceId] ?? null;
+      }
+      const fade = fadeSeconds(env);
+      if (bridgeUrl(env) && fade > 0) {
+        try {
+          // Bridge fades in the background and replies at once.
+          await bridgeFetch(env, '/fade', {
+            method: 'POST',
+            body: { deviceId, seconds: fade },
+          });
+          return;
+        } catch (err) {
+          console.error('[lights] fade failed, switching off instead', err);
+        }
       }
       await turnOffOne(env, token, deviceId);
     }),
