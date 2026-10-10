@@ -21,6 +21,10 @@ export interface TuyaEnv {
   TUYA_BRIDGE_TOKEN?: string;
   /** Seconds to fade the lights down before switching off (bridge mode only; default 2.5, 0 = instant off) */
   TUYA_FADE_SECONDS?: string;
+  /** Seconds between each bulb switching off at the end of the fade (default 0.7, 0 = all together) */
+  TUYA_FADE_STAGGER_SECONDS?: string;
+  /** "1" = fade to the dimmest level and stay on instead of switching off */
+  TUYA_FADE_STOP_AT_FLOOR?: string;
   /** ms after lights come ON during which a start/unpause is ignored (default 15000; 0 = off) */
   TUYA_COOLDOWN_AFTER_ON_MS?: string;
   /** ms after lights go OFF during which another off is ignored (default 5000; 0 = off) */
@@ -273,6 +277,13 @@ function fadeSeconds(env: TuyaEnv): number {
   return Number.isFinite(n) ? Math.max(0, Math.min(30, n)) : 2.5;
 }
 
+function fadeStaggerSeconds(env: TuyaEnv): number {
+  const raw = env.TUYA_FADE_STAGGER_SECONDS;
+  if (raw == null || raw.trim() === '') return 0.7;
+  const n = Number(raw);
+  return Number.isFinite(n) ? Math.max(0, Math.min(5, n)) : 0.7;
+}
+
 function bridgeUrl(env: TuyaEnv): string | null {
   const u = env.TUYA_BRIDGE_URL?.trim();
   return u ? u.replace(/\/+$/, '') : null;
@@ -480,7 +491,7 @@ export async function dimPlaybackLightingToOff(env: TuyaEnv): Promise<{
   const saved: Record<string, number | null> = {};
 
   await Promise.all(
-    deviceIds.map(async (deviceId) => {
+    deviceIds.map(async (deviceId, index) => {
       try {
         const pct = await readDeviceBrightness(env, token, deviceId);
         if (pct != null) {
@@ -498,7 +509,13 @@ export async function dimPlaybackLightingToOff(env: TuyaEnv): Promise<{
           // Bridge fades in the background and replies at once.
           await bridgeFetch(env, '/fade', {
             method: 'POST',
-            body: { deviceId, seconds: fade },
+            body: {
+              deviceId,
+              seconds: fade,
+              index,
+              gap: fadeStaggerSeconds(env),
+              thenOff: env.TUYA_FADE_STOP_AT_FLOOR?.trim() !== '1',
+            },
           });
           return;
         } catch (err) {
