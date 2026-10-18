@@ -43,19 +43,38 @@ function noteClass(n: NoteColor): string {
   return '';
 }
 
+/** Same footprint as letter tiles so the row reads as one aligned strip. */
+const TILE =
+  'w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-md border-2 flex items-center justify-center font-black uppercase';
+
 function CountChips({ counts }: { counts: Word500Counts }) {
   return (
     <div
-      className="flex items-center gap-1 shrink-0"
+      className="flex items-center gap-1.5 shrink-0"
       aria-label={`${counts.green} right place, ${counts.yellow} right letter wrong place, ${counts.red} not in word`}
     >
-      <span className="inline-flex items-center justify-center min-w-[1.35rem] h-6 px-1 rounded-md text-[11px] font-bold text-white bg-emerald-500">
+      <span
+        className={cn(
+          TILE,
+          'text-sm sm:text-base md:text-lg text-white bg-emerald-500 border-emerald-400',
+        )}
+      >
         {counts.green}
       </span>
-      <span className="inline-flex items-center justify-center min-w-[1.35rem] h-6 px-1 rounded-md text-[11px] font-bold text-slate-900 bg-amber-400">
+      <span
+        className={cn(
+          TILE,
+          'text-sm sm:text-base md:text-lg text-slate-900 bg-amber-400 border-amber-300',
+        )}
+      >
         {counts.yellow}
       </span>
-      <span className="inline-flex items-center justify-center min-w-[1.35rem] h-6 px-1 rounded-md text-[11px] font-bold text-white bg-rose-500">
+      <span
+        className={cn(
+          TILE,
+          'text-sm sm:text-base md:text-lg text-white bg-rose-500 border-rose-400',
+        )}
+      >
         {counts.red}
       </span>
     </div>
@@ -304,7 +323,7 @@ export function Word500Board({
         }`;
 
   return (
-    <Card className="p-4 space-y-3 max-w-xl mx-auto">
+    <Card className="p-4 sm:p-5 md:p-6 space-y-3 sm:space-y-4 max-w-xl sm:max-w-2xl md:max-w-3xl mx-auto">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <h2 className="text-base font-bold text-fg">Word500</h2>
@@ -357,8 +376,8 @@ export function Word500Board({
         </p>
       )}
 
-      {/* Board */}
-      <div className="space-y-1.5">
+      {/* Board — letter tiles and count chips share the same TILE size */}
+      <div className="space-y-1.5 sm:space-y-2">
         {Array.from({ length: WORD500_ROWS }, (_, row) => {
           const guess = game.guesses[row];
           const isCurrent = row === game.guesses.length && game.status === 'playing';
@@ -374,11 +393,11 @@ export function Word500Board({
             <div
               key={row}
               className={cn(
-                'flex items-center gap-2',
+                'flex items-center justify-center gap-2 sm:gap-3',
                 isCurrent && shake && 'animate-pulse',
               )}
             >
-              <div className="flex gap-1 flex-1 min-w-0 justify-center">
+              <div className="flex gap-1.5 sm:gap-2">
                 {letters.map((ch, col) => {
                   const note = rowNotes?.[col] || 'none';
                   const submitted = !!guess;
@@ -389,12 +408,16 @@ export function Word500Board({
                       disabled={!submitted}
                       onClick={() => cycleNote(row, col)}
                       className={cn(
-                        'w-9 h-11 sm:w-10 sm:h-12 rounded-md border text-sm font-bold uppercase flex items-center justify-center transition-colors',
+                        TILE,
+                        'text-sm sm:text-base md:text-lg transition-colors',
                         submitted
-                          ? cn('bg-surface-2 border-border text-fg cursor-pointer', noteClass(note))
+                          ? cn(
+                              'bg-surface-2 border-border text-fg cursor-pointer',
+                              noteClass(note),
+                            )
                           : isCurrent && ch
-                            ? 'bg-elevated border-accent/40 text-fg'
-                            : 'bg-surface-2/40 border-border/60 text-muted',
+                            ? 'border-fg/40 bg-surface-2 text-fg'
+                            : 'border-border bg-surface-2/40 text-transparent',
                       )}
                       aria-label={
                         submitted
@@ -404,13 +427,21 @@ export function Word500Board({
                             : 'Empty'
                       }
                     >
-                      {ch}
+                      {ch || (submitted ? '' : '·')}
                     </button>
                   );
                 })}
               </div>
-              <div className="w-[5.5rem] flex justify-end">
-                {counts ? <CountChips counts={counts} /> : <div className="h-6" />}
+              <div className="flex justify-end">
+                {counts ? (
+                  <CountChips counts={counts} />
+                ) : (
+                  <div className="flex gap-1.5 sm:gap-2 opacity-25" aria-hidden>
+                    <span className={cn(TILE, 'border-border bg-surface-2/30')} />
+                    <span className={cn(TILE, 'border-border bg-surface-2/30')} />
+                    <span className={cn(TILE, 'border-border bg-surface-2/30')} />
+                  </div>
+                )}
               </div>
             </div>
           );
@@ -463,16 +494,25 @@ export function Word500Board({
         </div>
       )}
 
-      {/* Keyboard — neutral only */}
+      {/* On-screen keyboard — same layout/sizing as Wordle (keys stay neutral) */}
       {game.status === 'playing' && !finishedReadOnly && (
-        <div className="space-y-1.5 pt-1">
-          {KEY_ROWS.map((row) => (
-            <div key={row} className="flex justify-center gap-1">
+        <div className="space-y-1.5 sm:space-y-2 pt-1">
+          {KEY_ROWS.map((row, ri) => (
+            <div key={row} className="flex justify-center gap-1 sm:gap-1.5">
+              {ri === 2 && (
+                <button
+                  type="button"
+                  onClick={() => submit()}
+                  className="px-2 sm:px-3 h-11 sm:h-12 rounded-md text-[10px] sm:text-xs font-bold uppercase bg-surface-2 border border-border text-fg hover:bg-nav-hover"
+                >
+                  Enter
+                </button>
+              )}
               {row.split('').map((k) => (
                 <button
                   key={k}
                   type="button"
-                  className="h-10 min-w-[1.55rem] px-1 rounded-md text-xs font-bold uppercase bg-surface-2 border border-border text-fg hover:bg-nav-hover"
+                  className="w-8 h-11 sm:w-9 sm:h-12 md:w-10 rounded-md text-sm font-bold uppercase border bg-surface-2 border-border text-fg hover:bg-nav-hover"
                   onClick={() =>
                     setCurrent((c) => (c.length < WORD500_LEN ? c + k : c))
                   }
@@ -480,16 +520,17 @@ export function Word500Board({
                   {k}
                 </button>
               ))}
+              {ri === 2 && (
+                <button
+                  type="button"
+                  onClick={() => setCurrent((c) => c.slice(0, -1))}
+                  className="px-2 sm:px-3 h-11 sm:h-12 rounded-md text-[10px] sm:text-xs font-bold uppercase bg-surface-2 border border-border text-fg hover:bg-nav-hover"
+                >
+                  Del
+                </button>
+              )}
             </div>
           ))}
-          <div className="flex justify-center gap-1.5 pt-0.5">
-            <Button size="sm" variant="secondary" onClick={() => setCurrent((c) => c.slice(0, -1))}>
-              Delete
-            </Button>
-            <Button size="sm" onClick={() => submit()}>
-              Enter
-            </Button>
-          </div>
         </div>
       )}
 
