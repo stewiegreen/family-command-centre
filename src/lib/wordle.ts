@@ -1459,11 +1459,11 @@ export function isValidGuess(word: string): boolean {
  * indices in the (alphabetical) answer list — otherwise you get long runs
  * of words starting with the same letter.
  */
-export function pickAnswer(seed?: string): string {
-  if (!seed) {
-    return WORDLE_ANSWERS[Math.floor(Math.random() * WORDLE_ANSWERS.length)]!;
-  }
-  // FNV-1a then final mix (Murmur-style) for avalanche; keep unsigned throughout
+/**
+ * Deterministic 32-bit mix of a seed string (FNV-1a + Murmur-style finalizer).
+ * Shared by Wordle and Word500 so both can index different pools safely.
+ */
+export function hashSeed(seed: string): number {
   let h = 2166136261 >>> 0;
   for (let i = 0; i < seed.length; i++) {
     h = Math.imul(h ^ seed.charCodeAt(i), 16777619) >>> 0;
@@ -1473,7 +1473,14 @@ export function pickAnswer(seed?: string): string {
   h = (h ^ (h >>> 15)) >>> 0;
   h = Math.imul(h, 0x846ca68b) >>> 0;
   h = (h ^ (h >>> 16)) >>> 0;
-  return WORDLE_ANSWERS[h % WORDLE_ANSWERS.length]!;
+  return h >>> 0;
+}
+
+export function pickAnswer(seed?: string): string {
+  if (!seed) {
+    return WORDLE_ANSWERS[Math.floor(Math.random() * WORDLE_ANSWERS.length)]!;
+  }
+  return WORDLE_ANSWERS[hashSeed(seed) % WORDLE_ANSWERS.length]!;
 }
 
 /**

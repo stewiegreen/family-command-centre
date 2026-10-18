@@ -882,6 +882,19 @@ export interface FamilyData {
     /** memberId → in-progress guesses for today's seed. */
     inProgress?: Record<string, { guesses: string[] }>;
   };
+  /** Today's Word500 solve board (shared family banner). */
+  word500Daily?: {
+    seed: string;
+    solves: {
+      memberId: string;
+      name: string;
+      guesses: number;
+      points: number;
+      at: string;
+    }[];
+    finishedMemberIds?: string[];
+    inProgress?: Record<string, { guesses: string[] }>;
+  };
 }
 
 export interface FirebaseConfig {

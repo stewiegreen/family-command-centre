@@ -63,6 +63,14 @@ import {
   type LetterState,
   type WordleState,
 } from '../lib/wordle';
+import {
+  word500DailyForToday,
+  recordWord500DailyFinish,
+  pruneWord500InProgress,
+  type Word500State,
+} from '../lib/word500';
+import { Word500Board } from './play/Word500Board';
+import { Word500Banner } from './play/Word500Banner';
 import { cn } from '../lib/cn';
 import type {
   BattleshipGame,
@@ -95,9 +103,9 @@ export function PlayPage() {
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [solo, setSolo] = useState<'wordle' | 'wordle-random' | null>(null);
+  const [solo, setSolo] = useState<'wordle' | 'wordle-random' | 'word500' | 'word500-practice' | null>(null);
 
-  // Sydney day change (or legacy UTC seed) → reset shared Wordle doc to today's empty board.
+  // Sydney day change → reset shared Wordle / Word500 docs to today's empty board.
   useEffect(() => {
     const seed = todaySeed();
     const cur = data.wordleDaily;
@@ -108,6 +116,17 @@ export function PlayPage() {
       return { ...prev, wordleDaily: wordleDailyForToday(prev.wordleDaily, seed) };
     });
   }, [data.wordleDaily?.seed]);
+
+  useEffect(() => {
+    const seed = todaySeed();
+    const cur = data.word500Daily;
+    if (!cur) return;
+    if (cur.seed === seed) return;
+    update((prev) => {
+      if (!prev.word500Daily || prev.word500Daily.seed === seed) return prev;
+      return { ...prev, word500Daily: word500DailyForToday(prev.word500Daily, seed) };
+    });
+  }, [data.word500Daily?.seed]);
 
 
   useEffect(() => {
@@ -392,6 +411,36 @@ export function PlayPage() {
         </div>
       </Card>
 
+      <Card className="p-4 space-y-2">
+        <h2 className="text-sm font-bold text-fg">Word500</h2>
+        <p className="text-xs text-muted">
+          Next-level Wordle: after each guess you only see how many letters are green, yellow, and
+          red — not which ones. 8 tries. Daily is the same puzzle for the whole family.
+        </p>
+        <Word500Banner daily={data.word500Daily} getMember={getMember} />
+        <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            onClick={() => {
+              setActiveId(null);
+              setSolo('word500');
+            }}
+          >
+            Daily Word500
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => {
+              setActiveId(null);
+              setSolo('word500-practice');
+            }}
+          >
+            Practice
+          </Button>
+        </div>
+      </Card>
+
       </div>
 
       {active && (
@@ -451,7 +500,7 @@ export function PlayPage() {
       )}
 
       <div className="max-w-xl mx-auto w-full space-y-5">
-      {solo && (
+      {solo && (solo === 'wordle' || solo === 'wordle-random') && (
         <WordleBoard
           key={solo}
           mode={solo === 'wordle' ? 'daily' : 'random'}
@@ -491,6 +540,55 @@ export function PlayPage() {
                     wordleDaily: recordDailyWordleFinish(
                       prev.wordleDaily,
                       seed,
+                      me.id,
+                      me.name,
+                      result,
+                    ),
+                  }));
+                }
+              : undefined
+          }
+        />
+      )}
+
+      {solo && (solo === 'word500' || solo === 'word500-practice') && (
+        <Word500Board
+          key={solo}
+          mode={solo === 'word500' ? 'daily' : 'practice'}
+          me={me}
+          daily={data.word500Daily}
+          onClose={() => setSolo(null)}
+          onProgress={
+            me
+              ? (state: Word500State) => {
+                  if (state.mode !== 'daily' || state.status !== 'playing') return;
+                  const day = todaySeed();
+                  if (state.seed && state.seed !== day) return;
+                  update((prev) => {
+                    const base = word500DailyForToday(prev.word500Daily, day);
+                    return {
+                      ...prev,
+                      word500Daily: {
+                        ...base,
+                        inProgress: {
+                          ...pruneWord500InProgress(base.inProgress, day),
+                          [me.id]: { guesses: state.guesses },
+                        },
+                      },
+                    };
+                  });
+                }
+              : undefined
+          }
+          onDailyFinish={
+            me
+              ? (result) => {
+                  const day = todaySeed();
+                  update((prev) => ({
+                    ...prev,
+                    word500Daily: recordWord500DailyFinish(
+                      prev.word500Daily,
+                      day,
                       me.id,
                       me.name,
                       result,
