@@ -296,6 +296,17 @@ export function Word500Board({
         ).length
       : 0;
 
+  // Player scratchpad → keyboard: any letter marked red on a submitted tile is faded.
+  // Red wins over green/yellow on the same letter so eliminated letters stay easy to skip.
+  const redLetters = new Set<string>();
+  for (let ri = 0; ri < game.guesses.length; ri++) {
+    const guess = game.guesses[ri]!;
+    const rowNotes = notes[ri];
+    for (let ci = 0; ci < guess.length; ci++) {
+      if (rowNotes?.[ci] === 'red') redLetters.add(guess[ci]!);
+    }
+  }
+
   const finishedReadOnly = alreadyFinished && game.status !== 'playing';
   const points =
     game.status === 'won' ? word500Points(game.guesses.length, true) : game.status === 'lost' ? 0 : null;
@@ -508,18 +519,27 @@ export function Word500Board({
                   Enter
                 </button>
               )}
-              {row.split('').map((k) => (
-                <button
-                  key={k}
-                  type="button"
-                  className="w-8 h-11 sm:w-9 sm:h-12 md:w-10 rounded-md text-sm font-bold uppercase border bg-surface-2 border-border text-fg hover:bg-nav-hover"
-                  onClick={() =>
-                    setCurrent((c) => (c.length < WORD500_LEN ? c + k : c))
-                  }
-                >
-                  {k}
-                </button>
-              ))}
+              {row.split('').map((k) => {
+                const eliminated = redLetters.has(k);
+                return (
+                  <button
+                    key={k}
+                    type="button"
+                    className={cn(
+                      'w-8 h-11 sm:w-9 sm:h-12 md:w-10 rounded-md text-sm font-bold uppercase border',
+                      eliminated
+                        ? 'bg-surface-2/40 border-border/50 text-muted/50 opacity-40'
+                        : 'bg-surface-2 border-border text-fg hover:bg-nav-hover',
+                    )}
+                    onClick={() =>
+                      setCurrent((c) => (c.length < WORD500_LEN ? c + k : c))
+                    }
+                    aria-label={eliminated ? `${k}, marked absent` : k}
+                  >
+                    {k}
+                  </button>
+                );
+              })}
               {ri === 2 && (
                 <button
                   type="button"
