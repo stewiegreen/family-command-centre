@@ -111,8 +111,14 @@ function zonedWallToUtc(
   return new Date(utcMs);
 }
 
-/** Default zone for floating (no TZID / no Z) times — GreenHQ family is AU. */
-const DEFAULT_FLOATING_TZ = 'Australia/Brisbane';
+/**
+ * Family calendar zone — NSW observes DST (AEDT +11 in summer, AEST +10 in winter).
+ * Brisbane does not observe DST; using it here caused a 1h skew vs phone calendars after
+ * the October switch. Keep in sync with Wordle's todaySeed zone (Australia/Sydney).
+ */
+const FAMILY_TZ = 'Australia/Sydney';
+/** @deprecated alias — floating (no TZID / no Z) times use FAMILY_TZ */
+const DEFAULT_FLOATING_TZ = FAMILY_TZ;
 
 /** ICS date → ISO UTC string. */
 function icsDateToIso(raw: string, allDayHint?: boolean): { iso: string; allDay: boolean } {
@@ -157,19 +163,28 @@ function icsDateToIso(raw: string, allDayHint?: boolean): { iso: string; allDay:
     return { iso: new Date(iso).toISOString(), allDay: false };
   }
 
-  // TZID=Area/City (iOS always sends this for timed events)
-  let tz = DEFAULT_FLOATING_TZ;
+  // TZID=Area/City (iOS usually sends this for timed events)
+  let tz = FAMILY_TZ;
   const tzidMatch = params.match(/TZID=([^;]+)/i);
   if (tzidMatch?.[1]) {
-    // Strip quotes Apple sometimes adds
-    tz = tzidMatch[1].replace(/^"|"$/g, '');
+    // Strip quotes / leading slash some clients add
+    tz = tzidMatch[1].replace(/^"|"$/g, '').replace(/^\//, '').trim();
+    // Common AU aliases → IANA
+    const aliases: Record<string, string> = {
+      'AUS Eastern Standard Time': 'Australia/Sydney',
+      'E. Australia Standard Time': 'Australia/Brisbane',
+      'Australia/NSW': 'Australia/Sydney',
+      'Australia/ACT': 'Australia/Sydney',
+      'Australia/Victoria': 'Australia/Melbourne',
+    };
+    if (aliases[tz]) tz = aliases[tz]!;
   }
 
   try {
     const utc = zonedWallToUtc(year, month, day, hour, minute, second, tz);
     return { iso: utc.toISOString(), allDay: false };
   } catch {
-    // Fallback: treat as floating Brisbane
+    // Fallback: treat as floating family zone (Sydney)
     const utc = zonedWallToUtc(year, month, day, hour, minute, second, DEFAULT_FLOATING_TZ);
     return { iso: utc.toISOString(), allDay: false };
   }
@@ -292,6 +307,24 @@ function toIcsUtc(iso: string, allDay: boolean): string {
   );
 }
 
+/** Wall-clock in FAMILY_TZ for DTSTART;TZID=… (so phones apply DST correctly). */
+function toIcsFamilyWall(iso: string): string {
+  const d = new Date(iso);
+  const dtf = new Intl.DateTimeFormat('en-US', {
+    timeZone: FAMILY_TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  });
+  const parts = dtf.formatToParts(d);
+  const g = (type: string) => parts.find((x) => x.type === type)?.value || '00';
+  return `${g('year')}${g('month')}${g('day')}T${g('hour')}${g('minute')}${g('second')}`;
+}
+
 function esc(s: string): string {
   return s.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
 }
@@ -304,8 +337,10 @@ export function serializeVEvent(ev: GhEvent): string {
     lines.push(`DTSTART;VALUE=DATE:${toIcsUtc(ev.start, true)}`);
     lines.push(`DTEND;VALUE=DATE:${toIcsUtc(ev.end, true)}`);
   } else {
-    lines.push(`DTSTART:${toIcsUtc(ev.start, false)}`);
-    lines.push(`DTEND:${toIcsUtc(ev.end, false)}`);
+    // Emit family TZ wall times (not bare Z) so Apple Calendar expands with DST
+    // rules for Australia/Sydney instead of a fixed offset.
+    lines.push(`DTSTART;TZID=${FAMILY_TZ}:${toIcsFamilyWall(ev.start)}`);
+    lines.push(`DTEND;TZID=${FAMILY_TZ}:${toIcsFamilyWall(ev.end)}`);
   }
   if (ev.location) lines.push(`LOCATION:${esc(ev.location)}`);
   if (ev.notes) lines.push(`DESCRIPTION:${esc(ev.notes)}`);
